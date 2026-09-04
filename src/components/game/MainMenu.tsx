@@ -127,7 +127,7 @@ export function MainMenu() {
       </motion.div>
 
       {/* ---------- Area utama ---------- */}
-      <div className="flex min-h-0 flex-1 items-start justify-center overflow-y-auto py-2 lg:items-center">
+      <div className="menu-main-scroll flex min-h-0 flex-1 items-start justify-center overflow-y-auto py-2">
         <div className="flex w-full max-w-lg flex-col items-center gap-2.5">
           {/* Kartu judul */}
           <motion.div
