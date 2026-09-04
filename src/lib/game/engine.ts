@@ -434,6 +434,7 @@ export class GameEngine {
       this.cancelPlacing()
       return
     }
+    this.canvas.setPointerCapture(e.pointerId)
     // P2: catat pointer untuk pinch tracking
     this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
     if (this.activePointers.size >= 2) {
@@ -497,6 +498,7 @@ export class GameEngine {
     const st = gameStore.get()
     // P2: lepas pointer dari pinch tracking
     this.activePointers.delete(e.pointerId)
+    if (this.canvas.hasPointerCapture(e.pointerId)) this.canvas.releasePointerCapture(e.pointerId)
     if (this.activePointers.size < 2) {
       if (this.pinchMode && this.activePointers.size === 0) this.pinchMode = false
       this.pinchDist = 0
