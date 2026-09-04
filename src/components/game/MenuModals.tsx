@@ -88,7 +88,7 @@ export function BadgesModal({ open, onClose }: { open: boolean; onClose: () => v
     <AnimatePresence>
       {open && (
         <CuteModal title="Lencana Ku" emoji="🏅" onClose={onClose}>
-          <div className="grid grid-cols-3 gap-2.5">
+          <div className="grid max-h-[52vh] grid-cols-3 gap-2.5 overflow-y-auto pr-1">
             {BADGES.map((b, i) => {
               const unlocked = isUnlocked(b.id)
               return (

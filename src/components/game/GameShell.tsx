@@ -12,6 +12,7 @@ import { CharacterBar } from './CharacterBar'
 import { TowerPanel } from './TowerPanel'
 import { EndScreens, PhotoControls } from './EndScreens'
 import { DuaButton, BadgeToastLayer } from './DuaButton'
+import { TutorialLayer } from './TutorialLayer'
 
 export default function GameShell() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -75,6 +76,7 @@ export default function GameShell() {
       <EndScreens />
       <PhotoControls />
       <DuaButton />
+      <TutorialLayer />
       <ToastLayer />
       <FunFactModal />
       <BadgeToastLayer />

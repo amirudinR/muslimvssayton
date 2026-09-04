@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import { useGameStore } from '@/lib/game/store'
 import { getEngine } from '@/lib/game/engine'
-import { CHAR_DEFS, WAVES, GAME_CONST, ENEMY_DEFS, type EnemyId } from '@/lib/game/data'
+import { CHAR_DEFS, WAVES, ENEMY_DEFS, type EnemyId } from '@/lib/game/data'
 import { audio } from '@/lib/game/audio'
 
 /* enemy yang muncul pertama kali per wave (untuk banner "setan baru!") */
@@ -25,7 +25,9 @@ export function Hud() {
   const screen = useGameStore((s) => s.screen)
   const paused = useGameStore((s) => s.paused)
   const mosqueHp = useGameStore((s) => s.mosqueHp)
-  const mosqueMaxHp = GAME_CONST.mosqueMaxHp
+  const mosqueMaxHp = useGameStore((s) => s.mosqueMaxHp)
+  const dailyMode = useGameStore((s) => s.dailyMode)
+  const dailyMod = useGameStore((s) => s.dailyMod)
   const pahala = useGameStore((s) => s.pahala)
   const wave = useGameStore((s) => s.wave)
   const waveActive = useGameStore((s) => s.waveActive)
@@ -246,6 +248,28 @@ export function Hud() {
         )}
       </AnimatePresence>
 
+      {/* ---------- Chip Tantangan Harian ---------- */}
+      <AnimatePresence>
+        {dailyMode && dailyMod && (
+          <motion.div
+            initial={{ opacity: 0, y: -12, scale: 0.8 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            className="daily-chip pointer-events-none mt-1"
+            role="status"
+          >
+            <motion.span
+              className="inline-block"
+              animate={{ rotate: [0, -10, 10, 0] }}
+              transition={{ repeat: Infinity, duration: 1.8 }}
+            >
+              {dailyMod.emoji}
+            </motion.span>
+            TANTANGAN · {dailyMod.name}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ---------- Banner wave ---------- */}
       <AnimatePresence>
         {banner && (
@@ -317,7 +341,7 @@ export function Hud() {
                 ))}
               </div>
             )}
-            <button className="btn-cute-lg" onClick={() => getEngine()?.startWaveNow()}>
+            <button data-tut="wave-btn" className="btn-cute-lg" onClick={() => getEngine()?.startWaveNow()}>
               <Play className="h-6 w-6 fill-current" />
               MULAI GELOMBANG! ({Math.ceil(nextWaveIn)}s)
             </button>

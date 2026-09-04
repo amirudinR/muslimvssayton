@@ -13,8 +13,45 @@ import { useGameStore } from '@/lib/game/store'
 import { getEngine } from '@/lib/game/engine'
 import { audio } from '@/lib/game/audio'
 import { setPlayerName, getRecords } from '@/lib/game/achievements'
-import { GAME_CONST } from '@/lib/game/data'
 import { LeaderboardModal } from './MenuModals'
+
+/* ------------------- Kartu saran Kakek Imam (Smart Coach) ------------------- */
+
+function CoachTipsCard() {
+  const coachTips = useGameStore((s) => s.coachTips)
+  if (!coachTips || coachTips.length === 0) return null
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: 0.45 }}
+      className="coach-card relative w-full text-left"
+      role="complementary"
+      aria-label="Saran Kakek Imam"
+    >
+      <div className="coach-avatar" aria-hidden>
+        👴
+      </div>
+      <p className="pl-12 text-xs font-black uppercase tracking-widest text-emerald-700">
+        Saran Kakek Imam
+      </p>
+      <ul className="mt-1 space-y-1.5 pl-12">
+        {coachTips.map((tip, i) => (
+          <motion.li
+            key={tip}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6 + i * 0.22 }}
+            className="flex items-start gap-1.5 rounded-xl bg-white/70 px-2.5 py-1.5 text-xs font-bold leading-snug text-[#3d5a3a]"
+          >
+            <span className="mt-0.5 shrink-0 text-sm">💡</span>
+            {tip}
+          </motion.li>
+        ))}
+      </ul>
+    </motion.div>
+  )
+}
 
 /* ------------------- Bintang rating lucu ------------------- */
 
@@ -148,9 +185,13 @@ export function EndScreens() {
   const soundOn = useGameStore((s) => s.soundOn)
   const musicOn = useGameStore((s) => s.musicOn)
   const mosqueHp = useGameStore((s) => s.mosqueHp)
+  const mosqueMaxHp = useGameStore((s) => s.mosqueMaxHp)
   const resultStars = useGameStore((s) => s.resultStars)
+  const dailyMode = useGameStore((s) => s.dailyMode)
+  const dailyMod = useGameStore((s) => s.dailyMod)
+  const dailyStreakResult = useGameStore((s) => s.dailyStreakResult)
 
-  const restart = () => getEngine()?.startGame()
+  const restart = () => getEngine()?.startGame(dailyMode ? { daily: true } : undefined)
   const toMenu = () => getEngine()?.backToMenu()
 
   return (
@@ -187,6 +228,35 @@ export function EndScreens() {
                     : 'Menang! Coba jaga masjid lebih rapat lagi ya! 💪'}
               </p>
 
+              {/* Tantangan Harian selesai */}
+              {dailyMode && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.8, type: 'spring', stiffness: 300, damping: 16 }}
+                  className="daily-won-banner"
+                >
+                  <motion.span
+                    animate={{ rotate: [0, -12, 12, 0], scale: [1, 1.15, 1] }}
+                    transition={{ repeat: Infinity, duration: 1.4 }}
+                    className="inline-block text-2xl"
+                  >
+                    🔥
+                  </motion.span>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-black text-white drop-shadow">
+                      Tantangan Hari Ini Selesai!
+                    </span>
+                    <span className="text-[11px] font-bold text-orange-100">
+                      {dailyMod ? `${dailyMod.emoji} ${dailyMod.name} · ` : ''}
+                      {dailyStreakResult > 1
+                        ? `${dailyStreakResult} hari beruntun! 🔥`
+                        : 'Rentetan dimulai — menang lagi besok! 🔥'}
+                    </span>
+                  </div>
+                </motion.div>
+              )}
+
               <div className="w-full space-y-1.5 rounded-2xl bg-amber-50/90 px-5 py-3 text-sm font-bold text-[#6a4d1a]">
                 <p className="flex justify-between">
                   <span>👻 Setan berhasil dihalau</span>
@@ -198,16 +268,23 @@ export function EndScreens() {
                 </p>
                 <p className="flex justify-between">
                   <span>🕌 Kesehatan masjid</span>
-                  <span className="font-black text-sky-600">{mosqueHp}/{GAME_CONST.mosqueMaxHp}</span>
+                  <span className="font-black text-sky-600">{mosqueHp}/{mosqueMaxHp}</span>
                 </p>
               </div>
 
-              <ScoreSubmit
-                stars={resultStars}
-                wave={stats.wavesCleared}
-                defeated={stats.defeated}
-                pahala={stats.starsEarned}
-              />
+              {/* Mode tantangan tidak masuk papan rekor */}
+              {dailyMode ? (
+                <p className="flex items-center justify-center gap-1.5 rounded-2xl border-2 border-orange-200 bg-orange-50 px-4 py-2 text-xs font-bold text-orange-700">
+                  🔥 Mode tantangan — skor tidak masuk papan rekor 🏆
+                </p>
+              ) : (
+                <ScoreSubmit
+                  stars={resultStars}
+                  wave={stats.wavesCleared}
+                  defeated={stats.defeated}
+                  pahala={stats.starsEarned}
+                />
+              )}
 
               <p className="text-xs font-semibold text-emerald-700">
                 Kembang api masih menyala di atas masjid — lihat dulu boleh! 🎆
@@ -249,11 +326,9 @@ export function EndScreens() {
                 Setan kebanyakan main-main kali ini. Masjid butuh penjaga
                 hebat sepertimu! 💪
               </p>
-              <div className="rounded-2xl bg-sky-50 px-5 py-3 text-sm font-semibold text-sky-800">
-                💡 Coba taruh Ali &amp; Aisyah lebih dekat jalur, upgrade mereka,
-                gunakan Fatimah untuk memperlambat setan gesit, dan tekan{' '}
-                <span className="font-black text-amber-600">DOA BERSAMA</span> saat penuh!
-              </div>
+
+              {/* Saran personal dari analisis gaya main */}
+              <CoachTipsCard />
               <div className="mt-1 flex flex-wrap justify-center gap-2">
                 <button className="btn-cute" onClick={restart}>
                   <RotateCcw className="h-5 w-5" />

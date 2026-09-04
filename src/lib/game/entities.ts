@@ -9,6 +9,7 @@ import {
   ENEMY_DEFS,
   DUA_CONST,
   LANES,
+  RUN_MODS,
   type CharId,
   type CharDef,
   type EnemyDef,
@@ -111,7 +112,7 @@ export class Enemy {
     this.def = ENEMY_DEFS[enemyId]
     this.id = id
     this.lane = lane
-    this.maxHp = Math.round(this.def.hp * (1 + 0.12 * (wave - 1)))
+    this.maxHp = Math.round(this.def.hp * (1 + 0.12 * (wave - 1)) * RUN_MODS.enemyHpMult)
     this.hp = this.maxHp
     this.group = getEnemyModel(enemyId)
     this.headY = { pocong: 1.55, kunti: 1.85, genderuwo: 1.7, tuyul: 1.35, wewe: 1.95, kuyang: 1.35, banaspati: 2.6 }[enemyId]
@@ -194,7 +195,7 @@ export class Enemy {
     })
 
     // kecepatan efektif
-    let speed = this.def.speed
+    let speed = this.def.speed * RUN_MODS.enemySpeedMult
     if (now < this.slowUntil) speed *= this.slowFactor
     else this.slowFactor = 1
     if (now < this.buffUntil) speed *= 1.35 // semangat karena ketawaan kunti

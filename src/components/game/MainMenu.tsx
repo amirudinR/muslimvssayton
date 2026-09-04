@@ -5,7 +5,7 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Play, Volume2, VolumeX, Music, Music2, Sparkles, Star, Trophy, Medal, Users } from 'lucide-react'
+import { Play, Volume2, VolumeX, Music, Music2, Sparkles, Star, Trophy, Medal, Users, GraduationCap } from 'lucide-react'
 import { useGameStore } from '@/lib/game/store'
 import { getEngine } from '@/lib/game/engine'
 import { audio } from '@/lib/game/audio'
@@ -17,6 +17,7 @@ import {
   MenuBadgesButton,
   MenuLeaderboardButton,
 } from './MenuModals'
+import { DailyChallengeCard } from './DailyChallenge'
 
 const HOW_TO = [
   { emoji: '🤲', text: 'Tarik anak sholeh ke lingkaran hijau' },
@@ -49,6 +50,12 @@ export function MainMenu() {
     getEngine()?.startGame()
   }
 
+  const replayTutorial = () => {
+    audio.ensure()
+    audio.chime()
+    getEngine()?.startGame({ forceTutorial: true })
+  }
+
   return (
     <div className="pointer-events-none fixed inset-0 z-40 flex flex-col">
       {/* hiasan melayang lucu di belakang panel */}
@@ -79,6 +86,7 @@ export function MainMenu() {
 
       {/* Area utama — bisa scroll di layar pendek */}
       <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto py-4">
+        <div className="flex w-full max-w-lg flex-col items-center gap-3">
         {/* Kartu judul */}
         <motion.div
           initial={{ opacity: 0, scale: 0.7, y: 40 }}
@@ -93,7 +101,7 @@ export function MainMenu() {
         >
           🕌
         </motion.div>
-        <h1 className="text-3xl font-black leading-tight tracking-wide text-emerald-700 drop-shadow-sm sm:text-4xl">
+        <h1 className="title-shimmer text-3xl font-black leading-tight tracking-wide drop-shadow-sm sm:text-4xl">
           PENJAGA MASJID
         </h1>
         <p className="-mt-2 rounded-full bg-amber-100 px-4 py-1 text-sm font-extrabold text-amber-700 shadow-inner sm:text-base">
@@ -168,6 +176,10 @@ export function MainMenu() {
           <Star className="h-3 w-3 fill-current" />
         </div>
       </motion.div>
+
+          {/* Kartu Tantangan Hari Ini */}
+          <DailyChallengeCard />
+        </div>
       </div>
 
       {/* Kontrol bawah — selalu terlihat (toolbar tetap) */}
@@ -180,6 +192,16 @@ export function MainMenu() {
         <div className="flex flex-wrap items-center justify-center gap-2">
           <MenuBadgesButton onClick={() => setShowBadges(true)} />
           <MenuLeaderboardButton onClick={() => setShowBoard(true)} />
+          {records?.tutorialSeen && (
+            <button
+              className="btn-cute-secondary !px-3 !py-1.5 !text-xs"
+              onClick={replayTutorial}
+              title="Ulangi tutorial interaktif"
+            >
+              <GraduationCap className="h-4 w-4" />
+              Ulangi Tutorial
+            </button>
+          )}
         </div>
 
         <div className="panel-cute flex items-center gap-2 px-3 py-1.5">

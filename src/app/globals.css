@@ -510,3 +510,276 @@
   50% { opacity: 1; }
   100% { opacity: 0.4; }
 }
+
+/* ============================ TUTORIAL INTERAKTIF ============================ */
+
+/* gelembung nasihat Kakek Imam (dipakai layer tutorial) */
+.tut-bubble {
+  position: relative;
+  border-radius: 1.6rem;
+  border: 4px solid #ffd76a;
+  background: linear-gradient(180deg, #fffdf0 0%, #fff6d8 100%);
+  box-shadow:
+    0 6px 0 #e8c065,
+    0 20px 44px rgba(120, 80, 20, 0.35),
+    inset 0 2px 0 rgba(255, 255, 255, 0.95);
+  padding: 0.9rem 5.2rem 0.8rem 0.9rem;
+}
+
+/* ekor gelembung kecil */
+.tut-bubble::after {
+  content: '';
+  position: absolute;
+  left: 34px;
+  bottom: -14px;
+  width: 22px;
+  height: 14px;
+  background: #fff6d8;
+  border-right: 4px solid #ffd76a;
+  border-bottom: 4px solid #ffd76a;
+  border-bottom-right-radius: 14px;
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+.tut-bubble.bottom-variant::after { display: none; }
+
+/* maskot Kakek Imam */
+.tut-mascot {
+  position: absolute;
+  left: -12px;
+  top: -18px;
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  font-size: 1.9rem;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 35% 30%, #ffffff, #e8f7ee 60%, #c9ecd8);
+  border: 4px solid #7dd8a2;
+  box-shadow: 0 5px 0 #4a9a6a, 0 12px 22px rgba(60, 120, 80, 0.35);
+  animation: mascot-float 2.6s ease-in-out infinite;
+}
+.tut-mascot-badge {
+  position: absolute;
+  right: -8px;
+  bottom: -6px;
+  font-size: 0.85rem;
+  background: #fff;
+  border-radius: 9999px;
+  border: 2px solid #ffd76a;
+  padding: 0 0.15rem;
+}
+@keyframes mascot-float {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-5px) rotate(2deg); }
+}
+
+/* tombol lewati kecil */
+.tut-skip {
+  position: absolute;
+  right: 0.6rem;
+  bottom: 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.22rem 0.6rem;
+  font-size: 0.62rem;
+  font-weight: 900;
+  color: #9a7a3a;
+  background: #fff;
+  border: 2px solid #e8c065;
+  border-radius: 9999px;
+  box-shadow: 0 2px 0 #e8c065;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.tut-skip:hover { transform: translateY(-1px); background: #fffdf0; }
+.tut-skip:active { transform: translateY(2px); box-shadow: none; }
+
+/* titik langkah */
+.tut-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: #e8d8a8;
+  display: inline-block;
+}
+.tut-dot-on {
+  background: #ffb43a;
+  box-shadow: 0 0 0 3px rgba(255, 180, 58, 0.35);
+  transform: scale(1.25);
+}
+
+/* cincin sorot pulsing di sekitar target */
+.tut-ring {
+  position: fixed;
+  pointer-events: none;
+  z-index: 45;
+  border-radius: 1.4rem;
+  border: 4px solid #ffb43a;
+  box-shadow:
+    0 0 0 5px rgba(255, 180, 58, 0.3),
+    0 0 26px rgba(255, 180, 58, 0.65),
+    inset 0 0 14px rgba(255, 220, 120, 0.5);
+  animation: tut-pulse 1.15s ease-in-out infinite;
+}
+@keyframes tut-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.055); opacity: 0.72; }
+}
+
+/* ============================ SARAN KAKEK (COACH) ============================ */
+
+.coach-card {
+  border-radius: 1.6rem;
+  border: 3px dashed #9fd8b4;
+  background: linear-gradient(180deg, #f2fbf5 0%, #e3f6ea 100%);
+  box-shadow: 0 4px 0 #b7ddc6, inset 0 2px 0 rgba(255, 255, 255, 0.8);
+  padding: 0.8rem 0.9rem;
+}
+
+.coach-avatar {
+  position: absolute;
+  left: -10px;
+  top: -16px;
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  font-size: 1.7rem;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 35% 30%, #ffffff, #e8f7ee 60%, #c9ecd8);
+  border: 4px solid #7dd8a2;
+  box-shadow: 0 4px 0 #4a9a6a, 0 10px 18px rgba(60, 120, 80, 0.3);
+  animation: mascot-float 3s ease-in-out infinite;
+}
+
+/* ============================ TANTANGAN HARIAN ============================ */
+
+.daily-card {
+  position: relative;
+  border-radius: 1.8rem;
+  border: 4px solid #ffb27a;
+  background:
+    radial-gradient(circle at 85% 15%, rgba(255, 255, 255, 0.55) 0%, transparent 45%),
+    linear-gradient(180deg, #fff3e0 0%, #ffe3c2 100%);
+  box-shadow:
+    0 6px 0 #e8a25c,
+    0 18px 38px rgba(200, 110, 40, 0.3),
+    inset 0 2px 0 rgba(255, 255, 255, 0.8);
+}
+
+.daily-effect-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  background: #fff;
+  border: 2px solid #ffc98f;
+  font-size: 0.66rem;
+  font-weight: 900;
+  color: #a05a20;
+  box-shadow: 0 2px 0 #f0b877;
+}
+
+.streak-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, #ff9a5c, #ff7b2e);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-shadow: 0 1px 0 rgba(150, 60, 10, 0.5);
+  box-shadow: 0 3px 0 #d9661f;
+}
+
+.btn-daily {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1.1rem;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, #ffb45c 0%, #ff8f3d 100%);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 900;
+  text-shadow: 0 1px 0 rgba(150, 60, 10, 0.5);
+  box-shadow:
+    0 5px 0 #d9661f,
+    0 12px 22px rgba(200, 110, 40, 0.4),
+    inset 0 2px 0 rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+.btn-daily:hover { transform: translateY(-2px) scale(1.03); filter: brightness(1.06); }
+.btn-daily:active { transform: translateY(3px); box-shadow: 0 2px 0 #d9661f; }
+.btn-daily:focus-visible { outline: 3px solid #ffd76a; outline-offset: 2px; }
+
+/* chip kecil di HUD saat mode tantangan */
+.daily-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.9rem;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, #ff9a5c, #ff7b2e);
+  border: 2px solid #ffd0a3;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-shadow: 0 1px 0 rgba(150, 60, 10, 0.5);
+  box-shadow: 0 3px 0 #d9661f, 0 8px 16px rgba(200, 110, 40, 0.35);
+}
+
+/* banner kemenangan tantangan di layar menang */
+.daily-won-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.7rem 1rem;
+  border-radius: 1.4rem;
+  background: linear-gradient(90deg, #ff8f3d, #ff6b2e);
+  border: 3px solid #ffd0a3;
+  box-shadow: 0 4px 0 #d9661f, 0 14px 26px rgba(200, 90, 20, 0.4);
+  text-align: left;
+}
+
+/* ============================ POLISH TAMBAHAN ============================ */
+
+/* judul menu — shimmer lembut emerald-emas */
+.title-shimmer {
+  background: linear-gradient(90deg, #047857 0%, #10b981 25%, #f59e0b 50%, #10b981 75%, #047857 100%);
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: title-shimmer-move 4.5s linear infinite;
+}
+@keyframes title-shimmer-move {
+  0% { background-position: 0% center; }
+  100% { background-position: 220% center; }
+}
+
+/* fokus keyboard jelas untuk semua tombol (aksesibilitas anak) */
+.btn-cute:focus-visible,
+.btn-cute-lg:focus-visible,
+.btn-cute-secondary:focus-visible,
+.btn-cute-danger:focus-visible,
+.btn-icon:focus-visible,
+.btn-cam:focus-visible,
+.btn-dua:focus-visible,
+.btn-quality:focus-visible,
+.card-char:focus-visible {
+  outline: 3px solid #ffd76a;
+  outline-offset: 3px;
+}
+
+/* area aman bawah untuk perangkat notch (kartu karakter & menu) */
+.safe-bottom {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}

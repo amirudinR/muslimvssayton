@@ -65,7 +65,7 @@ export function CharacterBar() {
   const selectedDef = selectedCharId ? CHAR_DEFS[selectedCharId] : null
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex flex-col items-center gap-2 px-2 pb-2 sm:pb-3">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex flex-col items-center gap-2 px-2 pb-2 safe-bottom sm:pb-3">
       {/* Panel preview karakter terpilih */}
       <AnimatePresence>
         {selectedDef && (
@@ -104,7 +104,7 @@ export function CharacterBar() {
       </AnimatePresence>
 
       {/* Kartu-kartu karakter */}
-      <div className="pointer-events-auto flex max-w-full items-stretch gap-1.5 overflow-x-auto pb-1 sm:gap-2.5">
+      <div data-tut="cards" className="pointer-events-auto flex max-w-full items-stretch gap-1.5 overflow-x-auto pb-1 sm:gap-2.5">
         {CHAR_ORDER.map((id) => {
           const def = CHAR_DEFS[id]
           const isUnlocked = unlocked.includes(id)

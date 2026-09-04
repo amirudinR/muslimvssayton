@@ -25,6 +25,14 @@ export interface SaveData {
   totalDuaUsed: number
   /** id lencana yang sudah terbuka */
   achievements: string[]
+  /** sudah melihat tutorial interaktif? */
+  tutorialSeen: boolean
+  /** kekalahan beruntun (untuk saran coach makin peka) */
+  lossStreak: number
+  /** hari berturut-turut menang Tantangan Harian */
+  dailyStreak: number
+  /** tanggal (YYYY-MM-DD) terakhir menang tantangan harian */
+  lastDailyWin: string | null
 }
 
 const KEY = 'penjaga-masjid-save-v1'
@@ -40,6 +48,10 @@ const DEFAULT_SAVE: SaveData = {
   totalStars: 0,
   totalDuaUsed: 0,
   achievements: [],
+  tutorialSeen: false,
+  lossStreak: 0,
+  dailyStreak: 0,
+  lastDailyWin: null,
 }
 
 export function loadSave(): SaveData {
@@ -52,6 +64,10 @@ export function loadSave(): SaveData {
       ...DEFAULT_SAVE,
       ...parsed,
       achievements: Array.isArray(parsed.achievements) ? parsed.achievements : [],
+      tutorialSeen: !!parsed.tutorialSeen,
+      lossStreak: typeof parsed.lossStreak === 'number' ? parsed.lossStreak : 0,
+      dailyStreak: typeof parsed.dailyStreak === 'number' ? parsed.dailyStreak : 0,
+      lastDailyWin: typeof parsed.lastDailyWin === 'string' ? parsed.lastDailyWin : null,
     }
   } catch {
     return { ...DEFAULT_SAVE, achievements: [] }

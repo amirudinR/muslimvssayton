@@ -4,7 +4,7 @@
  * ============================================================ */
 
 import { create } from 'zustand'
-import { GAME_CONST, DUA_CONST, type CharId } from './data'
+import { GAME_CONST, DUA_CONST, RUN_MODS, type CharId, type DailyModifier } from './data'
 
 export type Screen = 'menu' | 'playing' | 'victory' | 'gameover'
 export type CameraMode = 'iso' | 'follow' | 'photo' | 'menu' | 'boss'
@@ -61,6 +61,17 @@ export interface GameStore {
   scoreSubmitted: boolean
   /* --- lencana yang terbuka sesi ini (untuk toast) --- */
   badgeToast: { id: number; name: string; emoji: string; desc: string } | null
+  /* --- HP maksimum masjid (bisa berbeda saat Tantangan Harian) --- */
+  mosqueMaxHp: number
+  /* --- Tutorial interaktif: 0 = nonaktif, 1..6 = langkah aktif --- */
+  tutorialStep: number
+  /* --- mode Tantangan Harian aktif --- */
+  dailyMode: boolean
+  dailyMod: DailyModifier | null
+  /* --- saran strategi Kakek Imam saat kalah --- */
+  coachTips: string[] | null
+  /* --- streak Tantangan Harian hasil kemenangan (untuk layar menang) --- */
+  dailyStreakResult: number
 }
 
 interface GameActions {
@@ -98,6 +109,8 @@ interface GameActions {
   setScoreSubmitted: (v: boolean) => void
   showBadgeToast: (name: string, emoji: string, desc: string) => void
   clearBadgeToast: () => void
+  setTutorialStep: (n: number) => void
+  setCoachTips: (tips: string[] | null) => void
 }
 
 let toastId = 0
@@ -133,6 +146,12 @@ export const useGameStore = create<GameStore & GameActions>()((set) => ({
   duaUsedThisGame: 0,
   scoreSubmitted: false,
   badgeToast: null,
+  mosqueMaxHp: GAME_CONST.mosqueMaxHp,
+  tutorialStep: 0,
+  dailyMode: false,
+  dailyMod: null,
+  coachTips: null,
+  dailyStreakResult: 0,
 
   setScreen: (s) => set({ screen: s }),
   setPaused: (p) => set({ paused: p }),
@@ -174,7 +193,8 @@ export const useGameStore = create<GameStore & GameActions>()((set) => ({
   addDuaCharge: (amount) =>
     set((st) => {
       if (st.duaReady || st.screen !== 'playing') return st
-      const charge = Math.min(DUA_CONST.max, st.duaCharge + amount)
+      const gain = Math.round(amount * RUN_MODS.duaChargeMult)
+      const charge = Math.min(DUA_CONST.max, st.duaCharge + gain)
       const ready = charge >= DUA_CONST.max
       const justReady = ready && !st.duaReady
       if (justReady) {
@@ -196,6 +216,9 @@ export const useGameStore = create<GameStore & GameActions>()((set) => ({
   showBadgeToast: (name, emoji, desc) =>
     set({ badgeToast: { id: ++toastId, name, emoji, desc } }),
   clearBadgeToast: () => set({ badgeToast: null }),
+
+  setTutorialStep: (n) => set({ tutorialStep: n }),
+  setCoachTips: (tips) => set({ coachTips: tips }),
 
   resetForNewGame: () =>
     set({
@@ -224,6 +247,12 @@ export const useGameStore = create<GameStore & GameActions>()((set) => ({
       duaUsedThisGame: 0,
       scoreSubmitted: false,
       badgeToast: null,
+      mosqueMaxHp: GAME_CONST.mosqueMaxHp,
+      tutorialStep: 0,
+      dailyMode: false,
+      dailyMod: null,
+      coachTips: null,
+      dailyStreakResult: 0,
     }),
 }))
 

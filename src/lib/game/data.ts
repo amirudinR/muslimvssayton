@@ -447,5 +447,146 @@ export const DUA_CONST = {
   heal: 8,
 } as const
 
+/* --------------------------- TANTANGAN HARIAN --------------------------- */
+
+/** Modifier harian — ditentukan dari tanggal (semua pemain dapat sama). */
+export interface DailyModifier {
+  id: string
+  name: string
+  emoji: string
+  desc: string
+  /** chip efek singkat untuk UI */
+  effects: string[]
+  enemyHpMult?: number
+  enemySpeedMult?: number
+  rewardMult?: number
+  startPahalaBonus?: number
+  mosqueHpBonus?: number
+  duaChargeMult?: number
+  stealMult?: number
+}
+
+export const DAILY_MODIFIERS: DailyModifier[] = [
+  {
+    id: 'jumat_berkah',
+    name: 'Jumat Berkah',
+    emoji: '🌟',
+    desc: 'Hari berkah! Setan-setan "ketiban berkah" — hadiah pahala lebih melimpah!',
+    effects: ['Hadiah pahala +30% 🪙'],
+    rewardMult: 1.3,
+  },
+  {
+    id: 'angin_kencang',
+    name: 'Angin Kencang',
+    emoji: '💨',
+    desc: 'Angin bertiup kencang di halaman masjid — setan lari lebih gesit hari ini!',
+    effects: ['Setan +15% gesit 💨', 'Hadiah pahala +10% 🪙'],
+    enemySpeedMult: 1.15,
+    rewardMult: 1.1,
+  },
+  {
+    id: 'masjid_kokoh',
+    name: 'Masjid Kokoh',
+    emoji: '💪',
+    desc: 'Masjid direnovasi lebih kuat hari ini. Tenang, fondasinya tebal!',
+    effects: ['HP masjid +40 💪'],
+    mosqueHpBonus: 40,
+  },
+  {
+    id: 'gerhana_ceria',
+    name: 'Gerhana Ceria',
+    emoji: '🌙',
+    desc: 'Gerhana membuat setan lebih bersemangat — tapi hadiahnya juga melimpah!',
+    effects: ['Setan +20% kuat 😤', 'Hadiah pahala +25% 🪙'],
+    enemyHpMult: 1.2,
+    rewardMult: 1.25,
+  },
+  {
+    id: 'rezeki_subur',
+    name: 'Rezeki Subur',
+    emoji: '🪙',
+    desc: 'Rezeki subur! Modal awal lebih besar — bangun regu anak sholeh yang besar!',
+    effects: ['Modal awal +80 🪙'],
+    startPahalaBonus: 80,
+  },
+  {
+    id: 'bulan_purnama',
+    name: 'Bulan Purnama',
+    emoji: '✨',
+    desc: 'Cahaya purnama membuat doa cepat terkabul — energi DOA terisi kilat!',
+    effects: ['Energi DOA 2× lebih cepat ⚡'],
+    duaChargeMult: 2,
+  },
+  {
+    id: 'tuyul_pesta',
+    name: 'Tuyul Pesta',
+    emoji: '😅',
+    desc: 'Tuyul-tuyul ulang tahun! Mereka kalau lolos mencuri lebih banyak pahala…',
+    effects: ['Curian Tuyul 2× 😅', 'Hadiah pahala +15% 🪙'],
+    stealMult: 2,
+    rewardMult: 1.15,
+  },
+  {
+    id: 'pagi_cerah',
+    name: 'Pagi Cerah',
+    emoji: '☀️',
+    desc: 'Pagi yang cerah membuat setan males jalan — sambil rebahan-santai!',
+    effects: ['Setan -10% gesit 🐢', 'Modal awal +40 🪙'],
+    enemySpeedMult: 0.9,
+    startPahalaBonus: 40,
+  },
+]
+
+/** kunci tanggal lokal "YYYY-MM-DD" */
+export function dailyKey(d = new Date()): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/** modifier hari ini — deterministik dari tanggal (semua orang sama) */
+export function pickDailyModifier(key = dailyKey()): DailyModifier {
+  let h = 0
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0
+  return DAILY_MODIFIERS[h % DAILY_MODIFIERS.length]
+}
+
+/* --------------------- Modifier runtime per pertandingan --------------------- */
+
+export interface RunMods {
+  enemyHpMult: number
+  enemySpeedMult: number
+  rewardMult: number
+  stealMult: number
+  duaChargeMult: number
+}
+
+/** modifier aktif untuk pertandingan berjalan (diubah saat mulai game). */
+export const RUN_MODS: RunMods = {
+  enemyHpMult: 1,
+  enemySpeedMult: 1,
+  rewardMult: 1,
+  stealMult: 1,
+  duaChargeMult: 1,
+}
+
+export function resetRunMods() {
+  RUN_MODS.enemyHpMult = 1
+  RUN_MODS.enemySpeedMult = 1
+  RUN_MODS.rewardMult = 1
+  RUN_MODS.stealMult = 1
+  RUN_MODS.duaChargeMult = 1
+}
+
+export function applyDailyMods(mod: DailyModifier) {
+  resetRunMods()
+  if (mod.enemyHpMult) RUN_MODS.enemyHpMult = mod.enemyHpMult
+  if (mod.enemySpeedMult) RUN_MODS.enemySpeedMult = mod.enemySpeedMult
+  if (mod.rewardMult) RUN_MODS.rewardMult = mod.rewardMult
+  if (mod.stealMult) RUN_MODS.stealMult = mod.stealMult
+  if (mod.duaChargeMult) RUN_MODS.duaChargeMult = mod.duaChargeMult
+}
+
 export const QUALITY_LEVELS = ['low', 'medium', 'high'] as const
 export type Quality = (typeof QUALITY_LEVELS)[number]

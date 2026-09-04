@@ -7,6 +7,7 @@
 import { loadSave, saveSave, type SaveData } from './persist'
 import { gameStore } from './store'
 import { audio } from './audio'
+import { dailyKey } from './data'
 
 export interface BadgeDef {
   id: string
@@ -29,6 +30,8 @@ export const BADGES: BadgeDef[] = [
   { id: 'squad_8', name: 'Regu Anak Sholeh', desc: 'Memasang 8 anak sholeh sekaligus', emoji: '👨‍👩‍👧‍👦' },
   { id: 'kuyang', name: 'Penangkap Kuyang', desc: 'Menghalau Kuyang Melayang lucu', emoji: '🎈' },
   { id: 'sedekah_300', name: 'Jutawan Sedekah', desc: 'Kotak sedekah Misbah menghasilkan 300 pahala', emoji: '💰' },
+  { id: 'tutorial_done', name: 'Murid Rajin', desc: 'Menyelesaikan tutorial Kakek Imam', emoji: '🎓' },
+  { id: 'daily_win', name: 'Juara Harian', desc: 'Menang Tantangan Hari Ini', emoji: '🔥' },
 ]
 
 let saveCache: SaveData | null = null
@@ -75,6 +78,8 @@ export interface BadgeCtx {
     | 'duaUsed'
     | 'pahalaChanged'
     | 'sedekahTick'
+    | 'tutorialDone'
+    | 'dailyWin'
   enemyId?: string
   wave?: number
   stars?: number
@@ -140,6 +145,14 @@ export function checkBadges(ctx: BadgeCtx) {
       if ((ctx.misbahGen ?? 0) >= 300) unlock('sedekah_300')
       break
     }
+    case 'tutorialDone': {
+      unlock('tutorial_done')
+      break
+    }
+    case 'dailyWin': {
+      unlock('daily_win')
+      break
+    }
   }
 }
 
@@ -154,6 +167,9 @@ export interface RecordsView {
   totalDefeated: number
   achievements: string[]
   playerName: string
+  tutorialSeen: boolean
+  dailyStreak: number
+  lastDailyWin: string | null
 }
 
 export function getRecords(): RecordsView {
@@ -167,6 +183,9 @@ export function getRecords(): RecordsView {
     totalDefeated: s.totalDefeated,
     achievements: [...s.achievements],
     playerName: s.playerName,
+    tutorialSeen: s.tutorialSeen,
+    dailyStreak: s.dailyStreak,
+    lastDailyWin: s.lastDailyWin,
   }
 }
 
@@ -181,4 +200,57 @@ export function recordSessionEnd(pahala: number) {
   const s = getSave()
   s.totalStars += pahala
   flush()
+}
+
+/* ---------------- tutorial / coach / tantangan harian ---------------- */
+
+export function isTutorialSeen(): boolean {
+  return getSave().tutorialSeen
+}
+
+export function markTutorialDone() {
+  const s = getSave()
+  if (s.tutorialSeen) return
+  s.tutorialSeen = true
+  flush()
+}
+
+/** naikkan kekalahan beruntun — mengembalikan nilai baru */
+export function bumpLossStreak(): number {
+  const s = getSave()
+  s.lossStreak = Math.min(9, s.lossStreak + 1)
+  flush()
+  return s.lossStreak
+}
+
+export function clearLossStreak() {
+  const s = getSave()
+  if (s.lossStreak === 0) return
+  s.lossStreak = 0
+  flush()
+}
+
+export function getLossStreak(): number {
+  return getSave().lossStreak
+}
+
+/** info streak tantangan harian */
+export function getDailyStreakInfo(): { streak: number; lastWin: string | null } {
+  const s = getSave()
+  return { streak: s.dailyStreak, lastWin: s.lastDailyWin }
+}
+
+/** catat kemenangan tantangan harian hari ini — kembalikan streak baru. */
+export function recordDailyWin(todayKey: string): number {
+  const s = getSave()
+  if (s.lastDailyWin === todayKey) return s.dailyStreak // sudah dicatat hari ini
+  const yesterdayKey = (() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 1)
+    return dailyKey(d)
+  })()
+  s.dailyStreak = s.lastDailyWin === yesterdayKey ? s.dailyStreak + 1 : 1
+  s.lastDailyWin = todayKey
+  flush()
+  return s.dailyStreak
 }

@@ -23,9 +23,15 @@ import {
   SLOTS,
   GAME_CONST,
   DUA_CONST,
+  RUN_MODS,
+  resetRunMods,
+  applyDailyMods,
+  pickDailyModifier,
+  dailyKey,
   type CharId,
   type EnemyId,
   type Quality,
+  type DailyModifier,
 } from './data'
 import { createGround, createMosque, createSlotPad, createTree, createFlowerField, createCloud, createBird, createButterfly, createRangeRing, getCharacterModel } from './models'
 import { ParticleSystem } from './particles'
@@ -34,7 +40,15 @@ import { CameraController } from './camera'
 import { audio } from './audio'
 import { gameStore, type CameraMode } from './store'
 import { computeStars } from './persist'
-import { checkBadges, recordSessionEnd } from './achievements'
+import {
+  checkBadges,
+  recordSessionEnd,
+  isTutorialSeen,
+  markTutorialDone,
+  bumpLossStreak,
+  clearLossStreak,
+  recordDailyWin,
+} from './achievements'
 
 interface SlotObj {
   group: THREE.Group
@@ -112,6 +126,10 @@ export class GameEngine {
   private misbahGenTotal = 0
   /** cooldown suara koin sedekah agar tidak berisik */
   private sedekahSoundCd = 0
+  /** timer langkah tutorial aktif */
+  private tutTimer = 0
+  /** kunci tanggal tantangan harian yang sedang berjalan */
+  private dailyKeyRun: string | null = null
 
   private lastFrameTime = performance.now()
 
@@ -130,6 +148,7 @@ export class GameEngine {
     ;(window as unknown as Record<string, unknown>).__pmEngine = this
     ;(window as unknown as Record<string, unknown>).__THREE = THREE
     ;(window as unknown as Record<string, unknown>).__pmStore = gameStore
+    ;(window as unknown as Record<string, unknown>).__pmMods = RUN_MODS
 
     this.scene = new THREE.Scene()
     this.scene.background = new THREE.Color(0x8fd4ff)
@@ -665,14 +684,38 @@ export class GameEngine {
 
   /* =============================== GAME FLOW =============================== */
 
-  startGame() {
+  startGame(opts?: { daily?: boolean; forceTutorial?: boolean }) {
     audio.ensure()
     audio.setSound(gameStore.get().soundOn)
     audio.setMusic(gameStore.get().musicOn)
     audio.startBgm()
     this.clearDuaOverlay()
     gameStore.get().resetForNewGame()
-    gameStore.set((s) => ({ ...s, pahala: GAME_CONST.startPahala, mosqueHp: GAME_CONST.mosqueMaxHp }))
+
+    /* ---- Tantangan Harian: terapkan modifier tanggal hari ini ---- */
+    resetRunMods()
+    this.dailyKeyRun = null
+    let maxHp = GAME_CONST.mosqueMaxHp
+    let startPahala = GAME_CONST.startPahala
+    let dailyMod: DailyModifier | null = null
+    if (opts?.daily) {
+      const key = dailyKey()
+      dailyMod = pickDailyModifier(key)
+      applyDailyMods(dailyMod)
+      maxHp += dailyMod.mosqueHpBonus ?? 0
+      startPahala += dailyMod.startPahalaBonus ?? 0
+      this.dailyKeyRun = key
+    }
+
+    gameStore.set((s) => ({
+      ...s,
+      pahala: startPahala,
+      mosqueHp: maxHp,
+      mosqueMaxHp: maxHp,
+      dailyMode: !!opts?.daily,
+      dailyMod,
+      tutorialStep: 0,
+    }))
     this.manager.reset()
     this.slots.forEach((s) => (s.occupied = false))
     this.spawnEvents = []
@@ -680,11 +723,27 @@ export class GameEngine {
     this.spawnCursor = 0
     this.victoryTimer = 0
     this.misbahGenTotal = 0
+    this.tutTimer = 0
     gameStore.set((s) => ({ ...s, nextWaveIn: GAME_CONST.firstWaveDelay }))
     this.setCameraMode('iso')
     this.refreshSlotHighlights()
     this.updateWavePreview(1)
-    gameStore.get().showToast('Taruh Ali di dekat jalur setan, ya! 🧒', '🤲', 'info')
+
+    if (opts?.daily && dailyMod) {
+      gameStore
+        .get()
+        .showToast(`TANTANGAN HARI INI: ${dailyMod.emoji} ${dailyMod.name}!`, '🔥', 'info')
+      gsap.delayedCall(1.4, () =>
+        gameStore.get().showToast(dailyMod ? dailyMod.desc : '', dailyMod ? dailyMod.emoji : '🔥', 'info'),
+      )
+    } else {
+      /* ---- Tutorial interaktif saat pertama kali main ---- */
+      if (opts?.forceTutorial || !isTutorialSeen()) {
+        this.tutTimer = 0
+        gameStore.set((s) => ({ ...s, tutorialStep: 1 }))
+      }
+      gameStore.get().showToast('Taruh Ali di dekat jalur setan, ya! 🧒', '🤲', 'info')
+    }
   }
 
   backToMenu() {
@@ -701,6 +760,10 @@ export class GameEngine {
       dragging: false,
       paused: false,
       bossHp: null,
+      tutorialStep: 0,
+      coachTips: null,
+      dailyMode: false,
+      dailyMod: null,
     }))
     this.manager.reset()
     this.slots.forEach((s) => (s.occupied = false))
@@ -809,8 +872,8 @@ export class GameEngine {
 
   private onVictory() {
     const st = gameStore.get()
-    const stars = computeStars(st.mosqueHp, GAME_CONST.mosqueMaxHp)
-    gameStore.set((s) => ({ ...s, screen: 'victory', resultStars: stars }))
+    const stars = computeStars(st.mosqueHp, st.mosqueMaxHp)
+    gameStore.set((s) => ({ ...s, screen: 'victory', resultStars: stars, funFact: null }))
     audio.stopBgm()
     audio.cheer()
     audio.tada()
@@ -820,21 +883,62 @@ export class GameEngine {
     this.clearDuaOverlay()
     checkBadges({ event: 'victory', stars, pahala: st.stats.starsEarned })
     recordSessionEnd(st.stats.starsEarned)
+    clearLossStreak()
+    /* ---- Tantangan Harian menang → catat streak ---- */
+    if (st.dailyMode && this.dailyKeyRun) {
+      const streak = recordDailyWin(this.dailyKeyRun)
+      checkBadges({ event: 'dailyWin' })
+      gameStore.set((s) => ({ ...s, dailyStreakResult: streak }))
+      this.particles.rings.spawn(0, 0.12, 0, 0xff8a5c, 22, 1.6)
+    }
   }
 
   private onGameOver() {
     const st = gameStore.get()
-    gameStore.set((s) => ({ ...s, screen: 'gameover' }))
+    gameStore.set((s) => ({ ...s, screen: 'gameover', funFact: null }))
     audio.stopBgm()
     audio.mosqueHit()
     this.clearDuaOverlay()
     checkBadges({ event: 'gameOver' })
     recordSessionEnd(st.stats.starsEarned)
+    /* ---- Saran strategi personal dari "Kakek Imam" ---- */
+    const lossStreak = bumpLossStreak()
+    gameStore.set((s) => ({ ...s, coachTips: this.buildCoachTips(st, lossStreak) }))
     // setan lari senang (bukan dramatic)
     this.manager.enemies.forEach((e) => {
       e.fleeing = true
     })
     gameStore.get().showToast('Setan-setan lari senang-senang~ 😄', '👻', 'info')
+  }
+
+  /** Analisis gaya main untuk saran personal di layar kalah (semua positif). */
+  private buildCoachTips(st: ReturnType<typeof gameStore.get>, lossStreak: number): string[] {
+    const towers = this.manager.towers
+    const tips: string[] = []
+    if (lossStreak >= 2) {
+      tips.push('Kakek lihat kamu kesulitan — mulai dengan 3-4 penjaga dulu, baru upgrade pelan-pelan ya 🤗')
+    }
+    if (towers.length < 6) {
+      tips.push('Pasang lebih banyak penjaga — sebar di TIGA jalur (kiri, tengah, kanan) agar tidak ada yang lolos 🗺️')
+    }
+    const maxed = towers.filter((t) => t.level >= 3).length
+    if (maxed === 0 && towers.length > 0) {
+      tips.push('Nabung pahala untuk UPGRADE bintang ⭐ — penjaga level 3 jauh lebih kuat lho!')
+    }
+    const hasMisbah = towers.some((t) => t.def.id === 'misbah')
+    if (!hasMisbah && st.wave >= 4) {
+      tips.push('Coba pasang Misbah 💡 — kotak sedekahnya menghasilkan pahala otomatis tiap beberapa detik!')
+    }
+    if (st.duaUsedThisGame === 0) {
+      tips.push('Tekan DOA BERSAMA 🤲 saat energinya penuh — SEMUA penjaga ikut diberkahi, hebat sekali!')
+    }
+    if (st.wave >= 8) {
+      tips.push('Sedikit lagi! Kakek Imam 📢 serangannya kena SEMUA setan — pasang 2-3 beliau untuk gelombang akhir!')
+    }
+    if (tips.length === 0) {
+      tips.push('Kamu sudah bermain bagus! Rapikan posisi penjaga & upgrade pelan-pelan ya 😊')
+    }
+    return tips.slice(0, 3)
   }
 
   /* =============================== DOA BERSAMA =============================== */
@@ -854,7 +958,7 @@ export class GameEngine {
       }
     })
     // masjid dipulihkan sedikit
-    const healed = Math.min(GAME_CONST.mosqueMaxHp, st.mosqueHp + DUA_CONST.heal)
+    const healed = Math.min(st.mosqueMaxHp, st.mosqueHp + DUA_CONST.heal)
     if (healed > st.mosqueHp) {
       gameStore.set((s) => ({ ...s, mosqueHp: healed }))
       this.particles.showDamage(0, 7.5, 6, DUA_CONST.heal, '#4ade80')
@@ -905,16 +1009,17 @@ export class GameEngine {
 
   private onEnemyKilled(reward: number, pos: THREE.Vector3, enemyId: EnemyId) {
     const st = gameStore.get()
+    const rewardAdj = Math.round(reward * RUN_MODS.rewardMult)
     gameStore.set((s) => ({
       ...s,
-      pahala: s.pahala + reward,
-      stats: { ...s.stats, defeated: s.stats.defeated + 1, starsEarned: s.stats.starsEarned + reward },
+      pahala: s.pahala + rewardAdj,
+      stats: { ...s.stats, defeated: s.stats.defeated + 1, starsEarned: s.stats.starsEarned + rewardAdj },
     }))
-    this.particles.showPahala(pos.x, 2.4, pos.z, reward)
+    this.particles.showPahala(pos.x, 2.4, pos.z, rewardAdj)
     // energi Doa Bersama naik saat setan dihalau
     st.addDuaCharge(DUA_CONST.perKill)
     checkBadges({ event: 'enemyKilled', enemyId })
-    checkBadges({ event: 'pahalaChanged', pahala: st.pahala + reward })
+    checkBadges({ event: 'pahalaChanged', pahala: st.pahala + rewardAdj })
   }
 
   private onEnemyLeaked(enemy: Enemy) {
@@ -922,10 +1027,11 @@ export class GameEngine {
     const def = enemy.def
     let dmg = def.damage
     if (def.steals) {
-      gameStore.set((s) => ({ ...s, pahala: Math.max(0, s.pahala - def.steals!) }))
+      const steals = Math.round(def.steals * RUN_MODS.stealMult)
+      gameStore.set((s) => ({ ...s, pahala: Math.max(0, s.pahala - steals) }))
       this.particles.stealFx(enemy.pos.x, 1, enemy.pos.z)
       audio.steal()
-      st.showToast(`Tuyul usil mencuri ${def.steals} pahala! 🪙`, '😤', 'bad')
+      st.showToast(`Tuyul usil mencuri ${steals} pahala! 🪙`, '😤', 'bad')
       dmg = def.damage
     } else {
       audio.mosqueHit()
@@ -1036,6 +1142,9 @@ export class GameEngine {
           gameStore.get().showToast('Berkah doa selesai — kumpulkan lagi ya! 🤲', '✨', 'info')
         }
       }
+
+      // tutorial interaktif — maju sesuai aksi pemain sungguhan
+      if (st.tutorialStep > 0) this.updateTutorial(gameDt, st)
     } else {
       // saat pause/menu tetap animasikan manager minimal (idle tower)
       this.manager.update(0)
@@ -1072,6 +1181,53 @@ export class GameEngine {
     const n = Math.max(1, Math.round(seconds / step))
     for (let i = 0; i < n; i++) {
       this.simTick(step)
+    }
+  }
+
+  /* ============================ TUTORIAL INTERAKTIF ============================ */
+
+  /** Lewati tutorial dari tombol UI — tetap dianggap selesai. */
+  skipTutorial() {
+    if (gameStore.get().tutorialStep <= 0) return
+    this.finishTutorial()
+    gameStore.get().showToast('Tutorial selesai! Semangat bermain ya! 🎓', '🎓', 'good')
+  }
+
+  private setTutStep(n: number) {
+    this.tutTimer = 0
+    gameStore.set((s) => ({ ...s, tutorialStep: n }))
+    audio.chime()
+  }
+
+  private finishTutorial() {
+    gameStore.set((s) => ({ ...s, tutorialStep: 0 }))
+    markTutorialDone()
+    checkBadges({ event: 'tutorialDone' })
+  }
+
+  /** Langkah tutorial maju berdasarkan state game nyata (bukan timer saja). */
+  private updateTutorial(dt: number, st: ReturnType<typeof gameStore.get>) {
+    if (st.screen !== 'playing' || st.paused) return
+    this.tutTimer += dt
+    switch (st.tutorialStep) {
+      case 1: // tunggu pilih kartu
+        if (st.selectedCharId) this.setTutStep(2)
+        break
+      case 2: // tunggu pasang tower
+        if (this.manager.towers.length >= 1) this.setTutStep(3)
+        break
+      case 3: // tunggu mulai gelombang
+        if (st.waveActive && st.wave >= 1) this.setTutStep(4)
+        break
+      case 4: // info serangan — lanjut setelah kill pertama (atau mundur)
+        if (st.stats.defeated >= 1 || this.tutTimer > 30 || st.wave >= 2) this.setTutStep(5)
+        break
+      case 5: // info DOA — lanjut saat siap / dipakai / timeout
+        if (st.duaReady || st.duaUsedThisGame > 0 || this.tutTimer > 16 || st.wave >= 2) this.setTutStep(6)
+        break
+      case 6: // penutup
+        if (this.tutTimer > 8 || st.wave >= 2) this.finishTutorial()
+        break
     }
   }
 

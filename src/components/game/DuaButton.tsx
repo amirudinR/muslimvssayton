@@ -24,7 +24,7 @@ export function DuaButton() {
   const pct = Math.min(100, (duaCharge / DUA_CONST.max) * 100)
 
   return (
-    <div className="pointer-events-none fixed left-2.5 top-1/2 z-30 flex -translate-y-1/2 flex-col items-center gap-1.5 sm:left-3.5">
+    <div data-tut="dua-btn" className="pointer-events-none fixed left-2.5 top-1/2 z-30 flex -translate-y-1/2 flex-col items-center gap-1.5 sm:left-3.5">
       <AnimatePresence>
         {duaActive > 0 && (
           <motion.div

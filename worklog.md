@@ -190,3 +190,71 @@ Unresolved issues / risks & rekomendasi fase berikutnya:
 - Run 4-tower tanpa strategi tetap kalah di wave 6 — sesuai desain (pembelajaran), tapi bisa dipantau dari playtest nyata.
 - Ide lanjutan: setan palasik, mode tantangan harian, pilihan bahasa ID/EN, tutorial interaktif pertama main (overlay langkah), saran strategi saat game over berulang, audio pre-rendered, karakter perempuan ke-2 (Sarah si Penjahit?).
 - Screenshot headless tetap tidak menangkap WebGL — tetap gunakan trik .pm-snap + probe.
+
+---
+Task ID: 1-d s/d 6-d
+Agent: main-agent (Z.ai Code)
+Task: QA rutin + 3 fitur besar baru (Tutorial Interaktif, Smart Coach, Tantangan Harian) + polish styling menyeluruh
+
+Work Log:
+
+QA AWAL (agent-browser + probe __pmEngine/__pmStore):
+- Build sehat: halaman 200, 0 console error, API leaderboard 200, dev.log bersih.
+- Golden path terverifikasi ulang: gameover lemah (run 1 tower mati wave 5-6 — sesuai desain), victory run kuat (bot strategis lane-distribusi: wave 10, HP 95/120, 2⭐, 14 tower, dua 10×).
+- Catatan QA bot: `Tower.charId` tidak ada (pakai `t.def.id`); `tryPlace(slotIndex, charId)` — urutan argumen. Bot yang menara satu jalur saja kalah wajar (lane lain bocor) — bukan bug balance.
+
+FITUR BARU 1 — TUTORIAL INTERAKTIF (state-driven, main pertama):
+- store.ts: `tutorialStep` (0=off, 1..6) + aksi setTutorialStep.
+- engine.ts: state machine `updateTutorial(dt, st)` dipanggil di simTick — langkah maju dari AKSI nyata pemain: (1) pilih kartu → (2) pasang di slot → (3) mulai gelombang → (4) kill pertama → (5) intro DOA → (6) penutup → selesai. Timeout aman tiap langkah (bisa macet dihilangkan). `skipTutorial()` publik (tombol Lewati) tetap menandai selesai.
+- persist.ts: `tutorialSeen`; achievements.ts: `isTutorialSeen()/markTutorialDone()` + lencana ke-14 'tutorial_done' (Murid Rajin 🎓).
+- TutorialLayer.tsx (baru): gelembung Kakek Imam (mascot 👴 mengapung + badge 🕌, ekor gelembung, titik langkah 1/6, tombol Lewati pointer-events-auto) + cincin sorot `.tut-ring` (pulsing gold) yang mengukur bounding rect target `data-tut` tiap 700ms (hook useTargetRect, setState asinkron agar lolos lint react-hooks/set-state-in-effect).
+- data-tut target: "cards" (CharacterBar baris kartu), "wave-btn" (tombol MULAI GELOMBANG di Hud), "dua-btn" (DuaButton wrapper).
+- MainMenu: tombol "🎓 Ulangi Tutorial" (startGame({forceTutorial:true})) — hanya tampil jika tutorialSeen.
+
+FITUR BARU 2 — SMART COACH (Saran Kakek Imam di Game Over):
+- engine.onGameOver → `buildCoachTips(st, lossStreak)`: analisis run nyata (jumlah tower <6, tower L3 = 0, tidak ada Misbah & wave≥4, duaUsed=0, wave≥8) + empati saat lossStreak≥2; ambil 3 tips teratas; semua kalimat positif ramah anak.
+- persist: `lossStreak` (bump saat kalah, clear saat menang); store: `coachTips`.
+- EndScreens: CoachTipsCard (kartu hijau dash-border + avatar 👴 + baris tips stagger anim) menggantikan tip statis lama.
+- Bonus fix: onGameOver/onVictory kini meng-clear funFact (modal unlock tidak menumpuk di layar akhir).
+
+FITUR BARU 3 — TANTANGAN HARIAN (Daily Challenge):
+- data.ts: `DailyModifier` + 8 modifier lucu (Jumat Berkah 🌟 reward+30%, Angin Kencang 💨 speed+15%, Masjid Kokoh 💪 HP+40, Gerhana Ceria 🌙 hp+20%/reward+25%, Rezeki Subur 🪙 modal+80, Bulan Purnama ✨ doa 2×, Tuyul Pesta 😅 steal 2×, Pagi Cerah ☀️ speed-10%/modal+40); `dailyKey()` (YYYY-MM-DD lokal) + `pickDailyModifier()` (hash tanggal → deterministic sama untuk semua pemain); `RUN_MODS` mutable + `resetRunMods()/applyDailyMods()`.
+- Integrasi: Enemy constructor maxHp × enemyHpMult; Enemy.update speed × enemySpeedMult; onEnemyKilled reward × rewardMult (round); onEnemyLeaked steals × stealMult; store.addDuaCharge × duaChargeMult; startGame({daily:true}) → pahala+bonus, mosqueMaxHp+bonus (store.mosqueMaxHp baru — HUD & computeStars & heal DOA pakai max dinamis), toast pengumuman modifier.
+- Victory daily: `recordDailyWin(todayKey)` → streak (kemarin menang → +1, else 1, idempotent per hari) + lencana ke-15 'daily_win' (Juara Harian 🔥) + banner "Tantangan Hari Ini Selesai!" + streak di layar menang; skor tantangan TIDAK masuk leaderboard (UI pengganti form submit); tombol Coba Lagi di layar akhir mempertahankan mode (restart {daily:true}).
+- UI: DailyChallenge.tsx (kartu menu oranye: nama hari, modifier emoji+nama+desc, chip efek, streak pill 🔥, tombol MAIN TANTANGAN!, catatan tidak masuk papan rekor); chip `.daily-chip` di HUD saat mode aktif; backToMenu mereset mode.
+- Probe QA baru: `window.__pmMods` (RUN_MODS) — verifikasi multiplier live.
+
+STYLING (mandatory "lebih banyak detail"):
+- CSS baru (globals.css +270 baris): .tut-bubble (panel krem + ekor), .tut-mascot (float anim + badge), .tut-skip, .tut-dot(-on), .tut-ring + @keyframes tut-pulse, .coach-card (dash border hijau), .coach-avatar, .daily-card (gradient peach oranye), .daily-effect-chip, .streak-pill, .btn-daily, .daily-chip, .daily-won-banner, .title-shimmer (judul menu gradient emerald→amber berjalan), :focus-visible outline emas untuk SEMUA tombol (a11y anak), .safe-bottom (env safe-area-inset untuk notch).
+- BadgesModal: grid max-h-[52vh] + scroll (15 lencana).
+- CharacterBar: safe-bottom.
+
+BUGFIX/TEMUAN:
+- [FIX] FunFact modal menumpuk di layar akhir → di-clear di onVictory/onGameOver.
+- [PENTING untuk QA/dev] append CSS via bash `cat >>` TIDAK memicu recompile Turbopack — gunakan tool Edit/Write (kasus: semua class baru sempat hilang dari chunk CSS; setelah edit ulang → muncul). Chunk CSS: /_next/static/chunks/...css — cek via curl.
+- [Artfak QA bukan bug] aksi sinkron sekaligus (pilih+pasang dalam satu eval) membuat tutorial step tertinggal — pemain nyata selalu ada frame di antara aksi; verifikasi ulang dengan advance() di antara aksi → langkah benar (2→3→4).
+
+VERIFIKASI (probe + DOM + VLM + screenshot; artefak di /home/z/my-project/download/):
+- ✓ Tutorial full flow: step 1→2 (pilih kartu) →3 (pasang) →4 (mulai wave) →6 (kill pertama, dua intro) → selesai (tutStep 0, tutorialSeen true, badge Murid Rajin); skip via klik DOM asli bekerja; tidak muncul lagi di game ke-2; force replay bekerja.
+- ✓ Ring: membungkus kartu (349,576,582,120 vs kartu 357,584,566,104) & tombol MULAI (ringY 160 vs btnY 170, wraps=true); VLM: "cream bubble with round elderly-man avatar + gold pulsing ring".
+- ✓ Bulan Purnama (modifier hari ini, 4 Sep 2026): duaCharge 16/kill (8×2 ✓); RUN_MODS via probe: enemyHp 22→26 (×1.2 ✓), reward 8→10 (×1.25 ✓); startGame klasik me-reset RUN_MODS ke 1 ✓.
+- ✓ Daily victory: wave 10, streak 1 tersimpan (lastDailyWin 2026-09-04), badge daily_win, banner "Tantangan Hari Ini Selesai!", form skor disembunyikan + catatan tidak masuk papan rekor; chip HUD "✨TANTANGAN · Bulan Purnama" (desktop+mobile).
+- ✓ Coach: 3 tips personal muncul (DOM .coach-card 3 baris + avatar); lossStreak 2 → tip empati di posisi pertama; VLM konfirmasi render bersih; funFact ter-clear di layar akhir.
+- ✓ Menu: title shimmer gradient (computed style: linear-gradient + clip:text + transparent) — VLM: "green-to-gold gradient text"; kartu daily styled oranye (VLM konfirmasi); tombol MAIN TANTANGAN dalam viewport (desktop y 632-672 < 720; mobile btnVisible true).
+- ✓ Mobile 390×844: menu, tutorial bubble (y 531-668 fit), daily chip + DOA button terlihat; VLM: tanpa overlap/kliping.
+- ✓ Regression: victory klasik penuh (wave 10, 2⭐, HP 95/120, 140 defeated, dua 10×), lossStreak ter-reset saat menang, 0 console error, lint & tsc bersih.
+- ✓ Probe tersedia: __pmEngine, __pmStore, __THREE, __pmMods (baru).
+
+Stage Summary:
+- 3 fitur besar: (1) Tutorial Interaktif 6 langkah state-driven dengan maskot Kakek Imam + cincin sorot pulsing — anak baru langsung dibimbing aksi nyata; (2) Smart Coach — analisis gaya main → 3 saran personal positif + empati kekalahan beruntun di layar Game Over; (3) Tantangan Harian — 8 modifier date-seeded, streak harian, lencana, chip HUD, mode terjaga saat retry, skor terpisah dari leaderboard.
+- 2 lencana baru (Murid Rajin 🎓, Juara Harian 🔥) → total 15; grid modal scrollable.
+- Styling: ~270 baris CSS baru (tutorial/coach/daily/shimmer/focus-visible/safe-area), judul menu gradient animasi, a11y keyboard focus jelas.
+- Bug fix: modal funFact menumpuk di layar akhir.
+- Catatan lingkungan: append CSS via bash tidak memicu recompile — WAJIB pakai tool file-edit untuk CSS; verifikasi chunk CSS via curl.
+
+Unresolved issues / risks & rekomendasi fase berikutnya:
+- Tantangan Harian belum punya tanda khusus di leaderboard (skipped by design — skema DB tidak diubah). Fase lanjut bisa tambah kolom `mode` + tab Klasik/Tantangan di Papan Rekor.
+- Ide lanjutan dari backlog: karakter Sarah si Penjahit, setan Palasik, mode tantangan mingguan, pilihan bahasa ID/EN, audio pre-rendered, intro boss sinematik lebih kaya.
+- Tutorial hanya klasik (daily tidak menampilkan tutorial — by design agar tantangan langsung menantang).
+- Tablet fisik drag&drop tetap belum teruji di sandbox (pointer events sudah dipakai).
+- Playtest nyata untuk panjang tutorial (timeout langkah 4/5 mungkin perlu tuning) dan pace streak harian.
