@@ -72,6 +72,8 @@ export interface ManagerCtx {
   onEnemyKilled: (reward: number, pos: THREE.Vector3, enemyId: EnemyId) => void
   onEnemyLeaked: (enemy: Enemy) => void
   onBossShockwave: (duration: number) => void
+  /** Misbah: pahala hasil kotak sedekah */
+  onPahalaTick: (amount: number, pos: THREE.Vector3, level: number) => void
 }
 
 const tmpVec = new THREE.Vector2()
@@ -427,6 +429,18 @@ export class Tower {
     }
     if (this.punchTimer > 0) this.punchTimer -= dt * 3
 
+    /* --- animasi khusus Misbah: koin sedekah melayang + lampion berdenyut --- */
+    if (this.parts.koinSedekah) {
+      this.parts.koinSedekah.position.y = 1.3 + Math.sin(this.animT * 2.6) * 0.1
+      this.parts.koinSedekah.rotation.z = Math.sin(this.animT * 2.2) * 0.3
+    }
+    if (this.parts.lampion) {
+      const lm = this.parts.lampion as THREE.Mesh
+      const mat = lm.material as THREE.MeshStandardMaterial
+      mat.emissiveIntensity = 0.9 + Math.sin(this.animT * 3.4) * 0.5
+      lm.position.x = -0.72 + Math.sin(this.animT * 1.8) * 0.03
+    }
+
     if (stunned) {
       this.stunnedAnim += dt
       this.group.rotation.z = Math.sin(this.stunnedAnim * 18) * 0.08
@@ -465,6 +479,15 @@ export class Tower {
         inRange.forEach((e) => e.takeDamage(dmg, ctx, { slow }))
         this.punchTimer = 1
       }
+      return
+    }
+
+    if (this.def.attack === 'sedekah') {
+      // Misbah: kotak sedekah — hasilkan pahala pasif (tidak menyerang).
+      // Berkah Doa Bersama melipatgandakan sedekahnya (interval lebih cepat).
+      this.cooldown = stats.fireRate * (blessed ? DUA_CONST.rateMult : 1)
+      const [amount] = this.def.pahalaGen![this.level - 1]
+      ctx.onPahalaTick(amount, this.pos.clone(), this.level)
       return
     }
 

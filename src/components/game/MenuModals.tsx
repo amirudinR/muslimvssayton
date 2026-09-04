@@ -32,6 +32,21 @@ function CuteModal({
   onClose: () => void
   children: React.ReactNode
 }) {
+  // Escape menutup modal (ramah keyboard)
+  const onKey = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        onClose()
+      }
+    },
+    [onClose],
+  )
+  useEffect(() => {
+    window.addEventListener('keydown', onKey, true) // capture agar mod menang sebelum handler lain
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [onKey])
+
   return (
     <motion.div
       initial={{ opacity: 0 }}

@@ -108,6 +108,10 @@ export class GameEngine {
   private frameCount = 0
   /** overlay DOM cahaya keemasan saat Doa Bersama aktif */
   private duaOverlay: HTMLElement | null = null
+  /** total pahala hasil kotak sedekah Misbah pertandingan ini */
+  private misbahGenTotal = 0
+  /** cooldown suara koin sedekah agar tidak berisik */
+  private sedekahSoundCd = 0
 
   private lastFrameTime = performance.now()
 
@@ -149,6 +153,7 @@ export class GameEngine {
       onEnemyKilled: (reward, pos, enemyId) => this.onEnemyKilled(reward, pos, enemyId),
       onEnemyLeaked: (enemy) => this.onEnemyLeaked(enemy),
       onBossShockwave: (duration) => this.onBossShockwave(duration),
+      onPahalaTick: (amount, pos, level) => this.onPahalaTick(amount, pos, level),
     })
     this.scene.add(this.manager.group)
 
@@ -247,7 +252,7 @@ export class GameEngine {
     }
 
     // anak-anak kecil jalan-jalan di halaman masjid (menu hidup)
-    const kids: CharId[] = ['ali', 'aisyah', 'umar', 'fatimah']
+    const kids: CharId[] = ['ali', 'aisyah', 'umar', 'fatimah', 'misbah']
     kids.forEach((k, i) => {
       const g = getCharacterModel(k, 1)
       g.position.set(-5 + i * 3.2, 0, 9.5 + (i % 2) * 2.5)
@@ -674,6 +679,7 @@ export class GameEngine {
     this.waveElapsed = 0
     this.spawnCursor = 0
     this.victoryTimer = 0
+    this.misbahGenTotal = 0
     gameStore.set((s) => ({ ...s, nextWaveIn: GAME_CONST.firstWaveDelay }))
     this.setCameraMode('iso')
     this.refreshSlotHighlights()
@@ -682,7 +688,20 @@ export class GameEngine {
   }
 
   backToMenu() {
-    gameStore.set((s) => ({ ...s, screen: 'menu' }))
+    this.clearDuaOverlay()
+    gameStore.set((s) => ({
+      ...s,
+      screen: 'menu',
+      // bersihkan popup yang bisa nyangkut di menu (fun fact / toast / lencana)
+      funFact: null,
+      toast: null,
+      badgeToast: null,
+      selectedTower: null,
+      selectedCharId: null,
+      dragging: false,
+      paused: false,
+      bossHp: null,
+    }))
     this.manager.reset()
     this.slots.forEach((s) => (s.occupied = false))
     this.setCameraMode('menu')
@@ -930,6 +949,22 @@ export class GameEngine {
     gameStore.get().showToast('Banaspati ngamuk! Karaktermu kaget sebentar 😵', '🔥', 'bad')
   }
 
+  /** Misbah: koin sedekah masuk — pahala naik + VFX koin lucu. */
+  private onPahalaTick(amount: number, pos: THREE.Vector3, level: number) {
+    const st = gameStore.get()
+    if (st.screen !== 'playing') return
+    this.misbahGenTotal += amount
+    gameStore.set((s) => ({ ...s, pahala: s.pahala + amount }))
+    // VFX: koin kecil melompat dari kotak sedekah + angka mengapung
+    this.particles.showPahala(pos.x, 1.6, pos.z, amount)
+    this.particles.rings.spawn(pos.x, 0.1, pos.z, 0xffd76a, 1.6 + level * 0.2, 0.5)
+    if (this.sedekahSoundCd <= 0) {
+      this.sedekahSoundCd = 1.2
+      audio.coin()
+    }
+    checkBadges({ event: 'sedekahTick', misbahGen: this.misbahGenTotal })
+  }
+
   /* =============================== LOOP =============================== */
 
   private loop = () => {
@@ -1007,6 +1042,7 @@ export class GameEngine {
     }
 
     this.mosqueToastCd -= dt
+    this.sedekahSoundCd -= dt
 
     /* ---- ambient ceria (selalu jalan) ---- */
     this.updateAmbient(dt, st.screen)

@@ -52,27 +52,63 @@ export function TowerPanel() {
         </div>
 
         <div className="mt-2.5 space-y-1 rounded-xl bg-amber-50/80 px-3 py-2 text-xs font-bold text-[#6a4d1a]">
-          <div className="flex justify-between">
-            <span>⚔️ Kekuatan</span>
-            <span>
-              {stats.damage}
-              {nextStats && <span className="text-emerald-600"> → {nextStats.damage}</span>}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span>🎯 Jangkauan</span>
-            <span>
-              {stats.range > 50 ? '🎂 Semua' : stats.range}
-              {nextStats && nextStats.range <= 50 && <span className="text-emerald-600"> → {nextStats.range}</span>}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span>⏱️ Ritme</span>
-            <span>
-              {stats.fireRate.toFixed(1)}s
-              {nextStats && <span className="text-emerald-600"> → {nextStats.fireRate.toFixed(1)}s</span>}
-            </span>
-          </div>
+          {def.attack === 'sedekah' ? (
+            <>
+              <div className="flex justify-between">
+                <span>💰 Sedekah /tik</span>
+                <span>
+                  +{def.pahalaGen![selectedTower.level - 1][0]}
+                  {selectedTower.level < 3 && (
+                    <span className="text-emerald-600"> → +{def.pahalaGen![selectedTower.level][0]}</span>
+                  )}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>⏱️ Interval</span>
+                <span>
+                  {def.pahalaGen![selectedTower.level - 1][1]}s
+                  {selectedTower.level < 3 && (
+                    <span className="text-emerald-600"> → {def.pahalaGen![selectedTower.level][1]}s</span>
+                  )}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>📊 Estimasi/menit</span>
+                <span>
+                  ~{Math.round((def.pahalaGen![selectedTower.level - 1][0] / def.pahalaGen![selectedTower.level - 1][1]) * 60)}
+                  {selectedTower.level < 3 && (
+                    <span className="text-emerald-600">
+                      {' '}→ ~{Math.round((def.pahalaGen![selectedTower.level][0] / def.pahalaGen![selectedTower.level][1]) * 60)}
+                    </span>
+                  )}
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex justify-between">
+                <span>⚔️ Kekuatan</span>
+                <span>
+                  {stats.damage}
+                  {nextStats && <span className="text-emerald-600"> → {nextStats.damage}</span>}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>🎯 Jangkauan</span>
+                <span>
+                  {stats.range > 50 ? '🎂 Semua' : stats.range}
+                  {nextStats && nextStats.range <= 50 && <span className="text-emerald-600"> → {nextStats.range}</span>}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>⏱️ Ritme</span>
+                <span>
+                  {stats.fireRate.toFixed(1)}s
+                  {nextStats && <span className="text-emerald-600"> → {nextStats.fireRate.toFixed(1)}s</span>}
+                </span>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="mt-2.5 flex flex-col gap-1.5">

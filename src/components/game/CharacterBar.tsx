@@ -15,6 +15,7 @@ const ACCENT: Record<CharId, string> = {
   aisyah: '#e86a92',
   umar: '#f5b83d',
   fatimah: '#5bc8c0',
+  misbah: '#6db3d9',
   kakek: '#8f9779',
 }
 
@@ -126,6 +127,14 @@ export function CharacterBar() {
               aria-label={`Pilih ${def.name}`}
             >
               <span className="pointer-events-none absolute left-1 top-1 h-2.5 w-2.5 rounded-full" style={{ background: ACCENT[id] }} />
+              {def.attack === 'sedekah' && (
+                <span
+                  className="pointer-events-none absolute right-1 top-1 rounded-full bg-amber-100 px-1 text-[9px] font-black text-amber-700 shadow-sm"
+                  title="Menghasilkan pahala"
+                >
+                  💰
+                </span>
+              )}
               <span className={`text-3xl sm:text-4xl ${isUnlocked ? '' : 'grayscale'}`}>{def.emoji}</span>
               <span className="pointer-events-none truncate text-[11px] font-bold text-[#4a3b20] sm:text-xs">{def.shortName}</span>
               {isUnlocked ? (

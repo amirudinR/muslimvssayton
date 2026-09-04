@@ -28,6 +28,7 @@ export const BADGES: BadgeDef[] = [
   { id: 'pahala_1000', name: 'Dermawan', desc: 'Mengumpulkan 1000 pahala sekali main', emoji: '💝' },
   { id: 'squad_8', name: 'Regu Anak Sholeh', desc: 'Memasang 8 anak sholeh sekaligus', emoji: '👨‍👩‍👧‍👦' },
   { id: 'kuyang', name: 'Penangkap Kuyang', desc: 'Menghalau Kuyang Melayang lucu', emoji: '🎈' },
+  { id: 'sedekah_300', name: 'Jutawan Sedekah', desc: 'Kotak sedekah Misbah menghasilkan 300 pahala', emoji: '💰' },
 ]
 
 let saveCache: SaveData | null = null
@@ -73,11 +74,14 @@ export interface BadgeCtx {
     | 'gameOver'
     | 'duaUsed'
     | 'pahalaChanged'
+    | 'sedekahTick'
   enemyId?: string
   wave?: number
   stars?: number
   towersCount?: number
   pahala?: number
+  /** total pahala yang dihasilkan Misbah pertandingan ini */
+  misbahGen?: number
 }
 
 export function checkBadges(ctx: BadgeCtx) {
@@ -130,6 +134,10 @@ export function checkBadges(ctx: BadgeCtx) {
     }
     case 'pahalaChanged': {
       if ((ctx.pahala ?? 0) >= 1000) unlock('pahala_1000')
+      break
+    }
+    case 'sedekahTick': {
+      if ((ctx.misbahGen ?? 0) >= 300) unlock('sedekah_300')
       break
     }
   }

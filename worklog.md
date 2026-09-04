@@ -135,3 +135,58 @@ Unresolved issues / risks & rekomendasi fase berikutnya:
 - Escape tidak menutup modal menu (hanya klik X / klik luar) — kecil, bisa ditambah keydown handler.
 - Ide lanjutan: karakter Misbah si Muadzin, setan palasik, mode tantangan harian, pilihan bahasa ID/EN, audio pre-rendered, animasi intro boss sinematik lebih kaya.
 - Pengujian tablet fisik untuk drag & drop masih belum bisa dilakukan di sandbox.
+
+---
+Task ID: 1-c s/d 7-c
+Agent: main-agent (Z.ai Code)
+Task: QA rutin + perbaikan bug (Escape modal, popup nyangkut) + rebalancing gelombang + karakter baru MISBAH si Muadzin Muda (tower ekonomi) + 3 jenis banner wave + polish UI
+
+Work Log:
+QA AWAL (agent-browser + probe):
+- Build sehat (halaman 200, 0 console error, API leaderboard jalan).
+- Konfirmasi risiko balance dari ronde lalu: run lemah (4 tower tanpa upgrade) mati di wave 6 (sebelum kuyang ditambah: wave 9) — kuyang di wave 6 membuat kurva terlalu curam untuk anak.
+- Bug ditemukan: (1) tombol Escape tidak menutup modal Lencana/Papan Rekor, (2) FunFactModal (unlock karakter) NYANGKUT terbuka saat kembali ke menu — backdrop z-50 memblokir semua klik menu (ditemukan via elementFromPoint).
+
+FITUR BARU — MISBAH SI MUADZIN MUDA (karakter ke-6, tower ekonomi):
+- data.ts: CharId + 'misbah', AttackKind + 'sedekah', CharDef.pahalaGen?: [jumlah, intervalDetik][] per level. Misbah: 💡 biru, cost 80, upgrade [70,120], unlockWave 4, gen L1 +5/6s, L2 +8/5s, L3 +12/4s (≈50/96/180 per menit). damage 0 (tidak menyerang — edukasi "investasi sedekah").
+- models.ts: aksesori misbah — peci biru + KOTAK SEDEKAH kayu (tutup + celah koin emas + koin melayang bernama 'koinSedekah') + lampion kecil menyala di tangan kiri ('lampion') + tiang. ChibiParts + koinSedekah/lampion (opsional), getCharacterModel me-resolve via collectNamed.
+- entities.ts: ManagerCtx + onPahalaTick(amount, pos, level); branch attack 'sedekah' di Tower.update (cooldown = fireRate; BERKAH DOA mempercepat interval ×0.65 — sinergi lucu "sedekah diberkahi"); animasi idle: koin melayang naik-turun + rotasi, lampion berdenyut emissive ±0.5.
+- engine.ts: callback onPahalaTick → addPahala + showPahala VFX + ring emas + audio.coin (rate-limit 1.2s) + tracking misbahGenTotal + checkBadges('sedekahTick'); reset counter di startGame; Misbah ikut jadi wanderer halaman masjid di menu (5 anak).
+- achievements.ts: lencana ke-13 'sedekah_300' (Jutawan Sedekah 💰 — kotak Misbah menghasilkan 300 pahala sekali main).
+- CharacterBar.tsx: ACCENT misbah #6db3d9 + badge 💰 kecil di pojok kartu (penanda ekonomi).
+- TowerPanel.tsx: panel stats khusus sedekah — 💰 Sedekah/tik (+5 → +8), ⏱️ Interval (6s → 5s), 📊 Estimasi/menit (~50 → ~96) dengan preview upgrade.
+
+REBALANCING (ramah anak):
+- Wave 6: kuyang DIHAPUS (dipindah ke wave 7+), pocong 8→6 (kembali lebih ringan dari game original).
+- Wave 7/8/9: kuyang 3/3/4 (sebelumnya 3/4/5), reward 56/64/72/80 → 60/70/78/88 (lebih banyak uang untuk bangun tower).
+- DUA_CONST: perKill 7→8, perWave 12→14 (ultimate terisi lebih cepat — lebih sering merasakan "momen seru").
+
+FITUR BARU — 3 JENIS BANNER WAVE:
+- Hud.tsx: banner state {text, kind: 'normal'|'boss'|'newEnemy', enemyEmoji}; deteksi FIRST_APPEARANCE (map enemyType→wave pertama muncul, dihitung dari WAVES) → wave 7 tampil "🎈 Setan Baru: Kuyang Melayang Lucu!" dengan emoji wiggle; wave 10 tampil boss banner.
+- CSS: .boss-banner (gradasi oranye hangat + animasi boss-shake + label "🔥 BOSS GELOMBANG 🔥"), .new-enemy-banner (ungu ceria + sub-teks tips).
+
+BUGFIX:
+- [FIX] Escape tidak menutup modal menu → CuteModal (MenuModals.tsx) pasang window keydown listener capture + e.stopPropagation(); terverifikasi dengan dispatch manual DAN agent-browser press Escape asli.
+- [FIX] FunFactModal nyangkut di menu → backToMenu() kini membersihkan funFact/toast/badgeToast/selectedTower/selectedCharId/dragging/paused/bossHp + clearDuaOverlay.
+- [FIX] (tuning) Misbah test: 2 tick pertama tepat +10 pahala; L2 tepat 8/5s.
+
+VERIFIKASI (semua via probe + VLM + DOM):
+- ✓ Misbah: place → gen tepat (isolasi: 180-80+10 = 110 ✓), upgrade L2 = 8/5s ✓, berkah doa mempercepat tick ✓, badge sedekah_300 terbuka natural saat run ✓, model 3D terverifikasi VLM ("blue prayer cap, wooden charity box, glowing lantern") ✓, wanderer menu tampil ✓.
+- ✓ TowerPanel Misbah: stats ekonomi + preview upgrade terverifikasi VLM ("+5 → +8, 6s → 5s, ~50 → ~96/menit, Upgrade ⭐70") ✓.
+- ✓ Balance: run MEDIOKRE (6-8 tower + upgrade + dua + misbah) = VICTORY 2⭐ HP 95/120, 8 tower, duaUsed 8×, 0 error. Run kuat tanpa misbah juga menang 2⭐ (dua strategi viable). Run 4-tower murni tetap kalah (pembelajaran yang sehat).
+- ✓ Banner: DOM observer menangkap "Setan Baru: Kuyang Melayang Lucu!" (wave 7) + "Gelombang N datang!" + boss banner live "🔥 BOSS GELOMBANG 🔥 BANASPATI NGAMBEK!" dengan class .boss-banner ✓.
+- ✓ Escape modal: badges + leaderboard modal tertutup dengan keyboard asli ✓.
+- ✓ backToMenu cleanup: tidak ada backdrop nyangkut, klik menu berfungsi ✓.
+- ✓ Mobile 390×844: kartu Misbah (karakter ke-6) tampil di baris scroll, DOA button, HUD utuh ✓.
+- ✓ lint bersih, tsc --noEmit bersih (kode game), dev.log bersih, API leaderboard 200.
+
+Stage Summary:
+- Karakter ke-6 MISBAH si Muadzin Muda: tower ekonomi pasif (kotak sedekah) — strategi baru "investasi dini", berempat dengan Doa Bersama (berkah mempercepat sedekah), lencana ke-13 Jutawan Sedekah.
+- Balance wave 6-10 dikembalikan ramah anak (kuyang diperkenalkan bertahap mulai wave 7, reward naik, ultimate terisi lebih cepat); run wajar menang 2⭐ nyaman.
+- 3 jenis banner wave dengan kepribadian berbeda (normal emas, setan-baru ungu + emoji wiggle, boss oranye + shake) — info musuh baru lebih jelas untuk anak.
+- 2 bug UX diperbaiki (Escape modal, popup nyangkut di menu).
+
+Unresolved issues / risks & rekomendasi fase berikutnya:
+- Run 4-tower tanpa strategi tetap kalah di wave 6 — sesuai desain (pembelajaran), tapi bisa dipantau dari playtest nyata.
+- Ide lanjutan: setan palasik, mode tantangan harian, pilihan bahasa ID/EN, tutorial interaktif pertama main (overlay langkah), saran strategi saat game over berulang, audio pre-rendered, karakter perempuan ke-2 (Sarah si Penjahit?).
+- Screenshot headless tetap tidak menangkap WebGL — tetap gunakan trik .pm-snap + probe.

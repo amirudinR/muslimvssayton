@@ -11,8 +11,15 @@ import {
 } from 'lucide-react'
 import { useGameStore } from '@/lib/game/store'
 import { getEngine } from '@/lib/game/engine'
-import { CHAR_DEFS, WAVES, GAME_CONST } from '@/lib/game/data'
+import { CHAR_DEFS, WAVES, GAME_CONST, ENEMY_DEFS, type EnemyId } from '@/lib/game/data'
 import { audio } from '@/lib/game/audio'
+
+/* enemy yang muncul pertama kali per wave (untuk banner "setan baru!") */
+const FIRST_APPEARANCE: Partial<Record<EnemyId, number>> = (() => {
+  const map: Partial<Record<EnemyId, number>> = {}
+  WAVES.forEach((w, i) => w.spawns.forEach((s) => { if (map[s.type] === undefined) map[s.type] = i + 1 }))
+  return map
+})()
 
 export function Hud() {
   const screen = useGameStore((s) => s.screen)
@@ -30,7 +37,7 @@ export function Hud() {
   const bossMaxHp = useGameStore((s) => s.bossMaxHp)
   const wavePreview = useGameStore((s) => s.wavePreview)
 
-  const [banner, setBanner] = useState<string | null>(null)
+  const [banner, setBanner] = useState<{ text: string; kind: 'normal' | 'boss' | 'newEnemy'; enemyEmoji?: string } | null>(null)
   const prevWave = useRef(0)
 
   useEffect(() => {
@@ -40,10 +47,20 @@ export function Hud() {
     }
     prevWave.current = wave
     const isBoss = WAVES[wave - 1]?.isBoss
-    const text = isBoss ? '🔥 BOSS: BANASPATI NGAMBEK! 🔥' : `Gelombang ${wave} datang!`
+    // setan yang baru pertama kali muncul di wave ini?
+    const newEnemies = (Object.keys(FIRST_APPEARANCE) as EnemyId[]).filter((t) => FIRST_APPEARANCE[t] === wave)
+    const newEnemy = newEnemies[0]
+    let bannerData: { text: string; kind: 'normal' | 'boss' | 'newEnemy'; enemyEmoji?: string }
+    if (isBoss) {
+      bannerData = { text: 'BANASPATI NGAMBEK!', kind: 'boss' }
+    } else if (newEnemy) {
+      bannerData = { text: `Setan Baru: ${ENEMY_DEFS[newEnemy].name}!`, kind: 'newEnemy', enemyEmoji: ENEMY_DEFS[newEnemy].emoji }
+    } else {
+      bannerData = { text: `Gelombang ${wave} datang!`, kind: 'normal' }
+    }
     // setState lewat callback async agar tidak cascading render
-    const t1 = setTimeout(() => setBanner(text), 30)
-    const t2 = setTimeout(() => setBanner(null), 2650)
+    const t1 = setTimeout(() => setBanner(bannerData), 30)
+    const t2 = setTimeout(() => setBanner(null), isBoss || newEnemy ? 3200 : 2650)
     return () => {
       clearTimeout(t1)
       clearTimeout(t2)
@@ -234,12 +251,49 @@ export function Hud() {
         {banner && (
           <motion.div
             initial={{ opacity: 0, scale: 0.6, y: -20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
+            animate={{
+              opacity: 1,
+              scale: 1,
+              y: 0,
+              rotate: banner.kind === 'boss' ? [0, -2, 2, -1, 0] : 0,
+            }}
             exit={{ opacity: 0, scale: 1.1, y: 12 }}
             transition={{ type: 'spring', stiffness: 320, damping: 18 }}
-            className="wave-banner mt-2 rounded-3xl px-6 py-3 text-center"
+            className={`mt-2 rounded-3xl px-6 py-3 text-center ${
+              banner.kind === 'boss'
+                ? 'boss-banner'
+                : banner.kind === 'newEnemy'
+                  ? 'new-enemy-banner'
+                  : 'wave-banner'
+            }`}
+            role="status"
           >
-            <p className="text-xl font-black tracking-wide text-[#7a4a10] sm:text-2xl">{banner}</p>
+            {banner.kind === 'boss' && (
+              <p className="text-[10px] font-black uppercase tracking-[0.25em] text-orange-600">
+                🔥 BOSS GELOMBANG 🔥
+              </p>
+            )}
+            <p
+              className={`text-xl font-black tracking-wide sm:text-2xl ${
+                banner.kind === 'boss' ? 'text-white' : banner.kind === 'newEnemy' ? 'text-[#6a2a8a]' : 'text-[#7a4a10]'
+              }`}
+            >
+              {banner.kind === 'newEnemy' && banner.enemyEmoji && (
+                <motion.span
+                  className="mr-2 inline-block"
+                  animate={{ rotate: [0, -12, 12, 0], scale: [1, 1.15, 1] }}
+                  transition={{ repeat: Infinity, duration: 1.6 }}
+                >
+                  {banner.enemyEmoji}
+                </motion.span>
+              )}
+              {banner.text}
+            </p>
+            {banner.kind === 'newEnemy' && (
+              <p className="text-[11px] font-bold text-[#8a5aa8]">
+                Lihat tips setan di pratinjau gelombang ya! 👀
+              </p>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

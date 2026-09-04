@@ -4,9 +4,9 @@
  * wave, jalur (lane), slot penempatan, dan tips edukatif.
  * ============================================================ */
 
-export type CharId = 'ali' | 'aisyah' | 'umar' | 'fatimah' | 'kakek'
+export type CharId = 'ali' | 'aisyah' | 'umar' | 'fatimah' | 'misbah' | 'kakek'
 export type EnemyId = 'pocong' | 'kunti' | 'genderuwo' | 'tuyul' | 'wewe' | 'kuyang' | 'banaspati'
-export type AttackKind = 'orb' | 'bubble' | 'coin' | 'aura' | 'adzan'
+export type AttackKind = 'orb' | 'bubble' | 'coin' | 'aura' | 'adzan' | 'sedekah'
 
 export interface CharLevelStats {
   damage: number
@@ -35,6 +35,8 @@ export interface CharDef {
   slowDuration?: number[]
   knockback?: number
   stunDuration?: number
+  /** Misbah: [jumlahPahala, intervalDetik] per level — kotak sedekah pasif */
+  pahalaGen?: [number, number][]
 }
 
 export interface EnemyDef {
@@ -185,9 +187,35 @@ export const CHAR_DEFS: Record<CharId, CharDef> = {
     knockback: 2.6,
     stunDuration: 1.5,
   },
+  misbah: {
+    id: 'misbah',
+    name: 'Misbah si Muadzin Muda',
+    shortName: 'Misbah',
+    role: 'Kotak Sedekah',
+    desc: 'Tidak suka bertarung — kotak sedekahnya menghasilkan pahala otomatis! Pasang dini, untung besar 💰',
+    funFact: 'Misbah menyalakan lampu masjid tiap maghrib. Katanya: "Sedekah itu investasi akhirat!" 💡',
+    emoji: '💡',
+    color: 0x6db3d9, // biru jubah lembut
+    accent: 0xffd76a,
+    skin: 0xffd9b3,
+    cost: 80,
+    upgradeCosts: [70, 120],
+    attack: 'sedekah',
+    unlockWave: 4,
+    levels: [
+      { damage: 0, fireRate: 6, range: 2 },
+      { damage: 0, fireRate: 5, range: 2 },
+      { damage: 0, fireRate: 4, range: 2 },
+    ],
+    pahalaGen: [
+      [5, 6],
+      [8, 5],
+      [12, 4],
+    ],
+  },
 }
 
-export const CHAR_ORDER: CharId[] = ['ali', 'aisyah', 'umar', 'fatimah', 'kakek']
+export const CHAR_ORDER: CharId[] = ['ali', 'aisyah', 'umar', 'fatimah', 'misbah', 'kakek']
 
 /* --------------------------- SETAN JAHIL LUCU --------------------------- */
 
@@ -287,10 +315,10 @@ export const WAVES: WaveDef[] = [
   { spawns: [{ type: 'pocong', count: 6, interval: 1.2 }, { type: 'kunti', count: 4, interval: 2.2, delay: 2 }], reward: 36 },
   { spawns: [{ type: 'genderuwo', count: 2, interval: 3 }, { type: 'pocong', count: 8, interval: 1.1, delay: 2 }, { type: 'tuyul', count: 3, interval: 2, delay: 8 }], reward: 42 },
   { spawns: [{ type: 'kunti', count: 5, interval: 1.8 }, { type: 'genderuwo', count: 3, interval: 2.6, delay: 3 }], reward: 50 },
-  { spawns: [{ type: 'wewe', count: 5, interval: 2 }, { type: 'kuyang', count: 2, interval: 2.4, delay: 4 }, { type: 'tuyul', count: 4, interval: 1.5, delay: 3 }, { type: 'pocong', count: 8, interval: 0.9, delay: 5 }], reward: 56 },
-  { spawns: [{ type: 'genderuwo', count: 5, interval: 2 }, { type: 'kunti', count: 5, interval: 1.6, delay: 2 }, { type: 'kuyang', count: 3, interval: 2, delay: 6 }, { type: 'pocong', count: 6, interval: 0.8, delay: 6 }], reward: 64 },
-  { spawns: [{ type: 'wewe', count: 6, interval: 1.8 }, { type: 'genderuwo', count: 4, interval: 2.2, delay: 3 }, { type: 'kuyang', count: 4, interval: 1.8, delay: 5 }, { type: 'tuyul', count: 6, interval: 1, delay: 6 }], reward: 72 },
-  { spawns: [{ type: 'kunti', count: 6, interval: 1.2 }, { type: 'genderuwo', count: 5, interval: 1.8, delay: 2 }, { type: 'wewe', count: 5, interval: 1.6, delay: 4 }, { type: 'kuyang', count: 5, interval: 1.6, delay: 7 }, { type: 'tuyul', count: 4, interval: 0.9, delay: 8 }], reward: 80 },
+  { spawns: [{ type: 'wewe', count: 5, interval: 2 }, { type: 'tuyul', count: 4, interval: 1.5, delay: 3 }, { type: 'pocong', count: 6, interval: 0.9, delay: 5 }], reward: 60 },
+  { spawns: [{ type: 'genderuwo', count: 5, interval: 2 }, { type: 'kunti', count: 5, interval: 1.6, delay: 2 }, { type: 'kuyang', count: 3, interval: 2, delay: 6 }, { type: 'pocong', count: 6, interval: 0.8, delay: 6 }], reward: 70 },
+  { spawns: [{ type: 'wewe', count: 6, interval: 1.8 }, { type: 'genderuwo', count: 4, interval: 2.2, delay: 3 }, { type: 'kuyang', count: 3, interval: 1.8, delay: 5 }, { type: 'tuyul', count: 6, interval: 1, delay: 6 }], reward: 78 },
+  { spawns: [{ type: 'kunti', count: 6, interval: 1.2 }, { type: 'genderuwo', count: 5, interval: 1.8, delay: 2 }, { type: 'wewe', count: 5, interval: 1.6, delay: 4 }, { type: 'kuyang', count: 4, interval: 1.6, delay: 7 }, { type: 'tuyul', count: 4, interval: 0.9, delay: 8 }], reward: 88 },
   {
     spawns: [
       { type: 'banaspati', count: 1, interval: 3, delay: 2 },
@@ -404,9 +432,9 @@ export const DUA_CONST = {
   /** energi doa maksimum (terisi dengan menghalau setan) */
   max: 100,
   /** energi per setan dihalau */
-  perKill: 7,
+  perKill: 8,
   /** energi bonus saat gelombang selesai */
-  perWave: 12,
+  perWave: 14,
   /** durasi berkah (detik) */
   duration: 12,
   /** pengali damage tower saat berkah aktif */

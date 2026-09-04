@@ -601,6 +601,9 @@ export interface ChibiParts {
   armR: THREE.Object3D
   stars: THREE.Object3D[]
   glow: THREE.Mesh | null
+  /** Misbah: koin sedekah melayang & lampion berdenyut */
+  koinSedekah?: THREE.Object3D | null
+  lampion?: THREE.Object3D | null
 }
 
 function buildChibi(charId: CharId, level: number): THREE.Group {
@@ -740,6 +743,56 @@ function buildChibi(charId: CharId, level: number): THREE.Group {
     coin.position.set(0.72, 1.05, 0.1)
     coin.rotation.x = Math.PI / 2
     g.add(coin)
+  } else if (charId === 'misbah') {
+    // peci biru cerah
+    const peci = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.32, 0.2, 14), std(0x2c6f9e, { roughness: 0.85 }))
+    peci.position.y = 2.05
+    g.add(peci)
+    // KOTAK SEDEKAH kayu imut di depan badan dengan celah koin
+    const box = new THREE.Mesh(
+      new THREE.BoxGeometry(0.42, 0.32, 0.34),
+      std(0x9a6a3f, { roughness: 0.8 }),
+    )
+    box.name = 'kotak'
+    box.position.set(0, 0.95, 0.62)
+    box.rotation.x = -0.15
+    box.castShadow = true
+    g.add(box)
+    // tutup kotak + celah koin
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.07, 0.36), std(0x7a4f2c, { roughness: 0.85 }))
+    lid.name = 'lid'
+    lid.position.set(0, 1.13, 0.63)
+    lid.rotation.x = -0.15
+    g.add(lid)
+    const slot = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.05), basic(0xffd76a))
+    slot.name = 'slot'
+    slot.position.set(0, 1.16, 0.78)
+    slot.rotation.x = -0.15
+    g.add(slot)
+    // koin emas melambai di celah (animasi: naik-turun)
+    const coin = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.1, 0.1, 0.04, 12),
+      new THREE.MeshStandardMaterial({ color: 0xffd76a, metalness: 0.9, roughness: 0.2, emissive: 0xa67c1a, emissiveIntensity: 0.5 }),
+    )
+    coin.name = 'koinSedekah'
+    coin.position.set(0, 1.3, 0.8)
+    coin.rotation.x = Math.PI / 2.2
+    g.add(coin)
+    // lampion kecil tergantung di tangan kiri (misbah = penjaga lampu masjid)
+    const lanternPole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.6, 6), std(0x8a5a2b))
+    lanternPole.name = 'pole'
+    lanternPole.position.set(-0.72, 1.1, 0.1)
+    g.add(lanternPole)
+    const lantern = new THREE.Mesh(
+      new THREE.SphereGeometry(0.13, 10, 8),
+      new THREE.MeshStandardMaterial({ color: 0xffe9a8, emissive: 0xffd76a, emissiveIntensity: 0.9, roughness: 0.4 }),
+    )
+    lantern.name = 'lampion'
+    lantern.position.set(-0.72, 1.44, 0.1)
+    g.add(lantern)
+    const lanternCap = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.1, 8), std(0xd9962e))
+    lanternCap.position.set(-0.72, 1.58, 0.1)
+    g.add(lanternCap)
   } else if (charId === 'kakek') {
     // turban
     const turban = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.17, 10, 20), std(0xfdfdf6, { roughness: 0.85 }))
@@ -820,6 +873,8 @@ export function getCharacterModel(charId: CharId, level: number): THREE.Group {
     armR: named.armR!,
     stars: collectListed(clone, 'star'),
     glow: (named.glow as THREE.Mesh) ?? null,
+    koinSedekah: named.koinSedekah ?? null,
+    lampion: named.lampion ?? null,
   }
   clone.userData.parts = parts
   return clone
