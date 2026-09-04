@@ -17,7 +17,7 @@ import {
   ACCESSORY_INFO, EXPRESSION_INFO, type CharCustom,
   saveCustomEntry, deleteCustomEntry, listSavedCustoms, type SavedCustomEntry,
 } from '@/lib/game/roster'
-import { RosterPreview, CustomPreview } from './RosterPreview'
+import { RosterPreview, CustomPreview, LazyRosterPreview } from './RosterPreview'
 
 type ShopTab = 'beli' | 'buat'
 type SortMode = 'rarity' | 'harga-asc' | 'harga-desc' | 'nama'
@@ -79,7 +79,7 @@ export function ShopScreen() {
     }
     const ok = buyChar(c.id, c.price)
     if (ok) {
-      audio.tada()
+      audio.buyRarity(c.rarity) // P8: jingle khas per rarity
       refreshState()
       showToastLocal(`Yeay! ${c.name} bergabung! 🎉`, 'good')
     }
@@ -223,9 +223,9 @@ export function ShopScreen() {
                         <Check className="h-2.5 w-2.5" /> Milikmu
                       </span>
                     )}
-                    {/* preview */}
+                    {/* preview (lazy — hemat konteks WebGL utk grid 100 kartu) */}
                     <div className="mt-5 h-20 w-20 shrink-0 sm:h-24 sm:w-24">
-                      <RosterPreview rc={c} size={96} />
+                      <LazyRosterPreview rc={c} size={92} />
                     </div>
                     <p className="line-clamp-1 w-full text-center text-xs font-black text-[#4a3b20]">{c.name}</p>
                     <p className="line-clamp-1 w-full text-center text-[9px] font-bold text-[#8a6a30]">

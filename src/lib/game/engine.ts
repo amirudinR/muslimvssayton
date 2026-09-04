@@ -43,7 +43,7 @@ import { audio } from './audio'
 import { gameStore, type CameraMode } from './store'
 import { computeStars } from './persist'
 import { getLevel, levelWaves } from './levels'
-import { getCharDef } from './chardb'
+import { getCharDef, isHeroChar } from './chardb'
 import { getOwnedChars } from './achievements'
 import { loadCustomChars, ROSTER } from './roster'
 import {
@@ -134,6 +134,8 @@ export class GameEngine {
   private duaOverlay: HTMLElement | null = null
   /** total pahala hasil kotak sedekah Misbah pertandingan ini */
   private misbahGenTotal = 0
+  /** P8: karakter yang sudah pernah dipasang run ini (utk funFact 'Tahukah Kamu?'). */
+  private placedThisRun = new Set<string>()
   /** cooldown suara koin sedekah agar tidak berisik */
   private sedekahSoundCd = 0
   /** timer langkah tutorial aktif */
@@ -617,6 +619,17 @@ export class GameEngine {
     this.cancelPlacing()
     this.refreshSlotHighlights()
     checkBadges({ event: 'towerPlaced', towersCount: this.manager.towers.length })
+
+    /* P8: funFact edukatif "Tahukah Kamu?" saat pertama memasang karakter
+       (hanya bila sedang tidak bertempur supaya tidak mengganggu). */
+    if (!this.placedThisRun.has(charId) && !st.waveActive) {
+      this.placedThisRun.add(charId)
+      if (!isHeroChar(charId)) {
+        st.showFunFact(charId, def.funFact, 'place')
+      }
+    } else {
+      this.placedThisRun.add(charId)
+    }
     return true
   }
 
@@ -634,6 +647,7 @@ export class GameEngine {
         upgradeCost: tower.level < 3 ? tower.def.upgradeCosts[tower.level - 1] : 0,
         canSell: true,
         sellValue: Math.round(tower.totalSpent * GAME_CONST.sellRefund),
+        buffPct: Math.round((tower.buffMult - 1) * 100),
       },
       cameraMode: s.cameraMode === 'follow' ? 'follow' : s.cameraMode,
     }))
@@ -682,6 +696,7 @@ export class GameEngine {
         upgradeCost: tower.level < 3 ? tower.def.upgradeCosts[tower.level - 1] : 0,
         canSell: true,
         sellValue: Math.round(tower.totalSpent * GAME_CONST.sellRefund),
+        buffPct: Math.round((tower.buffMult - 1) * 100),
       },
     }))
   }
@@ -807,6 +822,7 @@ export class GameEngine {
     this.spawnCursor = 0
     this.victoryTimer = 0
     this.misbahGenTotal = 0
+    this.placedThisRun.clear()
     this.tutTimer = 0
 
     /* ---- P7: karakter milik pemain (toko + custom) otomatis terbuka ---- */
@@ -1254,6 +1270,19 @@ export class GameEngine {
 
       // tutorial interaktif — maju sesuai aksi pemain sungguhan
       if (st.tutorialStep > 0) this.updateTutorial(gameDt, st)
+
+      // P8: segarkan status buff nasihat di panel tower terpilih (hanya saat berubah)
+      if (st.selectedTower) {
+        const sel = this.manager.towers.find((t) => t.slotIndex === st.selectedTower!.slot)
+        if (sel) {
+          const pct = Math.round((sel.buffMult - 1) * 100)
+          if (pct !== st.selectedTower.buffPct) {
+            gameStore.set((s) =>
+              s.selectedTower ? { ...s, selectedTower: { ...s.selectedTower, buffPct: pct } } : s,
+            )
+          }
+        }
+      }
     } else {
       // saat pause/menu tetap animasikan manager minimal (idle tower)
       this.manager.update(0)

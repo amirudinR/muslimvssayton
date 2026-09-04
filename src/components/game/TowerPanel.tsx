@@ -52,6 +52,15 @@ export function TowerPanel() {
         </div>
 
         <div className="mt-2.5 space-y-1 rounded-xl bg-amber-50/80 px-3 py-2 text-xs font-bold text-[#6a4d1a]">
+          {selectedTower.buffPct > 0 && (
+            <div className="mb-1.5 flex items-center justify-between rounded-lg bg-emerald-100 px-2 py-1 text-emerald-700">
+              <span className="flex items-center gap-1">💡 Berkah Nasihat</span>
+              <span className="flex items-center gap-0.5">
+                <TrendingUp className="h-3 w-3" />
+                +{selectedTower.buffPct}%
+              </span>
+            </div>
+          )}
           {def.attack === 'sedekah' ? (
             <>
               <div className="flex justify-between">
@@ -82,6 +91,10 @@ export function TowerPanel() {
                     </span>
                   )}
                 </span>
+              </div>
+              <div className="flex justify-between text-emerald-700">
+                <span>💡 Aura nasihat</span>
+                <span>rad. {[4.5, 5.5, 6.5][selectedTower.level - 1]} · +{[10, 16, 22][selectedTower.level - 1]}%</span>
               </div>
             </>
           ) : (

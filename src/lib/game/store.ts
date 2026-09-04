@@ -5,6 +5,7 @@
 
 import { create } from 'zustand'
 import { GAME_CONST, DUA_CONST, RUN_MODS, type DailyModifier } from './data'
+import type { RosterChar } from './roster'
 
 export type Screen = 'menu' | 'playing' | 'victory' | 'gameover' | 'shop' | 'levels' | 'settings'
 export type CameraMode = 'iso' | 'follow' | 'photo' | 'menu' | 'boss'
@@ -25,6 +26,8 @@ export interface SelectedTowerInfo {
   upgradeCost: number
   canSell: boolean
   sellValue: number
+  /** P8: persen berkah nasihat aktif (0 = tanpa buff). */
+  buffPct: number
 }
 
 export interface GameStore {
@@ -47,7 +50,7 @@ export interface GameStore {
   bossHp: number | null
   bossMaxHp: number
   toast: ToastMsg | null
-  funFact: { id: number; char: string; text: string } | null
+  funFact: { id: number; char: string; text: string; kind?: 'unlock' | 'place' } | null
   unlockedChars: string[]
   stats: { defeated: number; starsEarned: number; wavesCleared: number }
   hudHidden: boolean // mode foto
@@ -76,6 +79,14 @@ export interface GameStore {
   levelId: number
   /* --- P3: total gelombang level aktif (dinamis utk level select) --- */
   totalWaves: number
+  /* --- P8: overlay layar KOLEKSI terbuka (dari menu maupun saat bermain) --- */
+  collectionOpen: boolean
+  /** data koleksi di-load saat dibuka (localStorage → store, tanpa effect React) */
+  collOwned: string[]
+  collCurrency: number
+  collCustoms: RosterChar[]
+  /** jeda dilakukan oleh layar koleksi (untuk restore saat ditutup) */
+  collPausedByUs: boolean
 }
 
 interface GameActions {
@@ -99,7 +110,7 @@ interface GameActions {
   setBossHp: (hp: number | null, max?: number) => void
   showToast: (text: string, emoji?: string, tone?: ToastMsg['tone']) => void
   clearToast: () => void
-  showFunFact: (char: string, text: string) => void
+  showFunFact: (char: string, text: string, kind?: 'unlock' | 'place') => void
   clearFunFact: () => void
   unlockChar: (c: string) => void
   setHudHidden: (h: boolean) => void
@@ -116,6 +127,8 @@ interface GameActions {
   setTutorialStep: (n: number) => void
   setCoachTips: (tips: string[] | null) => void
   setLevelInfo: (levelId: number, totalWaves: number) => void
+  /* P8 */
+  setCollectionOpen: (open: boolean) => void
 }
 
 let toastId = 0
@@ -159,6 +172,11 @@ export const useGameStore = create<GameStore & GameActions>()((set) => ({
   dailyStreakResult: 0,
   levelId: 0,
   totalWaves: 10,
+  collectionOpen: false,
+  collOwned: ['hero-ali', 'hero-aisyah'],
+  collCurrency: 0,
+  collCustoms: [],
+  collPausedByUs: false,
 
   setScreen: (s) => set({ screen: s }),
   setPaused: (p) => set({ paused: p }),
@@ -185,9 +203,9 @@ export const useGameStore = create<GameStore & GameActions>()((set) => ({
   },
   clearToast: () => set({ toast: null }),
 
-  showFunFact: (char, text) => {
+  showFunFact: (char, text, kind = 'unlock') => {
     toastId += 1
-    set({ funFact: { id: toastId, char, text } })
+    set({ funFact: { id: toastId, char, text, kind } })
   },
   clearFunFact: () => set({ funFact: null }),
 
@@ -227,6 +245,7 @@ export const useGameStore = create<GameStore & GameActions>()((set) => ({
   setTutorialStep: (n) => set({ tutorialStep: n }),
   setCoachTips: (tips) => set({ coachTips: tips }),
   setLevelInfo: (levelId: number, totalWaves: number) => set({ levelId, totalWaves }),
+  setCollectionOpen: (open) => set({ collectionOpen: open }),
 
   resetForNewGame: () =>
     set({

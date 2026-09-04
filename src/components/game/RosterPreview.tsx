@@ -1,9 +1,11 @@
 'use client'
 
 /* Preview 3D mini untuk karakter roster generatif & karakter custom
-   (dipakai di Toko & Character Creator). Bisa berputar otomatis. */
+   (dipakai di Toko & Character Creator). Bisa berputar otomatis.
+   P8: LazyRosterPreview — mount preview hanya saat kartu terlihat
+   (IntersectionObserver) supaya konteks WebGL tidak jenuh di grid 100 kartu. */
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { getRosterModel, getCustomModel } from '@/lib/game/models'
 import { getCharacterModel } from '@/lib/game/models'
@@ -68,6 +70,12 @@ function useSpinPreview(
     return () => {
       cancelAnimationFrame(raf)
       renderer.dispose()
+      // pastikan konteks GL benar-benar dilepas agar browser tidak jenuh
+      try {
+        renderer.forceContextLoss()
+      } catch {
+        /* abaikan */
+      }
     }
   }, deps)
 }
@@ -81,6 +89,51 @@ export function RosterPreview({ rc, size = 96 }: { rc: RosterChar; size?: number
     size,
   )
   return <canvas ref={ref} style={{ width: size, height: size }} aria-label={`Preview ${rc.name}`} />
+}
+
+/** P8: wrapper lazy — preview 3D hanya hidup saat kartu terlihat di viewport. */
+export function LazyRosterPreview({ rc, size = 96 }: { rc: RosterChar; size?: number }) {
+  const holderRef = useRef<HTMLDivElement>(null)
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    const el = holderRef.current
+    if (!el) return
+    let hideTimer: ReturnType<typeof setTimeout> | null = null
+    const io = new IntersectionObserver(
+      (entries) => {
+        const inter = entries.some((e) => e.isIntersecting)
+        if (inter) {
+          if (hideTimer) {
+            clearTimeout(hideTimer)
+            hideTimer = null
+          }
+          setVisible(true)
+        } else {
+          // histeresis 1.6s — hindari kedipan saat scroll cepat
+          if (!hideTimer) hideTimer = setTimeout(() => setVisible(false), 1600)
+        }
+      },
+      { rootMargin: '180px' },
+    )
+    io.observe(el)
+    return () => {
+      io.disconnect()
+      if (hideTimer) clearTimeout(hideTimer)
+    }
+  }, [])
+
+  return (
+    <div ref={holderRef} style={{ width: size, height: size }} className="flex items-center justify-center">
+      {visible ? (
+        <RosterPreview rc={rc} size={size} />
+      ) : (
+        <span aria-hidden style={{ fontSize: Math.round(size * 0.45), lineHeight: 1 }}>
+          {rc.emoji}
+        </span>
+      )}
+    </div>
+  )
 }
 
 export function CustomPreview({ cc, size = 184 }: { cc: CharCustom; size?: number }) {

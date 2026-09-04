@@ -446,3 +446,77 @@ Unresolved issues / risks & rekomendasi fase berikutnya:
 - Karakter roster/custom belum punya funFact edukatif unik (pakai teks generik) — bisa perkaya.
 - Leaderboard belum ada kolom mode/level; wave 10 masih 7 tipe musuh (padat).
 - Ide lanjutan: tab Koleksi terpisah dgn detail & statistik kepemilikan, sound cue khas per rarity, save cloud, pilihan bahasa EN.
+
+---
+Task ID: 9
+Agent: main-agent (Z.ai Code)
+Task: P8 — LAYAR KOLEKSI PENUH + BUFF NASIHAT NYATA DI GAMEPLAY + funFact EDUKATIF UNIK + KOLOM MODE LEADERBOARD + SFX RARITY + polish styling
+
+Work Log:
+
+QA AWAL (agent-browser + probe):
+- Dev server 200 OK, console bersih (hanya "WebGL Context Lost" headless yang wajar), probe lengkap.
+- Simulasi cepat: startGame level 1 → wave 3 HP 101 tanpa error — game P1-P7 stabil, lanjut ke fitur baru sesuai rekomendasi fase sebelumnya.
+
+P8-a — LAYAR KOLEKSI (menjawab risiko "CharacterBar bisa sangat panjang"):
+- BARU src/lib/game/collection.ts: openCollection() / closeCollection() / refreshCollData() — memuat data localStorage → store secara SINKRON (bebas react-hooks/set-state-in-effect, bebas impor melingkar store↔achievements).
+- BARU src/components/game/CollectionScreen.tsx (~480 baris): overlay full-screen z-50:
+  * Header (judul + ⭐ currency + close), kartu statistik kepemilikan: total X/100, progress bar animasi stripes emerald→amber, chip jumlah per rarity.
+  * Tab "Milikku" / "Semua (100)" + pencarian nama + filter power (6) & rarity (4) + sort rarity→nama.
+  * Grid kartu 2/3/4/5 kolom responsif: kartu owned (warna + badge "Milikmu") vs locked (grayscale + 🔒 harga ⭐); kartu legendaris owned dapat efek shimmer kilau animasi.
+  * Modal detail: preview 3D berputar, tema, TABEL STATISTIK NYATA level 1 (damage/range/ritme ATAU sedekah+aura nasihat dari getCharDef), power+varian, FUNFACT EDUKATIF UNIK 💡, desc rarity, tombol BELI (jingle rarity!) / "PASANG PENJAGA INI!" (saat bermain) / "Mainkan Koleksimu!" (dari menu → level select).
+- BARU LazyRosterPreview (RosterPreview.tsx): preview 3D hanya MOUNT saat kartu terlihat (IntersectionObserver rootMargin 180px + histeresis unmount 1.6s) + cleanup forceContextLoss() — grid 100 kartu kini hanya ~15 konteks WebGL hidup (sebelumnya 100 → berisiko jenuh konteks browser). Diterapkan juga di grid TOKO.
+- Integrasi: MainMenu tile KOLEKSI ke-4 (grid-cols-2 sm:grid-cols-4, badge jumlah owned ✨); CharacterBar indikator "Koleksi N+" → TOMBOL membuka layar (game AUTO-JEDA saat bermain, resume saat ditutup); GameShell Escape menutup koleksi; guard Space-toggle; EndScreens menu jeda disembunyikan saat koleksi terbuka (tidak tumpang tindih).
+- store.ts: collectionOpen, collOwned, collCurrency, collCustoms, collPausedByUs + setCollectionOpen.
+
+P8-b — BERKAH NASIHAT (menjawasi risiko "varian 'berkah' tidak berpengaruh nyata"):
+- entities.ts Tower: buffMult (1..1.22), nasihatGlow (cincin emerald berputar di kaki tower yang di-buff), buffRing (cincin radius aura berdenyut pada tower sedekah/nasihat), buffRadius basis MANDIRI 4.5/5.5/6.5 per level (bukan range serangan yang memang 2) ×1.4 utk varian 'berkah' → 6.3/7.7/9.1 — varian berkah kini punya efek gameplay nyata!
+- EntityManager.applyNasihatAuras() tiap frame sebelum tower update: tower 'sedekah' (Misbah + semua power nasihat) memperkuat tower tetangga dalam radius: damage × buffMult (dan hasil sedekah tower sedekah lain juga × buffMult). Tidak menumpuk (ambil maksimum). NASIHAT_BUFF = [1.10, 1.16, 1.22].
+- TowerPanel: badge "💡 Berkah Nasihat +N%" (refresh live via simTick saat nilai berubah) + baris "💡 Aura nasihat rad. X · +N%" untuk tower sedekah.
+- VERIFIKASI: misbah+ali jarak 0.5 → ali buffMult 1.1 glow visible ✓; aisyah jarak 5.6 > 4.5 → tidak ter-buff ✓; gen-5 (varian berkah, radius 6.3) → ali jarak 5.1 TER-BUFF ✓ (mustahil dgn radius standar); panel DOM "💡 Berkah Nasihat+10%" ✓; VLM: "green glowing rings on the ground near characters, no broken visuals" ✓.
+
+P8-c — FUNFACT EDUKATIF UNIK (menjawasi risiko "roster funFact generik"):
+- chardb.ts: POWER_FACTS (6 power × 3 fakta islami ramah anak Indonesia: sholat cahaya, dzikir menenangkan, sedekah menolak bala, wudhu separuh iman, nasihat amanah, Bilal muadzin pertama) + hashPick deterministik by id → tiap karakter punya funFact unik + suffix varian.
+- Engine tryPlace: funFact "Tahukah Kamu? 🤔" saat PERTAMA memasang karakter non-hero run itu (hanya saat wave tidak aktif agar tidak mengganggu); FunFactModal judul kontekstual (place vs unlock); placedThisRun direset tiap startGame.
+- VERIFIKASI: pasang gen-13 → modal "Tahukah Kamu?" + "Bangun subuh itu sindiran setan paling ampuh..." ✓; modal detail koleksi menampilkan funFact unik ✓.
+
+P8-d — LEADERBOARD KOLOM MODE (menjawasi risiko "leaderboard belum ada kolom mode/level"):
+- prisma schema: ScoreEntry.mode String @default("Klasik") + db:push sukses.
+- API route: validasi sanitizeMode (whitelist "Klasik"/"Daring Harian" + pola /^Level \d{1,2}$/; sisanya → "Klasik") — uji XSS `<script>` ditolak ✓.
+- CATATAN PENTING: dev server memuat client Prisma LAMA di memori (kolom baru tak dikenal tanpa restart; server tak boleh di-restart manual) → route dialihkan ke RAW SQL ($queryRawUnsafe/$executeRawUnsafe) yang kompatibel klien lama & baru, ranking/prune tetap sama.
+- EndScreens submit: mode = dailyMode ? 'Daring Harian' : levelId>0 ? `Level ${levelId}` : 'Klasik'.
+- MenuModals: chip mode di baris leaderboard (🔥 Daring Harian oranye / 🗺️ Level N biru; Klasik tanpa chip).
+- VERIFIKASI: POST "Level 3"/"Daring Harian" tersimpan ✓; UI victory level 3 → skor masuk dgn mode "Level 3" ✓; chip tampil di modal ✓.
+
+SFX & STYLING DETAIL (mandatory):
+- audio.buyRarity(rarity): 4 jingle berbeda (umum pop+koin, langka triple-chime, epik arpeggio+bel, legendaris fanfare+sorak) — dipakai di Toko & Koleksi.
+- ~150 baris CSS baru: .coll-stat-card (radial + shadow emerald), .coll-progress-fill (gradasi + stripes bergerak @keyframes), .coll-rarity-chip, .coll-tab/-active, .coll-card (owned/locked/legend + shimmer legendaris @keyframes legend-shimmer), .lb-mode-chip (daily orange / level biru).
+- Tile KOLEKSI menu dgn badge jumlah; Tombol KOLEKSI di CharacterBar (dashed amber + gradient + shadow-inner).
+
+BUGFIX TERKAIT:
+- [FIX] GameShell import kehilangan newline saat edit (parse error HMR) — dipulihkan.
+- [FIX] react-hooks/set-state-in-effect pada pemuatan data koleksi → refactor ke helper modul collection.ts (set sinkron di luar React).
+- [FIX] buffRadius awal memakai range tower (Misbah range 2 → radius 2 tak berguna) → basis mandiri 4.5/5.5/6.5.
+- MergeGeometries error 11× di console ternyata ARTEFAK HMR transien saat file setengah diedit — load bersih 0 error (dikonfirmasi dgn init-script capture stack).
+
+VERIFIKASI TOTAL (probe + DOM + VLM + API + mobile 390×844):
+- ✓ Koleksi dari menu: open → data (owned/currency/customs) termuat; tab Milikku 4 kartu, Semua 100 kartu; filter umum → beli "Adib si Ceria" 21⭐: owned 3→4, currency 100→79, toast, statistik "4/100" live-update.
+- ✓ Koleksi saat bermain: klik tombol KOLEKSI → paused=true, menu jeda TERSEMBUNYI, klik kartu Zahra → PASANG → koleksi tutup + unpause + selectedCharId=gen-13 + dragging → tryPlace sukses (ditolak dulu saat pahala kurang — logika ekonomi benar).
+- ✓ Lazy preview: shop 100 kartu hanya ~16 canvas hidup; scroll ke bawah tetap 16 (konteks dilepas/muat ulang).
+- ✓ Buff nasihat: angka + visual ring emerald (VLM konfirmasi) + panel badge + pahalaGen ter-buff.
+- ✓ Leaderboard: mode tersimpan & tampil; run level 3 victory → submit "Level 3" otomatis; XSS ditolak; prune tetap jalan.
+- ✓ Mobile 390×844: menu 4 tile 2 kolom, koleksi readable (VLM), progress+tab+filter OK.
+- ✓ Pause normal (space) tetap berfungsi; Escape menutup koleksi.
+- ✓ lint bersih, tsc --noEmit bersih (kode proyek), dev.log bersih, console 0 error.
+- Artefak: download/collection_screen.png, collection_grid.png, collection_mobile.png, funfact_place.png, nasihat_buff.png, leaderboard_mode.png.
+
+Stage Summary:
+- P8 SELESAI: Layar KOLEKSI profesional (statistik kepemilikan + progress + filter + beli + pasang langsung + lazy WebGL), buff Nasihat kini strategi nyata (tower dukungan memberi +10/16/22% damage & pahala area, varian 'berkah' radius terluas), funFact edukatif unik per karakter (modal "Tahukah Kamu?"), leaderboard berlabel mode asal skor, jingle beli per rarity.
+- Loop ekonomi & koleksi kini punya "rumah" sendiri: TOKO (belanja) → KOLEKSI (album + statistik + deploy) → GAMEPLAY (buff sinergi) → MENANG → ⭐.
+
+Unresolved issues / risks & rekomendasi fase berikutnya:
+- Prisma client di dev server masih versi lama (route leaderboard sudah raw-SQL-proof, tapi model Prisma baru baru terpakai setelah restart server berikutnya) — tidak mempengaruhi fungsi.
+- Koleksi belum menampilkan statistik pemakaian (berapa kali dipasang/menang) — bisa ditambah counter per karakter.
+- Lazy preview punya potensi kedipan sangat singkat saat scroll cepat (histeresis 1.6s menahan); jika terganggu bisa naikkan ke 2.5s.
+- funFact 'place' belum muncul bila penempatan pertama terjadi saat wave aktif (by design, non-intrusif).
+- Ide lanjutan: sorting koleksi by power rarity DESC default; tab "Karya Sendiri" terpisah; pencarian tema; export/share screenshot koleksi; bahasa EN; cloud save.

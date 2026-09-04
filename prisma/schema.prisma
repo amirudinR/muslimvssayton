@@ -39,5 +39,7 @@ model ScoreEntry {
   wave      Int
   defeated  Int
   pahala    Int
+  // P8: mode asal skor — "Klasik", "Daring Harian", atau "Level N"
+  mode      String   @default("Klasik")
   createdAt DateTime @default(now())
 }

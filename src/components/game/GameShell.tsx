@@ -6,6 +6,7 @@
 import { useEffect, useRef } from 'react'
 import { GameEngine, setEngineInstance } from '@/lib/game/engine'
 import { useGameStore } from '@/lib/game/store'
+import { closeCollection } from '@/lib/game/collection'
 import { MainMenu } from './MainMenu'
 import { Hud, ToastLayer, FunFactModal } from './Hud'
 import { CharacterBar } from './CharacterBar'
@@ -17,6 +18,7 @@ import { MobileNav } from './MobileNav'
 import { ShopScreen } from './ShopScreen'
 import { LevelSelectScreen } from './LevelSelectScreen'
 import { SettingsScreen } from './SettingsScreen'
+import { CollectionScreen } from './CollectionScreen'
 
 export default function GameShell() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -40,13 +42,18 @@ export default function GameShell() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         const st = useGameStore.getState()
+        if (st.collectionOpen) {
+          closeCollection()
+          return
+        }
         if (st.selectedCharId) engine.cancelPlacing()
         else if (st.selectedTower) engine.deselectTower()
         else if (st.cameraMode === 'photo') engine.setCameraMode('iso')
       }
       if (e.key === ' ' && stCanToggle()) {
-        e.preventDefault()
         const st = useGameStore.getState()
+        if (st.collectionOpen) return // jangan toggle jeda saat koleksi terbuka
+        e.preventDefault()
         if (st.screen === 'playing') st.setPaused(!st.paused)
       }
     }
@@ -81,6 +88,7 @@ export default function GameShell() {
       <ShopScreen />
       <LevelSelectScreen />
       <SettingsScreen />
+      <CollectionScreen />
       <EndScreens />
       <PhotoControls />
       <DuaButton />

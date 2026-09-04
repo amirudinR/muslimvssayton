@@ -1,0 +1,611 @@
+     1→'use client'
+     2→
+     3→/* P4: TOKO KARAKTER — grid kartu, preview 3D berputar, rarity badge,
+     4→   harga bintang, filter & sorting (power/rarity/harga), beli & pasang.
+     5→   P6: tab BUAT KARAKTER (character creator sederhana). */
+     6→
+     7→import { useMemo, useState } from 'react'
+     8→import { motion, AnimatePresence } from 'framer-motion'
+     9→import { ShoppingBag, X, Star, Search, SlidersHorizontal, Wand2, Check, Lock, Sparkles } from 'lucide-react'
+    10→import { useGameStore } from '@/lib/game/store'
+    11→import { getEngine } from '@/lib/game/engine'
+    12→import { audio } from '@/lib/game/audio'
+    13→import { getOwnedChars, buyChar, getStarCurrency } from '@/lib/game/achievements'
+    14→import {
+    15→  ROSTER, RARITY_INFO, POWERS, type RosterChar, type PowerCategory, type Rarity,
+    16→  DEFAULT_CUSTOM, ROBE_COLORS, ACCENT_COLORS, SKIN_COLORS, HAIR_COLORS,
+    17→  ACCESSORY_INFO, EXPRESSION_INFO, type CharCustom,
+    18→  saveCustomEntry, deleteCustomEntry, listSavedCustoms, type SavedCustomEntry,
+    19→} from '@/lib/game/roster'
+    20→import { RosterPreview, CustomPreview } from './RosterPreview'
+    21→
+    22→type ShopTab = 'beli' | 'buat'
+    23→type SortMode = 'rarity' | 'harga-asc' | 'harga-desc' | 'nama'
+    24→
+    25→const RARITY_ORDER: Record<Rarity, number> = { legendaris: 0, epik: 1, langka: 2, umum: 3 }
+    26→
+    27→export function ShopScreen() {
+    28→  const screen = useGameStore((s) => s.screen)
+    29→  const [tab, setTab] = useState<ShopTab>('beli')
+    30→  const [filterPower, setFilterPower] = useState<PowerCategory | 'semua'>('semua')
+    31→  const [filterRarity, setFilterRarity] = useState<Rarity | 'semua'>('semua')
+    32→  const [sortMode, setSortMode] = useState<SortMode>('rarity')
+    33→  const [query, setQuery] = useState('')
+    34→  const [owned, setOwned] = useState<string[]>(() => ['hero-ali', 'hero-aisyah', ...getOwnedChars()])
+    35→  const [currency, setCurrency] = useState(() => getStarCurrency())
+    36→  const [selected, setSelected] = useState<RosterChar | null>(null)
+    37→  const [toastMsg, setToastMsg] = useState<{ text: string; tone: 'good' | 'bad' } | null>(null)
+    38→  const [showFilters, setShowFilters] = useState(false)
+    39→
+    40→  /* ---- filter & sort (hook dipanggil sebelum early-return!) ---- */
+    41→  const filtered = useMemo(() => {
+    42→    let list = ROSTER.slice()
+    43→    if (filterPower !== 'semua') list = list.filter((c) => c.power === filterPower)
+    44→    if (filterRarity !== 'semua') list = list.filter((c) => c.rarity === filterRarity)
+    45→    if (query.trim()) {
+    46→      const q = query.trim().toLowerCase()
+    47→      list = list.filter((c) => c.name.toLowerCase().includes(q) || c.themeLabel.toLowerCase().includes(q))
+    48→    }
+    49→    switch (sortMode) {
+    50→      case 'rarity': list.sort((a, b) => RARITY_ORDER[a.rarity] - RARITY_ORDER[b.rarity] || a.price - b.price); break
+    51→      case 'harga-asc': list.sort((a, b) => a.price - b.price); break
+    52→      case 'harga-desc': list.sort((a, b) => b.price - a.price); break
+    53→      case 'nama': list.sort((a, b) => a.name.localeCompare(b.name)); break
+    54→    }
+    55→    return list
+    56→  }, [filterPower, filterRarity, sortMode, query])
+    57→
+    58→  if (screen !== 'shop') return null
+    59→
+    60→  const refreshState = () => {
+    61→    setOwned(['hero-ali', 'hero-aisyah', ...getOwnedChars()])
+    62→    setCurrency(getStarCurrency())
+    63→  }
+    64→
+    65→  const showToastLocal = (text: string, tone: 'good' | 'bad') => {
+    66→    setToastMsg({ text, tone })
+    67→    setTimeout(() => setToastMsg(null), 2600)
+    68→  }
+    69→
+    70→  const buyNow = (c: RosterChar) => {
+    71→    if (owned.includes(c.id)) {
+    72→      showToastLocal('Karakter ini sudah jadi milikmu! ✅', 'good')
+    73→      return
+    74→    }
+    75→    if (currency < c.price) {
+    76→      showToastLocal(`Bintang kurang! Butuh ${c.price - currency} ⭐ lagi. Menang yuk!`, 'bad')
+    77→      audio.mosqueHit()
+    78→      return
+    79→    }
+    80→    const ok = buyChar(c.id, c.price)
+    81→    if (ok) {
+    82→      audio.tada()
+    83→      refreshState()
+    84→      showToastLocal(`Yeay! ${c.name} bergabung! 🎉`, 'good')
+    85→    }
+    86→  }
+    87→
+    88→  return (
+    89→    <div className="pointer-events-auto fixed inset-0 z-50 flex flex-col bg-gradient-to-b from-[#fff8e0] via-[#f6edc8] to-[#e8d9a8]">
+    90→      {/* ---------- header ---------- */}
+    91→      <div className="flex shrink-0 items-center gap-2 border-b-4 border-amber-300 bg-gradient-to-r from-[#fffbe8] to-[#fff3d0] px-3 py-2 shadow-md sm:px-5 sm:py-3">
+    92→        <button
+    93→          className="btn-round"
+    94→          aria-label="Tutup toko"
+    95→          onClick={() => {
+    96→            audio.chime()
+    97→            useGameStore.getState().setScreen('menu')
+    98→          }}
+    99→        >
+   100→          <X className="h-4 w-4" />
+   101→        </button>
+   102→        <div className="flex min-w-0 items-center gap-2">
+   103→          <ShoppingBag className="h-6 w-6 shrink-0 text-orange-500 sm:h-7 sm:w-7" />
+   104→          <div className="min-w-0">
+   105→            <h2 className="truncate text-lg font-black tracking-wide text-[#4a3b20] sm:text-xl">TOKO ANAK SHOLEH</h2>
+   106→            <p className="-mt-1 hidden text-[10px] font-bold text-[#8a6a30] sm:block">Kumpulkan 100 penjaga masjid!</p>
+   107→          </div>
+   108→        </div>
+   109→        <div className="ml-auto flex items-center gap-1.5">
+   110→          <div className="flex items-center gap-1 rounded-full border-2 border-amber-300 bg-white/90 px-3 py-1.5 shadow-inner">
+   111→            <Star className="h-4 w-4 fill-amber-400 text-amber-500 sm:h-5 sm:w-5" />
+   112→            <motion.span key={currency} initial={{ scale: 1.4 }} animate={{ scale: 1 }} className="text-sm font-black text-amber-600 sm:text-base">
+   113→              {currency}
+   114→            </motion.span>
+   115→          </div>
+   116→        </div>
+   117→      </div>
+   118→
+   119→      {/* ---------- tab beli / buat ---------- */}
+   120→      <div className="flex shrink-0 justify-center gap-2 px-3 py-2">
+   121→        <button className={`shop-tab ${tab === 'beli' ? 'shop-tab-active' : ''}`} onClick={() => setTab('beli')}>
+   122→          🛒 Beli Karakter
+   123→          <span className="ml-1 rounded-full bg-white/60 px-1.5 text-[10px] font-black">{ROSTER.length}</span>
+   124→        </button>
+   125→        <button className={`shop-tab ${tab === 'buat' ? 'shop-tab-active' : ''}`} onClick={() => setTab('buat')}>
+   126→          <Wand2 className="h-4 w-4" />
+   127→          Buat Sendiri!
+   128→        </button>
+   129→      </div>
+   130→
+   131→      {tab === 'beli' ? (
+   132→        <>
+   133→          {/* ---------- filter bar ---------- */}
+   134→          <div className="flex shrink-0 flex-wrap items-center gap-1.5 px-3 pb-2 sm:px-5">
+   135→            <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-full border-2 border-amber-200 bg-white/90 px-3 py-1.5">
+   136→              <Search className="h-4 w-4 shrink-0 text-amber-500" />
+   137→              <input
+   138→                value={query}
+   139→                onChange={(e) => setQuery(e.target.value)}
+   140→                placeholder="Cari nama penjaga…"
+   141→                className="min-w-0 flex-1 bg-transparent text-sm font-bold text-[#4a3b20] outline-none placeholder:text-[#c4a86a]"
+   142→                aria-label="Cari karakter"
+   143→              />
+   144→            </div>
+   145→            <button className="btn-icon !h-9 !w-9" aria-label="Filter" onClick={() => setShowFilters((v) => !v)}>
+   146→              <SlidersHorizontal className="h-4 w-4" />
+   147→            </button>
+   148→          </div>
+   149→
+   150→          <AnimatePresence>
+   151→            {showFilters && (
+   152→              <motion.div
+   153→                initial={{ height: 0, opacity: 0 }}
+   154→                animate={{ height: 'auto', opacity: 1 }}
+   155→                exit={{ height: 0, opacity: 0 }}
+   156→                className="shrink-0 overflow-hidden px-3 sm:px-5"
+   157→              >
+   158→                <div className="flex flex-wrap items-center gap-1.5 rounded-2xl border-2 border-amber-200 bg-white/80 px-3 py-2">
+   159→                  {/* filter power */}
+   160→                  <span className="text-[10px] font-black uppercase tracking-wider text-[#8a6a30]">Kekuatan:</span>
+   161→                  <button className={`chip-filter ${filterPower === 'semua' ? 'chip-filter-on' : ''}`} onClick={() => setFilterPower('semua')}>Semua</button>
+   162→                  {POWERS.map((p) => (
+   163→                    <button key={p.id} className={`chip-filter ${filterPower === p.id ? 'chip-filter-on' : ''}`} onClick={() => setFilterPower(p.id)}>
+   164→                      {p.emoji} {p.label}
+   165→                    </button>
+   166→                  ))}
+   167→                  <div className="mx-1 h-4 w-px bg-amber-200" />
+   168→                  {/* filter rarity */}
+   169→                  <span className="text-[10px] font-black uppercase tracking-wider text-[#8a6a30]">Rarity:</span>
+   170→                  <button className={`chip-filter ${filterRarity === 'semua' ? 'chip-filter-on' : ''}`} onClick={() => setFilterRarity('semua')}>Semua</button>
+   171→                  {(Object.keys(RARITY_INFO) as Rarity[]).map((r) => (
+   172→                    <button key={r} className={`chip-filter ${filterRarity === r ? 'chip-filter-on' : ''}`} onClick={() => setFilterRarity(r)}>
+   173→                      {RARITY_INFO[r].emoji} {RARITY_INFO[r].label}
+   174→                    </button>
+   175→                  ))}
+   176→                  <div className="mx-1 h-4 w-px bg-amber-200" />
+   177→                  {/* sort */}
+   178→                  <span className="text-[10px] font-black uppercase tracking-wider text-[#8a6a30]">Urut:</span>
+   179→                  {([['rarity', 'Rarity'], ['harga-asc', 'Murah'], ['harga-desc', 'Mahal'], ['nama', 'A-Z']] as [SortMode, string][]).map(([m, l]) => (
+   180→                    <button key={m} className={`chip-filter ${sortMode === m ? 'chip-filter-on' : ''}`} onClick={() => setSortMode(m)}>{l}</button>
+   181→                  ))}
+   182→                </div>
+   183→              </motion.div>
+   184→            )}
+   185→          </AnimatePresence>
+   186→
+   187→          {/* ---------- grid kartu ---------- */}
+   188→          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4 sm:px-5">
+   189→            <div className="mx-auto grid max-w-5xl grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+   190→              {filtered.map((c, i) => {
+   191→                const isOwned = owned.includes(c.id)
+   192→                const ri = RARITY_INFO[c.rarity]
+   193→                const power = POWERS.find((p) => p.id === c.power)!
+   194→                const affordable = currency >= c.price
+   195→                return (
+   196→                  <motion.button
+   197→                    key={c.id}
+   198→                    initial={{ opacity: 0, y: 16, scale: 0.92 }}
+   199→                    animate={{ opacity: 1, y: 0, scale: 1 }}
+   200→                    transition={{ delay: Math.min(0.3, i * 0.018) }}
+   201→                    whileHover={{ y: -4, scale: 1.03 }}
+   202→                    whileTap={{ scale: 0.96 }}
+   203→                    onClick={() => {
+   204→                      audio.chime()
+   205→                      setSelected(c)
+   206→                    }}
+   207→                    className={`shop-card relative flex flex-col items-center gap-1 overflow-hidden rounded-2xl p-2 ${isOwned ? 'shop-card-owned' : ''}`}
+   208→                    style={{
+   209→                      border: `3px solid ${ri.border}`,
+   210→                      background: isOwned
+   211→                        ? `linear-gradient(180deg, #f0fbf2 0%, #dcf5e2 100%)`
+   212→                        : `linear-gradient(180deg, #fffdf5 0%, #fff6dd 100%)`,
+   213→                      boxShadow: `0 4px 0 ${ri.border}66, 0 10px 20px rgba(120,90,30,0.18)${c.rarity === 'legendaris' ? ', inset 0 0 24px rgba(245,158,11,0.15)' : ''}`,
+   214→                    }}
+   215→                    aria-label={`${c.name}, ${ri.label}, ${c.price} bintang`}
+   216→                  >
+   217→                    {/* rarity badge */}
+   218→                    <span className="absolute left-1.5 top-1.5 flex items-center gap-0.5 rounded-full bg-white/90 px-1.5 py-0.5 text-[9px] font-black" style={{ color: ri.color }}>
+   219→                      {ri.emoji} {ri.label}
+   220→                    </span>
+   221→                    {isOwned && (
+   222→                      <span className="absolute right-1.5 top-1.5 flex items-center gap-0.5 rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-black text-white shadow">
+   223→                        <Check className="h-2.5 w-2.5" /> Milikmu
+   224→                      </span>
+   225→                    )}
+   226→                    {/* preview */}
+   227→                    <div className="mt-5 h-20 w-20 shrink-0 sm:h-24 sm:w-24">
+   228→                      <RosterPreview rc={c} size={96} />
+   229→                    </div>
+   230→                    <p className="line-clamp-1 w-full text-center text-xs font-black text-[#4a3b20]">{c.name}</p>
+   231→                    <p className="line-clamp-1 w-full text-center text-[9px] font-bold text-[#8a6a30]">
+   232→                      {power.emoji} {power.label} · {c.themeLabel}
+   233→                    </p>
+   234→                    <div className="mt-auto flex items-center gap-1 rounded-full bg-white/80 px-2.5 py-1">
+   235→                      {isOwned ? (
+   236→                        <span className="flex items-center gap-0.5 text-[11px] font-black text-emerald-600">
+   237→                          <Check className="h-3 w-3" /> Sudah punya
+   238→                        </span>
+   239→                      ) : (
+   240→                        <span className={`flex items-center gap-0.5 text-[11px] font-black ${affordable ? 'text-amber-600' : 'text-rose-500'}`}>
+   241→                          <Star className={`h-3 w-3 ${affordable ? 'fill-amber-400 text-amber-500' : 'fill-rose-300 text-rose-400'}`} />
+   242→                          {c.price}
+   243→                        </span>
+   244→                      )}
+   245→                    </div>
+   246→                  </motion.button>
+   247→                )
+   248→              })}
+   249→            </div>
+   250→            {filtered.length === 0 && (
+   251→              <div className="flex flex-col items-center gap-2 py-12 text-[#8a6a30]">
+   252→                <span className="text-5xl">🔍</span>
+   253→                <p className="text-sm font-bold">Tidak ada penjaga yang cocok. Coba filter lain ya!</p>
+   254→              </div>
+   255→            )}
+   256→          </div>
+   257→        </>
+   258→      ) : (
+   259→        <CharCreator onToast={showToastLocal} />
+   260→      )}
+   261→
+   262→      {/* ---------- modal detail & beli ---------- */}
+   263→      <AnimatePresence>
+   264→        {selected && (
+   265→          <motion.div
+   266→            initial={{ opacity: 0 }}
+   267→            animate={{ opacity: 1 }}
+   268→            exit={{ opacity: 0 }}
+   269→            className="fixed inset-0 z-[60] flex items-center justify-center bg-emerald-950/40 p-4 backdrop-blur-sm"
+   270→            onClick={() => setSelected(null)}
+   271→          >
+   272→            <motion.div
+   273→              initial={{ scale: 0.6, y: 40, rotate: -2 }}
+   274→              animate={{ scale: 1, y: 0, rotate: 0 }}
+   275→              exit={{ scale: 0.8, y: 20 }}
+   276→              transition={{ type: 'spring', stiffness: 320, damping: 22 }}
+   277→              className="panel-cute flex max-w-sm flex-col items-center gap-3 px-6 py-5 text-center"
+   278→              onClick={(e) => e.stopPropagation()}
+   279→            >
+   280→              <div className="h-36 w-36 rounded-3xl border-2 border-amber-200 bg-gradient-to-b from-sky-100 to-emerald-100 p-1">
+   281→                <RosterPreview rc={selected} size={136} />
+   282→              </div>
+   283→              <div>
+   284→                <h3 className="text-lg font-black text-[#4a3b20]">{selected.name}</h3>
+   285→                <p className="text-xs font-bold text-[#8a6a30]">
+   286→                  {selected.themeLabel} · {RARITY_INFO[selected.rarity].emoji} {RARITY_INFO[selected.rarity].label}
+   287→                </p>
+   288→              </div>
+   289→              <p className="rounded-2xl bg-amber-50 px-4 py-2 text-xs font-semibold leading-relaxed text-[#6a4d1a]">
+   290→                {selected.desc}
+   291→              </p>
+   292→              <div className="flex items-center gap-2 rounded-full border-2 border-amber-200 bg-[#fffbe8] px-4 py-1.5">
+   293→                <Sparkles className="h-4 w-4 text-amber-500" />
+   294→                <span className="text-xs font-black text-[#6a4d1a]">
+   295→                  {POWERS.find((p) => p.id === selected.power)!.label}: {POWERS.find((p) => p.id === selected.power)!.variants.find((v) => v.id === selected.variant)?.label}
+   296→                </span>
+   297→              </div>
+   298→              {owned.includes(selected.id) ? (
+   299→                <div className="flex items-center gap-2 rounded-full border-2 border-emerald-300 bg-emerald-50 px-5 py-2 text-sm font-black text-emerald-700">
+   300→                  <Check className="h-4 w-4" /> Sudah dimiliki!
+   301→                </div>
+   302→              ) : (
+   303→                <motion.button
+   304→                  whileHover={{ scale: 1.05 }}
+   305→                  whileTap={{ scale: 0.94 }}
+   306→                  className={`btn-cute-lg !py-2.5 !text-sm ${currency < selected.price ? 'opacity-60' : ''}`}
+   307→                  onClick={() => buyNow(selected)}
+   308→                >
+   309→                  <Star className="h-5 w-5 fill-current" />
+   310→                  BELI {selected.price} BINTANG
+   311→                </motion.button>
+   312→              )}
+   313→              <button className="btn-cute-secondary !py-1.5 !text-xs" onClick={() => setSelected(null)}>
+   314→                Tutup
+   315→              </button>
+   316→            </motion.div>
+   317→          </motion.div>
+   318→        )}
+   319→      </AnimatePresence>
+   320→
+   321→      {/* ---------- toast lokal ---------- */}
+   322→      <AnimatePresence>
+   323→        {toastMsg && (
+   324→          <motion.div
+   325→            initial={{ opacity: 0, y: 30, scale: 0.8 }}
+   326→            animate={{ opacity: 1, y: 0, scale: 1 }}
+   327→            exit={{ opacity: 0, y: -10 }}
+   328→            className={`fixed bottom-6 left-1/2 z-[70] -translate-x-1/2 rounded-2xl border-4 px-5 py-2.5 text-sm font-bold shadow-xl ${
+   329→              toastMsg.tone === 'good' ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-rose-300 bg-rose-50 text-rose-700'
+   330→            }`}
+   331→          >
+   332→            {toastMsg.text}
+   333→          </motion.div>
+   334→        )}
+   335→      </AnimatePresence>
+   336→    </div>
+   337→  )
+   338→}
+   339→
+   340→/* ============================================================
+   341→ * P6: CHARACTER CREATOR — buat karakter sendiri
+   342→ * ============================================================ */
+   343→
+   344→function CharCreator({ onToast }: { onToast: (text: string, tone: 'good' | 'bad') => void }) {
+   345→  const [custom, setCustom] = useState<CharCustom>(DEFAULT_CUSTOM)
+   346→  const [saved, setSaved] = useState(false)
+   347→  const [savedList, setSavedList] = useState<SavedCustomEntry[]>(() => listSavedCustoms())
+   348→  const [customName, setCustomName] = useState('')
+   349→  const power = POWERS.find((p) => p.id === custom.power)!
+   350→
+   351→  const set = (patch: Partial<CharCustom>) => {
+   352→    setCustom((c) => ({ ...c, ...patch }))
+   353→    setSaved(false)
+   354→  }
+   355→
+   356→  const saveCustom = () => {
+   357→    try {
+   358→      const nama = customName.trim() || namaCustom()
+   359→      saveCustomEntry(custom, nama)
+   360→      audio.tada()
+   361→      setSaved(true)
+   362→      setSavedList(listSavedCustoms())
+   363→      onToast(`Karakter "${nama}" tersimpan & siap dipasang! 🎉`, 'good')
+   364→    } catch {
+   365→      onToast('Gagal menyimpan 😅 coba lagi ya!', 'bad')
+   366→    }
+   367→  }
+   368→
+   369→  const loadSaved = (entry: SavedCustomEntry) => {
+   370→    setCustom({
+   371→      presentation: entry.presentation === 'anak-perempuan' ? 'anak-perempuan' : 'anak-laki',
+   372→      robeColor: entry.robeColor,
+   373→      accentColor: entry.accentColor,
+   374→      skinColor: entry.skinColor,
+   375→      hairColor: entry.hairColor,
+   376→      accessory: entry.accessory,
+   377→      expression: entry.expression,
+   378→      power: entry.power,
+   379→      variant: entry.variant,
+   380→    })
+   381→    setCustomName(entry.name || '')
+   382→    setSaved(false)
+   383→    audio.chime()
+   384→    onToast(`Memuat "${entry.name || 'Karya Sendiri'}" — ubah lalu simpan lagi! 🎨`, 'good')
+   385→  }
+   386→
+   387→  const removeSaved = (id: string) => {
+   388→    deleteCustomEntry(id)
+   389→    setSavedList(listSavedCustoms())
+   390→    audio.mosqueHit()
+   391→    onToast('Karakter dihapus dari koleksi 🗑️', 'good')
+   392→  }
+   393→
+   394→  return (
+   395→    <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-6 sm:px-5">
+   396→      <div className="mx-auto flex max-w-3xl flex-col gap-4 lg:flex-row">
+   397→        {/* ---- preview 3D real-time ---- */}
+   398→        <div className="flex shrink-0 flex-col items-center gap-3 lg:w-64">
+   399→          <div className="h-48 w-48 rounded-3xl border-4 border-amber-300 bg-gradient-to-b from-sky-100 via-emerald-50 to-amber-50 p-1 shadow-lg">
+   400→            <CustomPreview cc={custom} size={184} />
+   401→          </div>
+   402→          {/* nama karakter */}
+   403→          <div className="flex w-full items-center gap-1.5 rounded-full border-2 border-amber-200 bg-white/90 px-3 py-1.5">
+   404→            <span className="text-sm">🏷️</span>
+   405→            <input
+   406→              value={customName}
+   407→              onChange={(e) => setCustomName(e.target.value.slice(0, 24))}
+   408→              placeholder="Nama karaktermu…"
+   409→              className="min-w-0 flex-1 bg-transparent text-sm font-bold text-[#4a3b20] outline-none placeholder:text-[#c4a86a]"
+   410→              aria-label="Nama karakter custom"
+   411→            />
+   412→          </div>
+   413→          <div className="w-full rounded-2xl border-2 border-purple-200 bg-purple-50/80 px-3 py-2 text-center">
+   414→            <p className="text-[10px] font-black uppercase tracking-widest text-purple-600">Kekuatan terpilih</p>
+   415→            <p className="text-sm font-black text-[#4a3b20]">
+   416→              {power.emoji} {power.label} — {power.variants.find((v) => v.id === custom.variant)?.label}
+   417→            </p>
+   418→            <p className="mt-1 text-[10px] font-semibold leading-snug text-[#8a6a30]">{power.desc}</p>
+   419→            <p className="mt-1.5 rounded-full bg-white/70 px-2 py-0.5 text-[9px] font-bold text-purple-500">
+   420→              Kekuatan tetap seimbang dari sistem game ⚖️ (fair!)
+   421→            </p>
+   422→          </div>
+   423→          <motion.button
+   424→            whileHover={{ scale: 1.04 }}
+   425→            whileTap={{ scale: 0.95 }}
+   426→            className={`btn-cute-lg w-full !py-3 !text-sm ${saved ? 'opacity-70' : ''}`}
+   427→            onClick={saveCustom}
+   428→          >
+   429→            {saved ? <><Check className="h-5 w-5" /> Tersimpan!</> : <><Wand2 className="h-5 w-5" /> SIMPAN KARAKTER!</>}
+   430→          </motion.button>
+   431→
+   432→          {/* ---- koleksi tersimpan (muat / hapus) ---- */}
+   433→          {savedList.length > 0 && (
+   434→            <div className="w-full rounded-2xl border-2 border-emerald-200 bg-emerald-50/80 px-3 py-2.5">
+   435→              <p className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-600">
+   436→                🎒 Koleksi Karya-mu ({savedList.length})
+   437→              </p>
+   438→              <div className="flex max-h-36 flex-col gap-1.5 overflow-y-auto pr-1">
+   439→                {savedList.map((entry) => (
+   440→                  <div key={entry.id} className="flex items-center gap-1.5 rounded-xl bg-white/85 px-2 py-1.5">
+   441→                    <span className="text-sm">
+   442→                      {POWERS.find((p) => p.id === entry.power)?.emoji ?? '🎨'}
+   443→                    </span>
+   444→                    <span className="min-w-0 flex-1 truncate text-[11px] font-black text-[#4a3b20]">
+   445→                      {entry.name || 'Karya Sendiri'}
+   446→                    </span>
+   447→                    <button
+   448→                      className="btn-round !h-6 !w-6"
+   449→                      aria-label={`Muat ${entry.name || 'karakter'}`}
+   450→                      title="Muat untuk diedit"
+   451→                      onClick={() => loadSaved(entry)}
+   452→                    >
+   453→                      <Sparkles className="h-3 w-3" />
+   454→                    </button>
+   455→                    <button
+   456→                      className="btn-round !h-6 !w-6 !border-rose-200"
+   457→                      aria-label={`Hapus ${entry.name || 'karakter'}`}
+   458→                      title="Hapus"
+   459→                      onClick={() => removeSaved(entry.id)}
+   460→                    >
+   461→                      <X className="h-3 w-3" />
+   462→                    </button>
+   463→                  </div>
+   464→                ))}
+   465→              </div>
+   466→            </div>
+   467→          )}
+   468→        </div>
+   469→
+   470→        {/* ---- panel kustomisasi ---- */}
+   471→        <div className="flex min-w-0 flex-1 flex-col gap-3">
+   472→          {/* presentasi */}
+   473→          <CreatorSection title="Bentuk Tubuh" emoji="🧒">
+   474→            <div className="flex flex-wrap gap-1.5">
+   475→              {(['anak-laki', 'anak-perempuan'] as const).map((p) => (
+   476→                <button key={p} className={`chip-filter ${custom.presentation === p ? 'chip-filter-on' : ''}`} onClick={() => set({ presentation: p })}>
+   477→                  {p === 'anak-laki' ? '👦 Anak Koko' : '👧 Anak Gamis'}
+   478→                </button>
+   479→              ))}
+   480→            </div>
+   481→          </CreatorSection>
+   482→
+   483→          {/* warna baju */}
+   484→          <CreatorSection title="Warna Baju Koko/Gamis" emoji="👕">
+   485→            <div className="flex flex-wrap gap-1.5">
+   486→              {ROBE_COLORS.map((col) => (
+   487→                <button
+   488→                  key={col}
+   489→                  aria-label={`Warna baju ${col.toString(16)}`}
+   490→                  className={`swatch ${custom.robeColor === col ? 'swatch-on' : ''}`}
+   491→                  style={{ background: '#' + col.toString(16).padStart(6, '0') }}
+   492→                  onClick={() => set({ robeColor: col })}
+   493→                />
+   494→              ))}
+   495→            </div>
+   496→          </CreatorSection>
+   497→
+   498→          {/* warna peci/hijab */}
+   499→          <CreatorSection title="Warna Peci / Hijab" emoji="🧢">
+   500→            <div className="flex flex-wrap gap-1.5">
+   501→              {ACCENT_COLORS.map((col) => (
+   502→                <button
+   503→                  key={col}
+   504→                  aria-label={`Warna aksen ${col.toString(16)}`}
+   505→                  className={`swatch ${custom.accentColor === col ? 'swatch-on' : ''}`}
+   506→                  style={{ background: '#' + col.toString(16).padStart(6, '0') }}
+   507→                  onClick={() => set({ accentColor: col })}
+   508→                />
+   509→              ))}
+   510→            </div>
+   511→          </CreatorSection>
+   512→
+   513→          {/* warna kulit */}
+   514→          <CreatorSection title="Warna Kulit" emoji="🖐️">
+   515→            <div className="flex flex-wrap gap-1.5">
+   516→              {SKIN_COLORS.map((col) => (
+   517→                <button
+   518→                  key={col}
+   519→                  aria-label={`Warna kulit ${col.toString(16)}`}
+   520→                  className={`swatch ${custom.skinColor === col ? 'swatch-on' : ''}`}
+   521→                  style={{ background: '#' + col.toString(16).padStart(6, '0') }}
+   522→                  onClick={() => set({ skinColor: col })}
+   523→                />
+   524→              ))}
+   525→            </div>
+   526→          </CreatorSection>
+   527→
+   528→          {/* warna rambut */}
+   529→          <CreatorSection title="Warna Rambut" emoji="💇">
+   530→            <div className="flex flex-wrap gap-1.5">
+   531→              {HAIR_COLORS.map((col) => (
+   532→                <button
+   533→                  key={col}
+   534→                  aria-label={`Warna rambut ${col.toString(16)}`}
+   535→                  className={`swatch ${custom.hairColor === col ? 'swatch-on' : ''}`}
+   536→                  style={{ background: '#' + col.toString(16).padStart(6, '0') }}
+   537→                  onClick={() => set({ hairColor: col })}
+   538→                />
+   539→              ))}
+   540→            </div>
+   541→          </CreatorSection>
+   542→
+   543→          {/* aksesoris */}
+   544→          <CreatorSection title="Aksesoris" emoji="🎒">
+   545→            <div className="flex flex-wrap gap-1.5">
+   546→              {(Object.keys(ACCESSORY_INFO) as CharCustom['accessory'][]).map((a) => (
+   547→                <button key={a} className={`chip-filter ${custom.accessory === a ? 'chip-filter-on' : ''}`} onClick={() => set({ accessory: a })}>
+   548→                  {ACCESSORY_INFO[a].emoji} {ACCESSORY_INFO[a].label}
+   549→                </button>
+   550→              ))}
+   551→            </div>
+   552→          </CreatorSection>
+   553→
+   554→          {/* ekspresi */}
+   555→          <CreatorSection title="Ekspresi Wajah" emoji="😄">
+   556→            <div className="flex flex-wrap gap-1.5">
+   557→              {(Object.keys(EXPRESSION_INFO) as CharCustom['expression'][]).map((e) => (
+   558→                <button key={e} className={`chip-filter ${custom.expression === e ? 'chip-filter-on' : ''}`} onClick={() => set({ expression: e })}>
+   559→                  {EXPRESSION_INFO[e].emoji} {EXPRESSION_INFO[e].label}
+   560→                </button>
+   561→              ))}
+   562→            </div>
+   563→          </CreatorSection>
+   564→
+   565→          {/* kekuatan */}
+   566→          <CreatorSection title="Pilih Kekuatan (dari sistem game — tetap fair!)" emoji="⚡">
+   567→            <div className="flex flex-col gap-1.5">
+   568→              {POWERS.map((p) => (
+   569→                <button
+   570→                  key={p.id}
+   571→                  className={`creator-power ${custom.power === p.id ? 'creator-power-on' : ''}`}
+   572→                  onClick={() => set({ power: p.id, variant: p.variants[0].id })}
+   573→                >
+   574→                  <span className="text-lg">{p.emoji}</span>
+   575→                  <span className="flex-1 text-left">
+   576→                    <span className="block text-xs font-black text-[#4a3b20]">{p.label}</span>
+   577→                    <span className="block text-[9px] font-semibold text-[#8a6a30]">{p.desc}</span>
+   578→                  </span>
+   579→                </button>
+   580→              ))}
+   581→            </div>
+   582→            {/* sub-varian */}
+   583→            <div className="mt-2 flex flex-wrap gap-1.5">
+   584→              {power.variants.map((v) => (
+   585→                <button key={v.id} className={`chip-filter ${custom.variant === v.id ? 'chip-filter-on' : ''}`} onClick={() => set({ variant: v.id })} title={v.desc}>
+   586→                  ⚙️ {v.label}
+   587→                </button>
+   588→              ))}
+   589→            </div>
+   590→          </CreatorSection>
+   591→        </div>
+   592→      </div>
+   593→    </div>
+   594→  )
+   595→}
+   596→
+   597→function CreatorSection({ title, emoji, children }: { title: string; emoji: string; children: React.ReactNode }) {
+   598→  return (
+   599→    <div className="rounded-2xl border-2 border-amber-200 bg-white/85 px-3.5 py-2.5 shadow-sm">
+   600→      <p className="mb-1.5 text-[11px] font-black uppercase tracking-wider text-[#8a6a30]">
+   601→        {emoji} {title}
+   602→      </p>
+   603→      {children}
+   604→    </div>
+   605→  )
+   606→}
+   607→
+   608→function namaCustom(): string {
+   609→  return 'Anak Sholeh Karya Sendiri'
+   610→}
+   611→

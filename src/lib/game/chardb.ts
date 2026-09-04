@@ -16,6 +16,55 @@ const RARITY_COST: Record<Rarity, number> = { umum: 45, langka: 70, epik: 95, le
 /** multiplier biaya upgrade per rarity. */
 const RARITY_UPGRADE: Record<Rarity, number> = { umum: 0.85, langka: 1, epik: 1.15, legendaris: 1.35 }
 
+/* ---------------- P8: funFact edukatif unik per power ---------------- */
+
+/** Fakta islami ramah anak per kategori power (deterministik by id hash). */
+const POWER_FACTS: Record<string, string[]> = {
+  cahaya: [
+    'Sholat adalah cahaya — yang rajin sholat 5 waktu hatinya ikut bercahaya! ✨',
+    'Bangun subuh itu sindiran setan paling ampuh. Cahaya fajar bikin hari berkah! 🌅',
+    'Kalimat thayyibah seperti lampu kecil yang menerangi hati siapa pun yang mengucapnya 💡',
+  ],
+  dzikir: [
+    'Dzikir "Subhanallah, Alhamdulillah, Allahu Akbar" menenangkan hati seperti gelembung air 🫧',
+    'Hati yang sering berdzikir ibarat tanaman disiram tiap hari — makin subur dan segar! 🌱',
+    'Membaca dzikir pagi menambah semangat seharian, coba deh! 🌅',
+  ],
+  sedekah: [
+    'Sedekah tidak pernah mengurangi harta — justru dibalas berlipat-lipat! 🪙',
+    'Umar bin Khattab ra terkenal dermawan, uang sakunya selalu disisihkan untuk anak yatim 💝',
+    'Sedekah bisa menolak bala, lho — walaupun cuma sepotong roti! 🍞',
+  ],
+  wangi: [
+    'Nabi ﷺ menyukai kebersihan dan wewangian — wudhu bikin badan segar dan wangi! 💧',
+    'Air wudhu yang membasuh wajah bikin muka bersinar sepanjang hari 🌟',
+    'Kesucian itu separuh dari iman — wudhu adalah kuncinya! 🕌',
+  ],
+  nasihat: [
+    'Menyampaikan nasihat itu amanah — kalimat lembut sampai ke hati! 💡',
+    'Teman yang mengingatkan sholat adalah sahabat sejati di surga nanti 🤝',
+    'Senyum dan kata positif bisa membuat temanmu semangat lagi! 😄',
+  ],
+  adzan: [
+    'Bilal bin Rabah ra adalah muadzin pertama dengan suara paling merdu 📢',
+    'Mendengar adzan lalu menjawabnya mendapat pahala seperti doa mustajab 🤲',
+    'Ketika adzan berkumandang, setan kabur — sampai seolah-olah tidak terlihat! 🏃',
+  ],
+}
+
+/** hash string kecil → indeks deterministik. */
+function hashPick(id: string, arr: string[]): string {
+  let h = 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0
+  return arr[Math.abs(h) % arr.length]
+}
+
+/** funFact unik per karakter: fakta power (hash) + rasa varian. */
+function synthFunFact(rc: RosterChar, variantLabel: string): string {
+  const fact = hashPick(rc.id, POWER_FACTS[rc.power] ?? POWER_FACTS.cahaya)
+  return `${fact} (${variantLabel})`
+}
+
 const HERO_IDS = new Set<string>(['ali', 'aisyah', 'umar', 'fatimah', 'misbah', 'kakek'])
 
 export function isHeroChar(id: string): id is CharId {
@@ -66,7 +115,7 @@ function synthRosterDef(rc: RosterChar): CharDef {
     shortName: rc.name.split(' ')[0],
     role: `${power.label} · ${variantName}`,
     desc: rc.desc,
-    funFact: `${rc.name} siap menjaga masjid bersama regu anak sholeh!`,
+    funFact: synthFunFact(rc, variantName),
     emoji: rc.emoji,
     color: rc.robe,
     accent: rc.accent,

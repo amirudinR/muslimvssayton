@@ -221,6 +221,30 @@ class GameAudio {
     this.sfx(() => this.osc('sine', 1046, this.t, 0.4, 0.14))
   }
 
+  /** P8: jingle beli berbeda per rarity — makin tinggi makin meriah. */
+  buyRarity(rarity: 'umum' | 'langka' | 'epik' | 'legendaris') {
+    this.sfx(() => {
+      const t = this.t
+      if (rarity === 'umum') {
+        // pop lucu + koin
+        this.osc('sine', 660, t, 0.14, 0.22, undefined, 880)
+        this.osc('square', 1046, t + 0.1, 0.12, 0.07)
+      } else if (rarity === 'langka') {
+        // triple chime naik
+        ;[660, 880, 1046].forEach((n, i) => this.osc('triangle', n, t + i * 0.07, 0.22, 0.16))
+      } else if (rarity === 'epik') {
+        // gemerlap ungu: arpeggio mayor + bel tinggi
+        ;[523, 622, 784, 932].forEach((n, i) => this.osc('sawtooth', n, t + i * 0.06, 0.18, 0.06))
+        this.osc('sine', 1568, t + 0.28, 0.45, 0.12)
+      } else {
+        // fanfare legendaris: trumpet naik + sorak
+        ;[523, 659, 784, 1046, 1318].forEach((n, i) => this.osc('triangle', n, t + i * 0.08, 0.42, 0.2))
+        this.osc('sine', 2093, t + 0.5, 0.75, 0.12)
+        this.noise(t + 0.42, 0.55, 0.09, 1800)
+      }
+    })
+  }
+
   /** Doa Bersama: arpeggio harpa lembut naik + bel + sorak — "berkah turun". */
   duaBlessing() {
     this.sfx(() => {

@@ -429,7 +429,9 @@ export function FunFactModal() {
             onClick={(e) => e.stopPropagation()}
           >
             <span className="animate-bounce-soft text-6xl">{getCharDef(funFact.char).emoji}</span>
-            <p className="text-lg font-black text-[#4a3b20]">Karakter Baru Terbuka!</p>
+            <p className="text-lg font-black text-[#4a3b20]">
+              {funFact.kind === 'place' ? 'Tahukah Kamu? 🤔' : 'Karakter Baru Terbuka!'}
+            </p>
             <p className="text-sm font-bold text-emerald-700">{getCharDef(funFact.char).name}</p>
             <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold leading-relaxed text-[#3d5a3a]">
               💡 {funFact.text}

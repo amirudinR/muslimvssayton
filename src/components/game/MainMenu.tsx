@@ -9,12 +9,13 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Play, ShoppingBag, Map, Settings as SettingsIcon, Star, Trophy, Medal,
-  GraduationCap, ChevronRight,
+  GraduationCap, ChevronRight, BookOpen,
 } from 'lucide-react'
 import { useGameStore } from '@/lib/game/store'
 import { getEngine } from '@/lib/game/engine'
 import { audio } from '@/lib/game/audio'
-import { getRecords, BADGES, getLevelProgress, getStarCurrency } from '@/lib/game/achievements'
+import { getRecords, BADGES, getLevelProgress, getStarCurrency, getOwnedChars } from '@/lib/game/achievements'
+import { openCollection } from '@/lib/game/collection'
 import { LEVELS, MAX_STARS } from '@/lib/game/levels'
 import {
   BadgesModal,
@@ -34,6 +35,9 @@ export function MainMenu() {
   const [records] = useState(() => (typeof window !== 'undefined' ? getRecords() : null))
   const [levelProg] = useState(() => (typeof window !== 'undefined' ? getLevelProgress() : null))
   const [starCur] = useState(() => (typeof window !== 'undefined' ? getStarCurrency() : 0))
+  const [ownedCount] = useState(
+    () => (typeof window !== 'undefined' ? 2 + getOwnedChars().filter((id) => id !== 'hero-ali' && id !== 'hero-aisyah').length : 0),
+  )
 
   if (screen !== 'menu') return null
 
@@ -173,11 +177,30 @@ export function MainMenu() {
             </motion.button>
 
             {/* Baris menu sekunder */}
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <motion.button whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.95 }} className="menu-tile" onClick={() => go('shop')}>
                 <ShoppingBag className="h-5 w-5 text-orange-500" />
                 <span className="text-xs font-black">TOKO</span>
                 <span className="text-[9px] font-bold opacity-70">100 karakter!</span>
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.04, y: -2 }}
+                whileTap={{ scale: 0.95 }}
+                className="menu-tile relative"
+                onClick={() => {
+                  audio.ensure()
+                  audio.chime()
+                  openCollection()
+                }}
+              >
+                <BookOpen className="h-5 w-5 text-emerald-500" />
+                <span className="text-xs font-black">KOLEKSI</span>
+                <span className="text-[9px] font-bold opacity-70">{ownedCount} dimiliki</span>
+                {ownedCount > 2 && (
+                  <span className="absolute -right-1.5 -top-1.5 flex items-center gap-0.5 rounded-full border-2 border-white bg-emerald-500 px-1.5 py-0.5 text-[9px] font-black text-white shadow">
+                    {ownedCount}✨
+                  </span>
+                )}
               </motion.button>
               <motion.button whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.95 }} className="menu-tile" onClick={() => go('levels')}>
                 <Map className="h-5 w-5 text-emerald-600" />

@@ -23,6 +23,7 @@ import {
   type ChibiParts,
 } from './models'
 import { getCharDef } from './chardb'
+import { getRosterChar } from './roster'
 import { ParticleSystem } from './particles'
 import { audio } from './audio'
 
@@ -466,9 +467,15 @@ export class Tower {
   private punchTimer = 0
   /** P7: timer spawn partikel aura (rarity epik/legendaris) */
   private auraTimer = Math.random() * 1
+  /** P8: multiplier berkah nasihat dari tower sedekah tetangga (1 = tanpa buff). */
+  buffMult = 1
   rangeRing: THREE.Mesh
   /** cincin keemasan berkah Doa Bersama di bawah kaki */
   duaGlow: THREE.Mesh
+  /** P8: cincin hijau berkah nasihat di bawah kaki (aktif saat di-buff) */
+  nasihatGlow: THREE.Mesh
+  /** P8: cincin radius aura buff (hanya tower sedekah/nasihat) */
+  buffRing: THREE.Mesh | null = null
   totalSpent: number
 
   constructor(charId: string, slotIndex: number, x: number, z: number, baseCost: number) {
@@ -494,6 +501,41 @@ export class Tower {
     this.duaGlow.rotation.x = -Math.PI / 2
     this.duaGlow.position.set(x, 0.06, z)
     this.duaGlow.visible = false
+
+    /* P8: cincin berkah nasihat (buff dari tower sedekah tetangga) */
+    this.nasihatGlow = new THREE.Mesh(
+      new THREE.RingGeometry(0.42, 0.72, 24),
+      new THREE.MeshBasicMaterial({
+        color: 0x34d399,
+        transparent: true,
+        opacity: 0.75,
+        side: THREE.DoubleSide,
+      }),
+    )
+    this.nasihatGlow.rotation.x = -Math.PI / 2
+    this.nasihatGlow.position.set(x, 0.05, z)
+    this.nasihatGlow.visible = false
+
+    /* P8: cincin radius aura buff untuk tower nasihat/sedekah — varian 'berkah'
+       (rangeMult 1.4) kini terasa nyata: radius buff ikut melebar. */
+    if (this.def.attack === 'sedekah') {
+      const buffRadius = this.buffRadius
+      this.buffRing = createRangeRing(buffRadius, 0x34d399)
+      this.buffRing.position.set(x, 0, z)
+      ;(this.buffRing.material as THREE.MeshBasicMaterial).opacity = 0.35
+      this.buffRing.visible = true
+    }
+  }
+
+  /**
+   * P8: radius aura buff nasihat — basis mandiri (bukan range serangan
+   * yang memang kecil utk tower sedekah): 4.5/5.5/6.5 per level.
+   * Varian 'berkah' (rangeMult 1.4) memperluas ×1.4 → 6.3/7.7/9.1.
+   */
+  get buffRadius(): number {
+    const base = 4.5 + (this.level - 1) * 1.0
+    const isBerkah = getRosterChar(this.def.id)?.variant === 'berkah'
+    return +(base * (isBerkah ? 1.4 : 1)).toFixed(1)
   }
 
   get stats() {
@@ -513,6 +555,9 @@ export class Tower {
     this.parts = this.group.userData.parts as ChibiParts
     const stats = this.def.levels[level - 1]
     this.rangeRing.scale.setScalar(stats.range / this.def.levels[0].range)
+    if (this.buffRing) {
+      this.buffRing.scale.setScalar(this.buffRadius / 4.5)
+    }
   }
 
   stun(now: number, duration: number) {
@@ -591,12 +636,27 @@ export class Tower {
       }
     }
 
+    /* --- P8: cincin berkah nasihat (visual buff aktif) --- */
+    if (this.nasihatGlow) {
+      const buffed = this.buffMult > 1
+      this.nasihatGlow.visible = buffed
+      if (buffed) {
+        this.nasihatGlow.rotation.z -= dt * 1.8
+        this.nasihatGlow.scale.setScalar(1 + Math.sin(this.animT * 4) * 0.1)
+      }
+    }
+    /* P8: denyut cincin radius buff pada tower nasihat */
+    if (this.buffRing) {
+      const mat = this.buffRing.material as THREE.MeshBasicMaterial
+      mat.opacity = 0.25 + Math.abs(Math.sin(this.animT * 1.6)) * 0.25
+    }
+
     /* --- serangan --- */
     this.cooldown -= dt
     if (this.cooldown > 0) return
     const stats = this.stats
     const blessed = now < ctx.duaActiveUntil
-    const dmg = blessed ? stats.damage * DUA_CONST.damageMult : stats.damage
+    const dmg = blessed ? stats.damage * DUA_CONST.damageMult * this.buffMult : stats.damage * this.buffMult
 
     if (this.def.attack === 'aura') {
       // Fatimah: denyut aroma wangi — AoE slow di sekitar
@@ -616,11 +676,12 @@ export class Tower {
     }
 
     if (this.def.attack === 'sedekah') {
-      // Misbah: kotak sedekah — hasilkan pahala pasif (tidak menyerang).
+      // Misbah & nasihat: kotak sedekah — hasilkan pahala pasif (tidak menyerang).
       // Berkah Doa Bersama melipatgandakan sedekahnya (interval lebih cepat).
+      // P8: berkah nasihat tetangga menambah hasil sedekah (buffMult).
       this.cooldown = stats.fireRate * (blessed ? DUA_CONST.rateMult : 1)
       const [amount] = this.def.pahalaGen![this.level - 1]
-      ctx.onPahalaTick(amount, this.pos.clone(), this.level)
+      ctx.onPahalaTick(Math.round(amount * this.buffMult), this.pos.clone(), this.level)
       return
     }
 
@@ -741,6 +802,8 @@ export class EntityManager {
       this.group.remove(t.group)
       this.group.remove(t.rangeRing)
       this.group.remove(t.duaGlow)
+      this.group.remove(t.nasihatGlow)
+      if (t.buffRing) this.group.remove(t.buffRing)
     })
     this.towers = []
     this.projectiles.forEach((p) => {
@@ -773,6 +836,8 @@ export class EntityManager {
     this.group.add(tower.group)
     this.group.add(tower.rangeRing)
     this.group.add(tower.duaGlow)
+    this.group.add(tower.nasihatGlow)
+    if (tower.buffRing) this.group.add(tower.buffRing)
     return tower
   }
 
@@ -781,6 +846,34 @@ export class EntityManager {
     this.group.remove(tower.group)
     this.group.remove(tower.rangeRing)
     this.group.remove(tower.duaGlow)
+    this.group.remove(tower.nasihatGlow)
+    if (tower.buffRing) this.group.remove(tower.buffRing)
+  }
+
+  /** P8: multiplier berkah nasihat per level tower sumber. */
+  static readonly NASIHAT_BUFF = [1.1, 1.16, 1.22]
+
+  /**
+   * P8: BERKAH NASIHAT — tower ber-attack 'sedekah' (Misbah & power nasihat)
+   * memancarkan aura hijau yang memperkuat tower tetangga:
+   * - tower penyerang: damage × buffMult
+   * - tower sedekah lain: hasil pahala × buffMult
+   * Radius = 70% range tower sumber (varian 'berkah' 1.4× → aura terluas).
+   * Buff tidak menumpuk (diambil nilai tertinggi).
+   */
+  private applyNasihatAuras() {
+    for (const t of this.towers) t.buffMult = 1
+    for (const src of this.towers) {
+      if (src.def.attack !== 'sedekah') continue
+      const radius = src.buffRadius
+      const mult = EntityManager.NASIHAT_BUFF[src.level - 1]
+      for (const t of this.towers) {
+        if (t === src) continue
+        if (t.buffMult < mult && t.pos.distanceTo(src.pos) <= radius) {
+          t.buffMult = mult
+        }
+      }
+    }
   }
 
   private spawnProjectile(kind: ProjKind, tower: Tower, target: Enemy, damage: number) {
@@ -812,6 +905,9 @@ export class EntityManager {
 
   update(dt: number) {
     this.ctx.now += dt
+
+    // P8: hitung ulang aura berkah nasihat (sebelum tower bertindak)
+    this.applyNasihatAuras()
 
     // update enemies
     for (const e of this.enemies) {

@@ -17,6 +17,8 @@ export interface LeaderEntry {
   defeated: number
   pahala: number
   createdAt: string
+  /** P8: mode asal skor — "Klasik" | "Daring Harian" | "Level N" */
+  mode?: string
 }
 
 /* ------------------------------ Modal dasar ------------------------------ */
@@ -206,7 +208,17 @@ export function LeaderboardModal({ open, onClose }: { open: boolean; onClose: ()
                   {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
                 </span>
                 <span className="flex flex-col overflow-hidden">
-                  <span className="truncate text-sm font-black text-[#4a3b20]">{e.name}</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate text-sm font-black text-[#4a3b20]">{e.name}</span>
+                    {e.mode && e.mode !== 'Klasik' && (
+                      <span
+                        className={`lb-mode-chip ${e.mode === 'Daring Harian' ? 'lb-mode-daily' : 'lb-mode-level'}`}
+                        title={`Mode: ${e.mode}`}
+                      >
+                        {e.mode === 'Daring Harian' ? '🔥' : '🗺️'} {e.mode}
+                      </span>
+                    )}
+                  </span>
                   <span className="text-[10px] font-bold text-[#8a6a30]">
                     👻 {e.defeated} · 🛡️ gel. {e.wave} · 🌟 {e.pahala}
                   </span>

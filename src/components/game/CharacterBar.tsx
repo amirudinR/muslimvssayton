@@ -13,6 +13,7 @@ import { getRosterChar, RARITY_INFO } from '@/lib/game/roster'
 import { useGameStore } from '@/lib/game/store'
 import { getEngine } from '@/lib/game/engine'
 import { audio } from '@/lib/game/audio'
+import { openCollection } from '@/lib/game/collection'
 import { CharPreview } from './CharPreview'
 import { RosterPreview } from './RosterPreview'
 
@@ -220,16 +221,27 @@ export function CharacterBar() {
           )
         })}
 
-        {/* --- indikator koleksi (bila pemain punya banyak) --- */}
+        {/* --- P8: tombol buka layar KOLEKSI (game otomatis jeda) --- */}
         {ownedExtra.length > 0 && (
-          <div className="pointer-events-none flex w-[52px] shrink-0 flex-col items-center justify-center gap-0.5 self-stretch rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50/60 px-1 py-2">
+          <motion.button
+            whileHover={{ y: -4 }}
+            whileTap={{ scale: 0.93 }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => {
+              audio.chime()
+              openCollection()
+            }}
+            className="relative flex w-[56px] shrink-0 select-none flex-col items-center justify-center gap-0.5 self-stretch rounded-2xl border-2 border-dashed border-amber-400 bg-gradient-to-b from-amber-50 to-amber-100/80 px-1 py-2 shadow-inner"
+            aria-label="Buka layar koleksi karakter"
+            title="Lihat semua koleksi penjagamu"
+          >
             <Sparkles className="h-4 w-4 text-amber-500" />
             <span className="text-center text-[9px] font-black leading-tight text-amber-700">
-              Koleksi
+              KOLEKSI
               <br />
-              {ownedExtra.length}+{unlocked.length > 8 ? '' : ''}
+              {unlocked.length}✨
             </span>
-          </div>
+          </motion.button>
         )}
       </div>
 

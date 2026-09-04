@@ -80,6 +80,8 @@ function StarRating({ stars }: { stars: number }) {
 
 function ScoreSubmit({ stars, wave, defeated, pahala }: { stars: number; wave: number; defeated: number; pahala: number }) {
   const scoreSubmitted = useGameStore((s) => s.scoreSubmitted)
+  const dailyMode = useGameStore((s) => s.dailyMode)
+  const levelId = useGameStore((s) => s.levelId)
   const [name, setName] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -125,10 +127,12 @@ function ScoreSubmit({ stars, wave, defeated, pahala }: { stars: number; wave: n
     setError(null)
     try {
       setPlayerName(clean)
+      // P8: label mode asal skor untuk papan rekor
+      const mode = dailyMode ? 'Daring Harian' : levelId > 0 ? `Level ${levelId}` : 'Klasik'
       const res = await fetch('/api/leaderboard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: clean, stars, wave, defeated, pahala }),
+        body: JSON.stringify({ name: clean, stars, wave, defeated, pahala, mode }),
       })
       const json = (await res.json()) as { ok: boolean; error?: string }
       if (!res.ok || !json.ok) throw new Error(json.error ?? 'gagal')
@@ -181,6 +185,7 @@ function ScoreSubmit({ stars, wave, defeated, pahala }: { stars: number; wave: n
 export function EndScreens() {
   const screen = useGameStore((s) => s.screen)
   const paused = useGameStore((s) => s.paused)
+  const collectionOpen = useGameStore((s) => s.collectionOpen)
   const stats = useGameStore((s) => s.stats)
   const soundOn = useGameStore((s) => s.soundOn)
   const musicOn = useGameStore((s) => s.musicOn)
@@ -372,7 +377,7 @@ export function EndScreens() {
 
       {/* ---------------- Jeda ---------------- */}
       <AnimatePresence>
-        {screen === 'playing' && paused && (
+        {screen === 'playing' && paused && !collectionOpen && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
