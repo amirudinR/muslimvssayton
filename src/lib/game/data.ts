@@ -22,7 +22,8 @@ export interface CharLevelStats {
 }
 
 export interface CharDef {
-  id: CharId
+  /** id karakter — hero ('ali' dll) ATAU id roster ('gen-13', 'custom-…') */
+  id: string
   name: string
   shortName: string
   role: string
@@ -44,6 +45,8 @@ export interface CharDef {
   stunDuration?: number
   /** Misbah: [jumlahPahala, intervalDetik] per level — kotak sedekah pasif */
   pahalaGen?: [number, number][]
+  /** P7: rarity (karakter roster) — utk aura partikel & styling */
+  rarity?: 'umum' | 'langka' | 'epik' | 'legendaris'
 }
 
 export interface EnemyDef {

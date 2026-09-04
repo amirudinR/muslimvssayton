@@ -9,6 +9,22 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { CHAR_DEFS, ENEMY_DEFS, LANES } from './data'
 import type { CharId, EnemyId } from './data'
 import type { RosterChar, CharCustom } from './roster'
+import { isHeroChar, isCustomCharId, getRosterCustomConfig } from './chardb'
+import { getRosterChar } from './roster'
+
+/* ------------------------------ P7: resolusi model tower ------------------------------
+ * id hero → model chibi asli; id roster → model generatif; custom → model custom. */
+export function getTowerModel(charId: string, level: number): THREE.Group {
+  if (isHeroChar(charId)) return getCharacterModel(charId as CharId, level)
+  if (isCustomCharId(charId)) {
+    const cc = getRosterCustomConfig(charId)
+    if (cc) return getCustomModel(cc, level)
+  }
+  const rc = getRosterChar(charId)
+  if (rc && rc.heroId) return getCharacterModel(rc.heroId as CharId, level)
+  if (rc) return getRosterModel(rc, level)
+  return getCharacterModel('ali', level) // fallback aman
+}
 
 /* ------------------------------ Helpers ------------------------------ */
 

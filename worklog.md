@@ -376,3 +376,73 @@ Unresolved issues / risks & rekomendasi fase berikutnya:
 - Karakter custom tersimpan tapi tidak dimuat kembali di creator (list saved chars belum ditampilkan).
 - Leaderboard belum punya kolom level/mode.
 - Ide lanjutan: Sarah si Penjahit, tantangan mingguan, bahasa EN, audio pre-rendered, partikel aura legendaris di gameplay.
+
+---
+Task ID: 8
+Agent: main-agent (Z.ai Code)
+Task: P7 — INTEGRASI KARAKTER MILIK PEMAIN KE GAMEPLAY (roster toko + custom bisa dipasang & bertarung) + creator load/hapus + aura legendaris + playtest level 2-8
+
+Work Log:
+
+QA AWAL (agent-browser + probe):
+- Build sehat: halaman 200, 0 console error, probe lengkap (__pmEngine/__pmStore).
+- KONFIRMASI GAP UTAMA (dari worklog fase lalu): tryPlace(slot, 'gen-13') THROW "Cannot read properties of undefined (reading 'cost')" — karakter yang dibeli di toko TIDAK BISA dipasang di gameplay (CHAR_DEFS hanya 6 hero). Ini prioritas #1.
+
+P7 — INTEGRASI LENGKAP (roster + custom → gameplay):
+1) data.ts: CharDef.id melebar dari CharId → string ( struktur aman, 'ali' tetap assign-able); tambah field rarity?: 'umum'|'langka'|'epik'|'legendaris' (untuk aura & styling).
+2) BARU src/lib/game/chardb.ts (~100 baris):
+   - getCharDef(id): hero → CHAR_DEFS; roster/custom → synthRosterDef(rc) dgn cache; fallback aman CHAR_DEFS.ali.
+   - synthRosterDef: base stats dari HERO se-power (POWERS.heroId) × variant.damageMult/rateMult/rangeMult × RARITY_POWER (umum 0.92 / langka 1.0 / epik 1.08 / legendaris 1.15) → TETAP BALANCED.
+   - Biaya per rarity: RARITY_COST 45/70/95/140 pahala; upgrade ×0.85/1.0/1.15/1.35.
+   - Varian khusus: 'mentul' knockback ×1.5; 'subur' pahalaGen ×1.3; 'kilat' interval ×0.75.
+   - aoeRadius/slowDuration diskalakan rangeMult; slowFactor/knockback/stun dari base.
+   - isHeroChar / isCustomCharId helper.
+3) roster.ts: REGISTRY karakter custom runtime:
+   - loadCustomChars(): localStorage 'penjaga-masjid-custom-char' → Map<id, RosterChar> + rcModels (CharCustom per id) — dipanggil engine.init() & startGame().
+   - getRosterChar(id) cek custom registry dulu → ROSTER.
+   - saveCustomEntry(cc, name) / deleteCustomEntry(id) / listSavedCustoms().
+   - SavedCustomEntry interface (id/presentation/warna/accessory/expression/power/variant/name).
+4) models.ts: getTowerModel(charId, level) — resolusi terpusat: hero → getCharacterModel; custom-* → getCustomModel(cc); roster dgn heroId → model hero asli; roster generatif → getRosterModel; fallback ali.
+5) entities.ts: Tower constructor & setLevel pakai getCharDef + getTowerModel (charId: string); placeTower(charId: string).
+   - AURA PARTIKEL: rarity epik (tiap 0.9s) / legendaris (tiap 0.5s) → ctx.particles.sparkleRise orbit radius 0.6-1.1 sekitar tower, warna emas/ungu.
+6) engine.ts: beginPlacing/updateHoverSlot/refreshSlotHighlights/tryPlace → getCharDef (charId: string); ghostChar: string.
+   - startGame: loadCustomChars() + seed unlockedChars ← ownedChars (hero-umar → 'umar') + semua id custom → belanja toko LANGSUNG terasa di gameplay.
+   - init(): loadCustomChars() awal + probe baru __pmRoster (ROSTER + getCharDef utk QA).
+7) store.ts: selectedCharId/funFact.char/unlockedChars/SelectedTowerInfo.char → string (type widening).
+8) CharacterBar.tsx (rewrite): 6 kartu hero + KARTU ROSTER/CUSTOM MILIK PEMAIN (border sesuai rarity RARITY_INFO.border, badge rarity emoji pojok, preview RosterPreview 3D berputar, harga ⭐, badge 💰 utk power nasihat) + indikator "Koleksi N+" dashed di ujung; panel preview terpilih pakai RosterPreview utk non-hero; onCardDown(charId: string).
+9) TowerPanel/Hud(FunFactModal): CHAR_DEFS[x] → getCharDef(x).
+10) ShopScreen CharCreator: input NAMA karakter (🏷️, max 24 char); KOLEKSI KARYA-MU list (max tampil, scroll 36px) tiap item: emoji power + nama + tombol Muat (Sparkles) + Hapus (X rose); loadSaved() set seluruh state custom + nama; removeSaved() delete + refresh; saveCustom pakai saveCustomEntry(nama).
+
+VERIFIKASI (probe + DOM + VLM + screenshot):
+- ✓ Seed owned: startGame → unlockedChars ['ali','aisyah','gen-13','kakek','custom-1'] (hero-kakek dari toko + gen-13 roster + custom-1 creator).
+- ✓ tryPlace(0,'gen-13') & tryPlace(5,'custom-1') → true; def: "Zahra si Penolong (Cahaya Cepat)" orb dmg7 cost45 rarity umum / "Sarah Karyaku (Dzikir Luas)" bubble dmg9 — ATTACK & VARIAN benar dari power/variant!
+- ✓ Combat: wave 1 selesai 5 defeated dgn tower roster+custom aktif; pahala flow normal.
+- ✓ Upgrade roster tower: level 1→2, dmg 7→11 (multiplier varian+rarity jalan).
+- ✓ Legendaris/epik roster placeable (gen-5 legendaris cost 140 dmg1[nasihat-economy by design], gen-10 epik); aura partikel: glow pool 21-22 alive particles regen tiap 0.5s.
+- ✓ VLM gameplay: "chibi towers on green pads near dirt paths, at least one with hijab, mosque visible, no broken models" ✓.
+- ✓ Level 2-8 e2e bot: L3 victory (47 defeated), L4 3⭐/hp120, L5 3⭐/115, L6 3⭐/115, L7 3⭐/110, L8 2⭐/85 (boss) — semua victory; save: levelStars [0,3,3,3,3,3,3,2], bestLevelDone 8, starCurrency 810.
+- ✓ Creator: input nama; list "Muat Sarah Karyaku" + Hapus; klik Muat → state creator berubah (Anak Gamis aktif + nama "Sarah Karyaku" terisi) — siklus create→save→load→edit lengkap!
+- ✓ Mobile 390×844: 8 kartu bar (6 hero + gen-13 + custom-1) + "Koleksi 2+" badge + D-pad; VLM rekonstruksi cocok.
+- ✓ Tutorial fresh save: step 1→2→3→4→…→0 selesai (advance antar aksi), tutorialSeen tersimpan.
+- ✓ lint bersih, tsc --noEmit bersih, 0 console error, dev.log GET 200.
+- Artefak: download/roster_gameplay.png, download/charbar_mobile.png.
+
+BUGFIX:
+- [FIX] Custom char tidak muncul di CharacterBar (unlockedChars tidak di-seed id custom) → startGame kini gabungkan customs.map(id) ke seed.
+- [FIX] TS error: onToast 'info' → 'good' (tipe toast lokal ShopScreen); comma-expression chardb; unused import addStarCurrency/grantRunReward dihapus.
+- Catatan QA: gameover saat tutorial → tutorialStep tetap (restart tutorial otomatis di game berikut karena tutorialSeen false) — by design. Aksi probe sinkron berturut tanpa advance → step tertinggal (known artifact, pemain nyata selalu ada frame antar aksi).
+
+STYLING DETAIL (mandatory):
+- Kartu roster di CharacterBar: border rarity warna (abu/biru/ungu/emas), badge emoji rarity pojok kiri, preview 3D melayang dalam frame 72px, indikator Koleksi dashed amber.
+- Creator: input nama pill rounded; koleksi list emerald card dgn btn-round mini (Muat golden, Hapus rose).
+
+Stage Summary:
+- SIKLUS GAME TERTUTUP PENUH: TOKO (beli ⭐) + CREATOR (buat & simpan) → START GAME (auto-unlock semua milikan) → PASANG & BERTARUNG (stats seimbang dari sistem: hero-base × varian × rarity) → UPGRADE → AURA legendaris/epik → MENANG → dapat ⭐ lagi utk belanja. Loop ekonomi lengkap!
+- Semua 8 level terverifikasi menang (bot); tutorial & mobile regression pass.
+
+Unresolved issues / risks & rekomendasi fase berikutnya:
+- Slot kartu roster di CharacterBar bisa sangat panjang jika pemain memiliki banyak karakter (scroll horizontal membantu, tapi bisa pertimbangkan tab/kategori atau modal koleksi utk >12 kartu).
+- Nasihat (sedekah) roster: pahalaGen varian 'subur'/'kilat' hanya 2 varian spesial — 'berkah' (range) tidak berpengaruh nyata ke gameplay economy tower (range dipakai cincin saja); bisa buat aura buff nyata nanti.
+- Karakter roster/custom belum punya funFact edukatif unik (pakai teks generik) — bisa perkaya.
+- Leaderboard belum ada kolom mode/level; wave 10 masih 7 tipe musuh (padat).
+- Ide lanjutan: tab Koleksi terpisah dgn detail & statistik kepemilikan, sound cue khas per rarity, save cloud, pilihan bahasa EN.

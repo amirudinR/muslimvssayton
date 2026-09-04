@@ -5,18 +5,16 @@
 
 import * as THREE from 'three'
 import {
-  CHAR_DEFS,
   ENEMY_DEFS,
   DUA_CONST,
   LANES,
   RUN_MODS,
-  type CharId,
   type CharDef,
   type EnemyDef,
   type EnemyId,
 } from './data'
 import {
-  getCharacterModel,
+  getTowerModel,
   getEnemyModel,
   createOrb,
   createBubble,
@@ -24,6 +22,7 @@ import {
   createRangeRing,
   type ChibiParts,
 } from './models'
+import { getCharDef } from './chardb'
 import { ParticleSystem } from './particles'
 import { audio } from './audio'
 
@@ -465,16 +464,18 @@ export class Tower {
   private animT = Math.random() * 10
   private waveTimer = Math.random() * 4
   private punchTimer = 0
+  /** P7: timer spawn partikel aura (rarity epik/legendaris) */
+  private auraTimer = Math.random() * 1
   rangeRing: THREE.Mesh
   /** cincin keemasan berkah Doa Bersama di bawah kaki */
   duaGlow: THREE.Mesh
   totalSpent: number
 
-  constructor(charId: CharId, slotIndex: number, x: number, z: number, baseCost: number) {
-    this.def = CHAR_DEFS[charId]
+  constructor(charId: string, slotIndex: number, x: number, z: number, baseCost: number) {
+    this.def = getCharDef(charId)
     this.slotIndex = slotIndex
     this.totalSpent = baseCost
-    this.group = getCharacterModel(charId, 1)
+    this.group = getTowerModel(charId, 1)
     this.group.position.set(x, 0, z)
     this.parts = this.group.userData.parts as ChibiParts
     const stats = this.def.levels[0]
@@ -507,7 +508,7 @@ export class Tower {
     const x = this.group.position.x
     const z = this.group.position.z
     this.level = level
-    this.group = getCharacterModel(this.def.id, level)
+    this.group = getTowerModel(this.def.id, level)
     this.group.position.set(x, 0, z)
     this.parts = this.group.userData.parts as ChibiParts
     const stats = this.def.levels[level - 1]
@@ -543,6 +544,23 @@ export class Tower {
       this.parts.glow.scale.setScalar(1 + Math.sin(this.animT * 4) * 0.08)
     }
     if (this.punchTimer > 0) this.punchTimer -= dt * 3
+
+    /* --- P7: aura partikel legendaris/epik (menguat tiap level) --- */
+    if (this.def.rarity === 'legendaris' || this.def.rarity === 'epik') {
+      this.auraTimer -= dt
+      if (this.auraTimer <= 0) {
+        this.auraTimer = this.def.rarity === 'legendaris' ? 0.5 : 0.9
+        const a = Math.random() * Math.PI * 2
+        const r = 0.6 + Math.random() * 0.5
+        const color = this.def.rarity === 'legendaris' ? 0xffd76a : 0xc79ae8
+        ctx.particles.sparkleRise(
+          this.pos.x + Math.cos(a) * r,
+          0.3 + Math.random() * 1.4,
+          this.pos.z + Math.sin(a) * r,
+          color,
+        )
+      }
+    }
 
     /* --- animasi khusus Misbah: koin sedekah melayang + lampion berdenyut --- */
     if (this.parts.koinSedekah) {
@@ -749,7 +767,7 @@ export class EntityManager {
     return this.towers.find((t) => t.slotIndex === slotIndex) ?? null
   }
 
-  placeTower(charId: CharId, slotIndex: number, x: number, z: number, cost: number): Tower {
+  placeTower(charId: string, slotIndex: number, x: number, z: number, cost: number): Tower {
     const tower = new Tower(charId, slotIndex, x, z, cost)
     this.towers.push(tower)
     this.group.add(tower.group)

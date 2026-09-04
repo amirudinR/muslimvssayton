@@ -255,7 +255,116 @@ function buildRoster(): RosterChar[] {
 export const ROSTER: RosterChar[] = buildRoster()
 
 export function getRosterChar(id: string): RosterChar | undefined {
+  if (customRegistry.has(id)) return customRegistry.get(id)
   return ROSTER.find((c) => c.id === id)
+}
+
+/* ------------------------------ P7: registry karakter custom ------------------------------ */
+
+const CUSTOM_KEY = 'penjaga-masjid-custom-char'
+
+/** entri karakter custom tersimpan (localStorage) */
+export interface SavedCustomEntry {
+  id: string
+  presentation: CharCustom['presentation']
+  robeColor: number
+  accentColor: number
+  skinColor: number
+  hairColor: number
+  accessory: CharCustom['accessory']
+  expression: CharCustom['expression']
+  power: PowerCategory
+  variant: string
+  /** nama yang diberikan pemain (opsional) */
+  name?: string
+}
+
+const customRegistry = new Map<string, RosterChar>()
+
+/** Muat karakter custom tersimpan dari localStorage → registry runtime. */
+export function loadCustomChars(): RosterChar[] {
+  customRegistry.clear()
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(CUSTOM_KEY)
+    if (!raw) return []
+    const list = JSON.parse(raw) as SavedCustomEntry[]
+    list.forEach((entry) => {
+      if (!entry || !entry.power || !entry.id) return
+      const power = POWERS.find((p) => p.id === entry.power)
+      if (!power) return
+      const cc: CharCustom = {
+        presentation: entry.presentation === 'anak-perempuan' ? 'anak-perempuan' : 'anak-laki',
+        robeColor: entry.robeColor ?? 0x5aa668,
+        accentColor: entry.accentColor ?? 0xf5d76e,
+        skinColor: entry.skinColor ?? 0xffd9b3,
+        hairColor: entry.hairColor ?? 0x3a3550,
+        accessory: entry.accessory ?? 'tasbih',
+        expression: entry.expression ?? 'ceria',
+        power: entry.power,
+        variant: entry.variant ?? power.variants[0].id,
+      }
+      const rc: RosterChar = {
+        id: entry.id,
+        name: entry.name || 'Karya Sendiri',
+        power: entry.power,
+        variant: cc.variant,
+        theme: 'custom',
+        themeLabel: 'Karya Sendiri 🎨',
+        rarity: 'umum',
+        emoji: '🎨',
+        robe: cc.robeColor,
+        accent: cc.accentColor,
+        skin: cc.skinColor,
+        price: 0,
+        desc: `Karakter buatan sendiri dengan kekuatan ${power.label} — tetap seimbang dari sistem game!`,
+        presentation: cc.presentation,
+      }
+      customRegistry.set(rc.id, rc)
+      // simpan CharCustom utk resolusi model
+      rcModels.set(rc.id, cc)
+    })
+    return Array.from(customRegistry.values())
+  } catch {
+    return []
+  }
+}
+
+/** CharCustom per id roster custom (dipakai resolusi model). */
+const rcModels = new Map<string, CharCustom>()
+export function getCustomConfig(id: string): CharCustom | undefined {
+  return rcModels.get(id)
+}
+
+/** simpan entri custom baru ke localStorage */
+export function saveCustomEntry(cc: CharCustom, name?: string): string {
+  const id = `custom-${Date.now()}`
+  const entry: SavedCustomEntry = { id, name, ...cc }
+  const list = typeof window !== 'undefined' ? JSON.parse(window.localStorage.getItem(CUSTOM_KEY) || '[]') as SavedCustomEntry[] : []
+  list.push(entry)
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(CUSTOM_KEY, JSON.stringify(list.slice(0, 12)))
+  }
+  loadCustomChars()
+  return id
+}
+
+/** hapus entri custom by id */
+export function deleteCustomEntry(id: string) {
+  if (typeof window === 'undefined') return
+  const list = JSON.parse(window.localStorage.getItem(CUSTOM_KEY) || '[]') as SavedCustomEntry[]
+  const next = list.filter((e) => e.id !== id)
+  window.localStorage.setItem(CUSTOM_KEY, JSON.stringify(next))
+  loadCustomChars()
+}
+
+export function listSavedCustoms(): SavedCustomEntry[] {
+  if (typeof window === 'undefined') return []
+  try {
+    return JSON.parse(window.localStorage.getItem(CUSTOM_KEY) || '[]') as SavedCustomEntry[]
+  } catch {
+    return []
+  }
 }
 
 export function rosterByPower(power: PowerCategory): RosterChar[] {

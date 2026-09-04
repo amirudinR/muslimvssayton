@@ -10,11 +10,12 @@ import { ShoppingBag, X, Star, Search, SlidersHorizontal, Wand2, Check, Lock, Sp
 import { useGameStore } from '@/lib/game/store'
 import { getEngine } from '@/lib/game/engine'
 import { audio } from '@/lib/game/audio'
-import { getOwnedChars, buyChar, getStarCurrency, addStarCurrency, grantRunReward } from '@/lib/game/achievements'
+import { getOwnedChars, buyChar, getStarCurrency } from '@/lib/game/achievements'
 import {
   ROSTER, RARITY_INFO, POWERS, type RosterChar, type PowerCategory, type Rarity,
   DEFAULT_CUSTOM, ROBE_COLORS, ACCENT_COLORS, SKIN_COLORS, HAIR_COLORS,
   ACCESSORY_INFO, EXPRESSION_INFO, type CharCustom,
+  saveCustomEntry, deleteCustomEntry, listSavedCustoms, type SavedCustomEntry,
 } from '@/lib/game/roster'
 import { RosterPreview, CustomPreview } from './RosterPreview'
 
@@ -343,6 +344,8 @@ export function ShopScreen() {
 function CharCreator({ onToast }: { onToast: (text: string, tone: 'good' | 'bad') => void }) {
   const [custom, setCustom] = useState<CharCustom>(DEFAULT_CUSTOM)
   const [saved, setSaved] = useState(false)
+  const [savedList, setSavedList] = useState<SavedCustomEntry[]>(() => listSavedCustoms())
+  const [customName, setCustomName] = useState('')
   const power = POWERS.find((p) => p.id === custom.power)!
 
   const set = (patch: Partial<CharCustom>) => {
@@ -351,20 +354,41 @@ function CharCreator({ onToast }: { onToast: (text: string, tone: 'good' | 'bad'
   }
 
   const saveCustom = () => {
-    // simpan karakter custom sebagai roster entry milik pemain
     try {
-      const KEY = 'penjaga-masjid-custom-char'
-      const id = `custom-${Date.now()}`
-      const entry = { id, ...custom }
-      const list = JSON.parse(window.localStorage.getItem(KEY) || '[]') as unknown[]
-      list.push(entry)
-      window.localStorage.setItem(KEY, JSON.stringify(list.slice(0, 12)))
+      const nama = customName.trim() || namaCustom()
+      saveCustomEntry(custom, nama)
       audio.tada()
       setSaved(true)
-      onToast(`Karakter "${namaCustom(custom)}" tersimpan! 🎉`, 'good')
+      setSavedList(listSavedCustoms())
+      onToast(`Karakter "${nama}" tersimpan & siap dipasang! 🎉`, 'good')
     } catch {
       onToast('Gagal menyimpan 😅 coba lagi ya!', 'bad')
     }
+  }
+
+  const loadSaved = (entry: SavedCustomEntry) => {
+    setCustom({
+      presentation: entry.presentation === 'anak-perempuan' ? 'anak-perempuan' : 'anak-laki',
+      robeColor: entry.robeColor,
+      accentColor: entry.accentColor,
+      skinColor: entry.skinColor,
+      hairColor: entry.hairColor,
+      accessory: entry.accessory,
+      expression: entry.expression,
+      power: entry.power,
+      variant: entry.variant,
+    })
+    setCustomName(entry.name || '')
+    setSaved(false)
+    audio.chime()
+    onToast(`Memuat "${entry.name || 'Karya Sendiri'}" — ubah lalu simpan lagi! 🎨`, 'good')
+  }
+
+  const removeSaved = (id: string) => {
+    deleteCustomEntry(id)
+    setSavedList(listSavedCustoms())
+    audio.mosqueHit()
+    onToast('Karakter dihapus dari koleksi 🗑️', 'good')
   }
 
   return (
@@ -375,7 +399,17 @@ function CharCreator({ onToast }: { onToast: (text: string, tone: 'good' | 'bad'
           <div className="h-48 w-48 rounded-3xl border-4 border-amber-300 bg-gradient-to-b from-sky-100 via-emerald-50 to-amber-50 p-1 shadow-lg">
             <CustomPreview cc={custom} size={184} />
           </div>
-          <p className="text-center text-xs font-bold text-[#6a4d1a]">Putar-putar lihat dari segala arah! 👀</p>
+          {/* nama karakter */}
+          <div className="flex w-full items-center gap-1.5 rounded-full border-2 border-amber-200 bg-white/90 px-3 py-1.5">
+            <span className="text-sm">🏷️</span>
+            <input
+              value={customName}
+              onChange={(e) => setCustomName(e.target.value.slice(0, 24))}
+              placeholder="Nama karaktermu…"
+              className="min-w-0 flex-1 bg-transparent text-sm font-bold text-[#4a3b20] outline-none placeholder:text-[#c4a86a]"
+              aria-label="Nama karakter custom"
+            />
+          </div>
           <div className="w-full rounded-2xl border-2 border-purple-200 bg-purple-50/80 px-3 py-2 text-center">
             <p className="text-[10px] font-black uppercase tracking-widest text-purple-600">Kekuatan terpilih</p>
             <p className="text-sm font-black text-[#4a3b20]">
@@ -394,6 +428,43 @@ function CharCreator({ onToast }: { onToast: (text: string, tone: 'good' | 'bad'
           >
             {saved ? <><Check className="h-5 w-5" /> Tersimpan!</> : <><Wand2 className="h-5 w-5" /> SIMPAN KARAKTER!</>}
           </motion.button>
+
+          {/* ---- koleksi tersimpan (muat / hapus) ---- */}
+          {savedList.length > 0 && (
+            <div className="w-full rounded-2xl border-2 border-emerald-200 bg-emerald-50/80 px-3 py-2.5">
+              <p className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-600">
+                🎒 Koleksi Karya-mu ({savedList.length})
+              </p>
+              <div className="flex max-h-36 flex-col gap-1.5 overflow-y-auto pr-1">
+                {savedList.map((entry) => (
+                  <div key={entry.id} className="flex items-center gap-1.5 rounded-xl bg-white/85 px-2 py-1.5">
+                    <span className="text-sm">
+                      {POWERS.find((p) => p.id === entry.power)?.emoji ?? '🎨'}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[11px] font-black text-[#4a3b20]">
+                      {entry.name || 'Karya Sendiri'}
+                    </span>
+                    <button
+                      className="btn-round !h-6 !w-6"
+                      aria-label={`Muat ${entry.name || 'karakter'}`}
+                      title="Muat untuk diedit"
+                      onClick={() => loadSaved(entry)}
+                    >
+                      <Sparkles className="h-3 w-3" />
+                    </button>
+                    <button
+                      className="btn-round !h-6 !w-6 !border-rose-200"
+                      aria-label={`Hapus ${entry.name || 'karakter'}`}
+                      title="Hapus"
+                      onClick={() => removeSaved(entry.id)}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ---- panel kustomisasi ---- */}
@@ -534,7 +605,6 @@ function CreatorSection({ title, emoji, children }: { title: string; emoji: stri
   )
 }
 
-function namaCustom(c: CharCustom): string {
-  const a = 'Anak Sholeh Karya Sendiri'
-  return a
+function namaCustom(): string {
+  return 'Anak Sholeh Karya Sendiri'
 }

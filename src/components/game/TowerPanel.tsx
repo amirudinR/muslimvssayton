@@ -4,7 +4,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion'
 import { Star, X, TrendingUp, Coins, Video } from 'lucide-react'
-import { CHAR_DEFS } from '@/lib/game/data'
+import { getCharDef } from '@/lib/game/chardb'
 import { useGameStore } from '@/lib/game/store'
 import { getEngine } from '@/lib/game/engine'
 import { audio } from '@/lib/game/audio'
@@ -17,7 +17,7 @@ export function TowerPanel() {
   const paused = useGameStore((s) => s.paused)
 
   if (!selectedTower || screen !== 'playing' || paused) return null
-  const def = CHAR_DEFS[selectedTower.char]
+  const def = getCharDef(selectedTower.char)
   const stats = def.levels[selectedTower.level - 1]
   const nextStats = selectedTower.level < 3 ? def.levels[selectedTower.level] : null
   const affordable = pahala >= selectedTower.upgradeCost

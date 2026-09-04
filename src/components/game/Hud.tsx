@@ -12,6 +12,7 @@ import {
 import { useGameStore } from '@/lib/game/store'
 import { getEngine } from '@/lib/game/engine'
 import { CHAR_DEFS, WAVES, ENEMY_DEFS, type EnemyId } from '@/lib/game/data'
+import { getCharDef } from '@/lib/game/chardb'
 import { levelWaves } from '@/lib/game/levels'
 import { audio } from '@/lib/game/audio'
 
@@ -427,9 +428,9 @@ export function FunFactModal() {
             className="panel-cute relative flex max-w-sm flex-col items-center gap-3 px-6 py-6 text-center"
             onClick={(e) => e.stopPropagation()}
           >
-            <span className="animate-bounce-soft text-6xl">{CHAR_DEFS[funFact.char].emoji}</span>
+            <span className="animate-bounce-soft text-6xl">{getCharDef(funFact.char).emoji}</span>
             <p className="text-lg font-black text-[#4a3b20]">Karakter Baru Terbuka!</p>
-            <p className="text-sm font-bold text-emerald-700">{CHAR_DEFS[funFact.char].name}</p>
+            <p className="text-sm font-bold text-emerald-700">{getCharDef(funFact.char).name}</p>
             <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold leading-relaxed text-[#3d5a3a]">
               💡 {funFact.text}
             </p>

@@ -1,16 +1,22 @@
 'use client'
 
-/* Bar karakter bawah: kartu besar ramah anak, drag & drop ke slot. */
+/* Bar karakter bawah: kartu besar ramah anak, drag & drop ke slot.
+   P7: hero (6) + karakter milik pemain dari TOKO (roster generatif)
+   + karakter custom buatan sendiri — semua bisa dipasang! */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Star, Lock, X } from 'lucide-react'
-import { CHAR_DEFS, CHAR_ORDER, type CharId } from '@/lib/game/data'
+import { Star, Lock, X, Sparkles } from 'lucide-react'
+import { CHAR_DEFS, CHAR_ORDER } from '@/lib/game/data'
+import { getCharDef } from '@/lib/game/chardb'
+import { getRosterChar, RARITY_INFO } from '@/lib/game/roster'
 import { useGameStore } from '@/lib/game/store'
 import { getEngine } from '@/lib/game/engine'
+import { audio } from '@/lib/game/audio'
 import { CharPreview } from './CharPreview'
+import { RosterPreview } from './RosterPreview'
 
-const ACCENT: Record<CharId, string> = {
+const ACCENT: Record<string, string> = {
   ali: '#2ea36a',
   aisyah: '#e86a92',
   umar: '#f5b83d',
@@ -30,6 +36,11 @@ export function CharacterBar() {
 
   const [ghost, setGhost] = useState<{ x: number; y: number } | null>(null)
 
+  /* kartu roster milik pemain (di luar 6 hero) — dibaca sekali saat mount layar playing */
+  const ownedExtra = useMemo(() => {
+    return unlocked.filter((id) => !CHAR_ORDER.includes(id as never))
+  }, [unlocked])
+
   useEffect(() => {
     const move = (e: PointerEvent) => setGhost({ x: e.clientX, y: e.clientY })
     window.addEventListener('pointermove', move)
@@ -44,12 +55,12 @@ export function CharacterBar() {
 
   if (screen !== 'playing' || paused) return null
 
-  const onCardDown = (charId: CharId) => (e: React.PointerEvent) => {
+  const onCardDown = (charId: string) => (e: React.PointerEvent) => {
     e.preventDefault()
     const engine = getEngine()
     if (!engine) return
     if (!unlocked.includes(charId)) {
-      const def = CHAR_DEFS[charId]
+      const def = getCharDef(charId)
       useGameStore.getState().showToast(`Terbuka di gelombang ${def.unlockWave}! Semangat ya 🔒`, '🔒', 'info')
       return
     }
@@ -62,7 +73,8 @@ export function CharacterBar() {
     engine.beginPlacing(charId)
   }
 
-  const selectedDef = selectedCharId ? CHAR_DEFS[selectedCharId] : null
+  const selectedDef = selectedCharId ? getCharDef(selectedCharId) : null
+  const selectedRoster = selectedCharId ? getRosterChar(selectedCharId) : null
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex flex-col items-center gap-2 px-2 pb-2 safe-bottom sm:pb-3">
@@ -78,7 +90,11 @@ export function CharacterBar() {
             className="panel-cute pointer-events-auto relative flex max-w-[92vw] items-center gap-3 px-4 py-2.5"
           >
             <div className="shrink-0 rounded-2xl bg-gradient-to-b from-sky-100 to-emerald-100 p-1">
-              <CharPreview charId={selectedDef.id} size={92} />
+              {selectedRoster ? (
+                <RosterPreview rc={selectedRoster} size={92} />
+              ) : (
+                <CharPreview charId={selectedDef.id as 'ali'} size={92} />
+              )}
             </div>
             <div className="min-w-0 max-w-[240px]">
               <div className="flex items-center gap-2">
@@ -105,6 +121,7 @@ export function CharacterBar() {
 
       {/* Kartu-kartu karakter */}
       <div data-tut="cards" className="pointer-events-auto flex max-w-full items-stretch gap-1.5 overflow-x-auto pb-1 sm:gap-2.5">
+        {/* --- 6 hero --- */}
         {CHAR_ORDER.map((id) => {
           const def = CHAR_DEFS[id]
           const isUnlocked = unlocked.includes(id)
@@ -151,6 +168,69 @@ export function CharacterBar() {
             </motion.button>
           )
         })}
+
+        {/* --- P7: karakter milik pemain (roster & custom) --- */}
+        {ownedExtra.map((id) => {
+          const def = getCharDef(id)
+          const rc = getRosterChar(id)
+          const affordable = pahala >= def.cost
+          const selected = selectedCharId === id
+          const ri = rc ? RARITY_INFO[rc.rarity] : RARITY_INFO.umum
+          return (
+            <motion.button
+              key={id}
+              whileHover={{ y: -6, rotate: -1.5 }}
+              whileTap={{ scale: 0.92 }}
+              onPointerDown={onCardDown(id)}
+              className={`card-char relative flex w-[72px] shrink-0 select-none flex-col items-center gap-0.5 rounded-2xl border-2 px-1.5 py-2 sm:w-[86px] sm:py-2.5 ${
+                selected
+                  ? 'border-amber-400 bg-amber-50 shadow-[0_0_0_4px_rgba(251,191,36,0.45)]'
+                  : affordable
+                    ? 'bg-[#fffaf0]'
+                    : 'border-stone-200 bg-stone-100 opacity-80'
+              }`}
+              style={{ touchAction: 'none', borderColor: selected ? undefined : ri.border }}
+              aria-label={`Pilih ${def.name}`}
+            >
+              {/* badge rarity */}
+              <span
+                className="pointer-events-none absolute left-1 top-1 rounded-full bg-white/90 px-1 text-[8px] font-black"
+                style={{ color: ri.color }}
+                title={ri.label}
+              >
+                {ri.emoji}
+              </span>
+              {rc?.power === 'nasihat' && (
+                <span
+                  className="pointer-events-none absolute right-1 top-1 rounded-full bg-amber-100 px-1 text-[9px] font-black text-amber-700 shadow-sm"
+                  title="Menghasilkan pahala"
+                >
+                  💰
+                </span>
+              )}
+              <div className="h-10 w-full overflow-hidden">
+                <RosterPreview rc={rc!} size={72} />
+              </div>
+              <span className="pointer-events-none truncate text-[11px] font-bold text-[#4a3b20] sm:text-xs">{def.shortName}</span>
+              <span className={`pointer-events-none flex items-center gap-0.5 text-[11px] font-extrabold sm:text-xs ${affordable ? 'text-amber-600' : 'text-rose-500'}`}>
+                <Star className="h-3 w-3 fill-current" />
+                {def.cost}
+              </span>
+            </motion.button>
+          )
+        })}
+
+        {/* --- indikator koleksi (bila pemain punya banyak) --- */}
+        {ownedExtra.length > 0 && (
+          <div className="pointer-events-none flex w-[52px] shrink-0 flex-col items-center justify-center gap-0.5 self-stretch rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50/60 px-1 py-2">
+            <Sparkles className="h-4 w-4 text-amber-500" />
+            <span className="text-center text-[9px] font-black leading-tight text-amber-700">
+              Koleksi
+              <br />
+              {ownedExtra.length}+{unlocked.length > 8 ? '' : ''}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Hint kecil ramah anak */}

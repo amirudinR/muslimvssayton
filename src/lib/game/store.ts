@@ -4,7 +4,7 @@
  * ============================================================ */
 
 import { create } from 'zustand'
-import { GAME_CONST, DUA_CONST, RUN_MODS, type CharId, type DailyModifier } from './data'
+import { GAME_CONST, DUA_CONST, RUN_MODS, type DailyModifier } from './data'
 
 export type Screen = 'menu' | 'playing' | 'victory' | 'gameover' | 'shop' | 'levels' | 'settings'
 export type CameraMode = 'iso' | 'follow' | 'photo' | 'menu' | 'boss'
@@ -19,7 +19,7 @@ export interface ToastMsg {
 
 export interface SelectedTowerInfo {
   slot: number
-  char: CharId
+  char: string
   level: number // 1..3
   canUpgrade: boolean
   upgradeCost: number
@@ -40,15 +40,15 @@ export interface GameStore {
   cameraMode: CameraMode
   soundOn: boolean
   musicOn: boolean
-  selectedCharId: CharId | null // kartu yang dipilih untuk ditempatkan
+  selectedCharId: string | null // kartu yang dipilih untuk ditempatkan (hero / roster / custom)
   dragging: boolean // sedang drag dari kartu
   selectedTower: SelectedTowerInfo | null
   wavePreview: { emoji: string; count: number }[]
   bossHp: number | null
   bossMaxHp: number
   toast: ToastMsg | null
-  funFact: { id: number; char: CharId; text: string } | null
-  unlockedChars: CharId[]
+  funFact: { id: number; char: string; text: string } | null
+  unlockedChars: string[]
   stats: { defeated: number; starsEarned: number; wavesCleared: number }
   hudHidden: boolean // mode foto
   /* --- Doa Bersama (kekuatan spesial) --- */
@@ -92,16 +92,16 @@ interface GameActions {
   setCameraMode: (m: CameraMode) => void
   setSoundOn: (v: boolean) => void
   setMusicOn: (v: boolean) => void
-  setSelectedChar: (c: CharId | null) => void
+  setSelectedChar: (c: string | null) => void
   setDragging: (d: boolean) => void
   setSelectedTower: (t: SelectedTowerInfo | null) => void
   setWavePreview: (p: { emoji: string; count: number }[]) => void
   setBossHp: (hp: number | null, max?: number) => void
   showToast: (text: string, emoji?: string, tone?: ToastMsg['tone']) => void
   clearToast: () => void
-  showFunFact: (char: CharId, text: string) => void
+  showFunFact: (char: string, text: string) => void
   clearFunFact: () => void
-  unlockChar: (c: CharId) => void
+  unlockChar: (c: string) => void
   setHudHidden: (h: boolean) => void
   bumpStats: (patch: Partial<GameStore['stats']>) => void
   resetForNewGame: () => void

@@ -43,6 +43,9 @@ import { audio } from './audio'
 import { gameStore, type CameraMode } from './store'
 import { computeStars } from './persist'
 import { getLevel, levelWaves } from './levels'
+import { getCharDef } from './chardb'
+import { getOwnedChars } from './achievements'
+import { loadCustomChars, ROSTER } from './roster'
 import {
   checkBadges,
   recordSessionEnd,
@@ -109,7 +112,7 @@ export class GameEngine {
   private pointerNdc = new THREE.Vector2()
   private hoverSlot = -1
   private ghostRange: THREE.Mesh | null = null
-  private ghostChar: CharId | null = null
+  private ghostChar: string | null = null
 
   private elapsed = 0
   private rafId = 0
@@ -149,6 +152,8 @@ export class GameEngine {
 
   init(canvas: HTMLCanvasElement) {
     this.canvas = canvas
+    // P7: muat karakter custom tersimpan (registry roster) sebelum dunia dibangun
+    loadCustomChars()
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' })
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -158,6 +163,7 @@ export class GameEngine {
 
     // debug probe (dev)
     ;(window as unknown as Record<string, unknown>).__pmEngine = this
+    ;(window as unknown as Record<string, unknown>).__pmRoster = { ROSTER, getCharDef }
     ;(window as unknown as Record<string, unknown>).__THREE = THREE
     ;(window as unknown as Record<string, unknown>).__pmStore = gameStore
     ;(window as unknown as Record<string, unknown>).__pmMods = RUN_MODS
@@ -510,9 +516,9 @@ export class GameEngine {
 
   /* =============================== PLACEMENT =============================== */
 
-  beginPlacing(charId: CharId) {
+  beginPlacing(charId: string) {
     this.ghostChar = charId
-    const def = CHAR_DEFS[charId]
+    const def = getCharDef(charId)
     if (!this.ghostRange) {
       this.ghostRange = createRangeRing(def.levels[0].range, 0xffe9a8)
       this.scene.add(this.ghostRange)
@@ -542,11 +548,11 @@ export class GameEngine {
     this.refreshSlotHighlights()
   }
 
-  private updateHoverSlot(charId: CharId) {
+  private updateHoverSlot(charId: string) {
     const idx = this.raycastSlot()
     if (idx === this.hoverSlot) return
     this.hoverSlot = idx
-    const def = CHAR_DEFS[charId]
+    const def = getCharDef(charId)
     const st = gameStore.get()
     this.slots.forEach((s, i) => {
       const mat = s.pad.material as THREE.MeshStandardMaterial
@@ -577,7 +583,7 @@ export class GameEngine {
         s.ring.visible = !s.occupied
         ;(s.ring.material as THREE.MeshStandardMaterial).color.setHex(0xffd76a)
       } else {
-        const def = CHAR_DEFS[st.selectedCharId!]
+        const def = getCharDef(st.selectedCharId!)
         const ok = !s.occupied && st.pahala >= def.cost
         mat.emissive.setHex(ok ? 0x7bd45f : 0xd97a7a)
         mat.emissiveIntensity = 0.45
@@ -587,10 +593,10 @@ export class GameEngine {
     })
   }
 
-  tryPlace(slotIndex: number, charId: CharId): boolean {
+  tryPlace(slotIndex: number, charId: string): boolean {
     const st = gameStore.get()
     if (st.screen !== 'playing') return false
-    const def = CHAR_DEFS[charId]
+    const def = getCharDef(charId)
     const slot = this.slots[slotIndex]
     if (!slot || slot.occupied) return false
     if (st.pahala < def.cost) {
@@ -802,6 +808,22 @@ export class GameEngine {
     this.victoryTimer = 0
     this.misbahGenTotal = 0
     this.tutTimer = 0
+
+    /* ---- P7: karakter milik pemain (toko + custom) otomatis terbuka ---- */
+    const customs = loadCustomChars()
+    const owned = [
+      ...getOwnedChars().map((id) =>
+        id.startsWith('hero-') ? id.slice(5) : id, // hero-umar → umar
+      ),
+      ...customs.map((c) => c.id),
+    ]
+    if (owned.length > 0) {
+      gameStore.set((s) => {
+        const merged = Array.from(new Set([...s.unlockedChars, ...owned]))
+        return { ...s, unlockedChars: merged }
+      })
+    }
+
     gameStore.set((s) => ({ ...s, nextWaveIn: GAME_CONST.firstWaveDelay }))
     this.setCameraMode('iso')
     this.refreshSlotHighlights()
