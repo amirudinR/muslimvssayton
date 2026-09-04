@@ -146,8 +146,8 @@ export class CameraController {
     this.lastY = y
     if (this.dragBtn < 0) return false
 
-    if (this.mode === 'photo' || this.mode === 'boss') {
-      // orbit bebas
+    if (this.dragBtn === 2 || this.mode === 'photo' || this.mode === 'boss') {
+      // tombol kanan/mode foto: orbit bebas
       this.state.azimuth -= dx * 0.005
       this.state.elevation = THREE.MathUtils.clamp(this.state.elevation + dy * 0.004, 0.18, 1.4)
       return true

@@ -402,6 +402,7 @@ export class GameEngine {
   /* =============================== EVENTS =============================== */
 
   private downPos = { x: 0, y: 0 }
+  private downButton = 0
   private isDown = false
   private moved = 0
 
@@ -430,10 +431,6 @@ export class GameEngine {
   private onContextMenu = (e: Event) => e.preventDefault()
 
   private onPointerDown = (e: PointerEvent) => {
-    if (e.button === 2) {
-      this.cancelPlacing()
-      return
-    }
     this.canvas.setPointerCapture(e.pointerId)
     // P2: catat pointer untuk pinch tracking
     this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
@@ -448,9 +445,10 @@ export class GameEngine {
     this.isDown = true
     this.pinchMode = false
     this.moved = 0
+    this.downButton = e.button
     this.downPos = { x: e.clientX, y: e.clientY }
     const st = gameStore.get()
-    if (st.cameraMode !== 'iso') {
+    if (st.cameraMode !== 'iso' || e.button === 2) {
       this.cameraCtrl.onPointerDown(e.clientX, e.clientY, e.button)
       return
     }
@@ -503,7 +501,7 @@ export class GameEngine {
       if (this.pinchMode && this.activePointers.size === 0) this.pinchMode = false
       this.pinchDist = 0
     }
-    const wasClick = this.isDown && this.moved < 8 && !this.pinchMode
+    const wasClick = this.isDown && this.downButton !== 2 && this.moved < 8 && !this.pinchMode
     this.isDown = false
     this.cameraCtrl.onPointerUp()
 
