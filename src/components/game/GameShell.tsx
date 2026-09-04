@@ -20,6 +20,7 @@ import { ShopScreen } from './ShopScreen'
 import { LevelSelectScreen } from './LevelSelectScreen'
 import { SettingsScreen } from './SettingsScreen'
 import { CollectionScreen } from './CollectionScreen'
+import { LanguageProvider } from '@/lib/game/i18n'
 
 export default function GameShell() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -70,7 +71,8 @@ export default function GameShell() {
   }, [])
 
   return (
-    <div className="fixed inset-0 select-none overflow-hidden bg-[#8fd4ff]">
+    <LanguageProvider>
+      <div className="fixed inset-0 select-none overflow-hidden bg-[#8fd4ff]">
       <canvas
         ref={canvasRef}
         className="h-full w-full touch-none"
@@ -97,7 +99,8 @@ export default function GameShell() {
       <TutorialLayer />
       <ToastLayer />
       <FunFactModal />
-      <BadgeToastLayer />
-    </div>
+        <BadgeToastLayer />
+      </div>
+    </LanguageProvider>
   )
 }

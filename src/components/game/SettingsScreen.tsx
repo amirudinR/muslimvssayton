@@ -10,6 +10,7 @@ import { useGameStore } from '@/lib/game/store'
 import { getEngine } from '@/lib/game/engine'
 import { audio } from '@/lib/game/audio'
 import type { Quality } from '@/lib/game/data'
+import { LANGUAGES, useLanguage } from '@/lib/game/i18n'
 
 const QUALITY_OPTS: { id: Quality; label: string; hint: string }[] = [
   { id: 'low', label: 'Ringan', hint: 'HP / tablet lama' },
@@ -22,6 +23,7 @@ export function SettingsScreen() {
   const quality = useGameStore((s) => s.quality)
   const soundOn = useGameStore((s) => s.soundOn)
   const musicOn = useGameStore((s) => s.musicOn)
+  const { language, setLanguage, t } = useLanguage()
   const [sfxVol, setSfxVol] = useState(() => Math.round(audio.sfxVolume * 100))
   const [musicVol, setMusicVol] = useState(() => Math.round(audio.musicVolume * 100))
   const [dragSens, setDragSens] = useState(() => {
@@ -70,8 +72,8 @@ export function SettingsScreen() {
         <div className="flex min-w-0 items-center gap-2">
           <SettingsIcon className="h-6 w-6 shrink-0 text-sky-600 sm:h-7 sm:w-7" />
           <div className="min-w-0">
-            <h2 className="truncate text-lg font-black tracking-wide text-[#4a3b20] sm:text-xl">PENGATURAN</h2>
-            <p className="-mt-1 hidden text-[10px] font-bold text-[#8a6a30] sm:block">Atur biar nyaman dimainkan!</p>
+            <h2 className="truncate text-lg font-black tracking-wide text-[#4a3b20] sm:text-xl">{t('settings')}</h2>
+            <p className="-mt-1 hidden text-[10px] font-bold text-[#8a6a30] sm:block">{t('settingsHint')}</p>
           </div>
         </div>
       </div>
@@ -82,7 +84,7 @@ export function SettingsScreen() {
 
           {/* --- Audio --- */}
           <section className="settings-card">
-            <p className="settings-title"><Volume2 className="h-4 w-4" /> Efek Suara (SFX)</p>
+            <p className="settings-title"><Volume2 className="h-4 w-4" /> {t('sound')}</p>
             <div className="flex items-center gap-3">
               <button
                 className="btn-icon !h-8 !w-8"
@@ -107,7 +109,7 @@ export function SettingsScreen() {
               />
               <span className="w-10 text-right text-sm font-black text-[#4a3b20]">{sfxVol}%</span>
             </div>
-            <p className="settings-title mt-3"><Music className="h-4 w-4" /> Musik Latar</p>
+            <p className="settings-title mt-3"><Music className="h-4 w-4" /> {t('music')}</p>
             <div className="flex items-center gap-3">
               <button
                 className="btn-icon !h-8 !w-8"
@@ -136,7 +138,7 @@ export function SettingsScreen() {
 
           {/* --- Kualitas grafis --- */}
           <section className="settings-card">
-            <p className="settings-title"><Monitor className="h-4 w-4" /> Kualitas Grafis</p>
+            <p className="settings-title"><Monitor className="h-4 w-4" /> {t('quality')}</p>
             <div className="grid grid-cols-3 gap-2">
               {QUALITY_OPTS.map((q) => (
                 <button
@@ -154,10 +156,10 @@ export function SettingsScreen() {
 
           {/* --- Sensitivitas kamera --- */}
           <section className="settings-card">
-            <p className="settings-title"><Gauge className="h-4 w-4" /> Kontrol Kamera</p>
-            <p className="mb-1 text-[11px] font-bold text-[#8a6a30]">Sensitivitas geser (drag)</p>
+            <p className="settings-title"><Gauge className="h-4 w-4" /> {t('camera')}</p>
+            <p className="mb-1 text-[11px] font-bold text-[#8a6a30]">{t('drag')}</p>
             <div className="flex items-center gap-3">
-              <span className="text-[10px] font-black text-[#8a6a30]">Lambat</span>
+              <span className="text-[10px] font-black text-[#8a6a30]">{t('slow')}</span>
               <input
                 type="range"
                 min={30}
@@ -167,12 +169,12 @@ export function SettingsScreen() {
                 className="cute-range flex-1"
                 aria-label="Sensitivitas drag kamera"
               />
-              <span className="text-[10px] font-black text-[#8a6a30]">Cepat</span>
+              <span className="text-[10px] font-black text-[#8a6a30]">{t('fast')}</span>
               <span className="w-10 text-right text-sm font-black text-[#4a3b20]">{dragSens}%</span>
             </div>
-            <p className="mb-1 mt-3 text-[11px] font-bold text-[#8a6a30]">Sensitivitas zoom (scroll/cubit)</p>
+            <p className="mb-1 mt-3 text-[11px] font-bold text-[#8a6a30]">{t('zoom')}</p>
             <div className="flex items-center gap-3">
-              <span className="text-[10px] font-black text-[#8a6a30]">Halus</span>
+              <span className="text-[10px] font-black text-[#8a6a30]">{t('smooth')}</span>
               <input
                 type="range"
                 min={30}
@@ -182,17 +184,28 @@ export function SettingsScreen() {
                 className="cute-range flex-1"
                 aria-label="Sensitivitas zoom kamera"
               />
-              <span className="text-[10px] font-black text-[#8a6a30]">Nekat</span>
+              <span className="text-[10px] font-black text-[#8a6a30]">{t('bold')}</span>
               <span className="w-10 text-right text-sm font-black text-[#4a3b20]">{zoomSens}%</span>
             </div>
           </section>
 
+          <section className="settings-card">
+            <p className="settings-title"><span aria-hidden>文</span> {t('language')}</p>
+            <label className="sr-only" htmlFor="game-language">{t('languageHint')}</label>
+            <select
+              id="game-language"
+              value={language}
+              onChange={(event) => setLanguage(event.target.value as typeof language)}
+              className="w-full rounded-xl border-2 border-emerald-200 bg-white px-3 py-2 text-sm font-black text-[#4a3b20] outline-none focus:border-emerald-400"
+            >
+              {LANGUAGES.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+            </select>
+          </section>
+
           {/* --- Reset progres --- */}
           <section className="settings-card !border-rose-200">
-            <p className="settings-title text-rose-600"><Trash2 className="h-4 w-4" /> Mulai dari Awal</p>
-            <p className="mb-2 text-[11px] font-semibold text-[#8a6a30]">
-              Hapus semua rekor, lencana, bintang toko, dan progres level. Tidak bisa dibatalkan!
-            </p>
+            <p className="settings-title text-rose-600"><Trash2 className="h-4 w-4" /> {t('resetTitle')}</p>
+            <p className="mb-2 text-[11px] font-semibold text-[#8a6a30]">{t('resetDesc')}</p>
             <AnimatePresence mode="wait">
               {confirmReset ? (
                 <motion.div key="confirm" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="flex gap-2">
@@ -206,16 +219,16 @@ export function SettingsScreen() {
                       useGameStore.getState().showToast('Progres dihapus. Selamat memulai petualangan baru! 🌱', '🌱', 'info')
                     }}
                   >
-                    Ya, Hapus Semua!
+                    {t('yesReset')}
                   </button>
                   <button className="btn-cute-secondary flex-1 !py-2 !text-xs" onClick={() => setConfirmReset(false)}>
-                    Tidak Jadi
+                    {t('cancel')}
                   </button>
                 </motion.div>
               ) : (
                 <motion.button key="ask" whileTap={{ scale: 0.96 }} className="btn-cute-danger w-full !py-2 !text-xs" onClick={() => setConfirmReset(true)}>
                   <Trash2 className="h-4 w-4" />
-                  Reset Semua Progres
+                  {t('resetButton')}
                 </motion.button>
               )}
             </AnimatePresence>

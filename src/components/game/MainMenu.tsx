@@ -21,6 +21,7 @@ import {
 import { openCollection } from '@/lib/game/collection'
 import { LEVELS, MAX_STARS } from '@/lib/game/levels'
 import { getCharDef } from '@/lib/game/chardb'
+import { useLanguage } from '@/lib/game/i18n'
 import {
   BadgesModal,
   LeaderboardModal,
@@ -35,6 +36,7 @@ const AVATARS = ['🤲', '📖', '💝', '💧', '💡', '📢']
 
 export function MainMenu() {
   const screen = useGameStore((s) => s.screen)
+  const { t } = useLanguage()
   const [showBadges, setShowBadges] = useState(false)
   const [showBoard, setShowBoard] = useState(false)
   /* [FIX P11-a] semua data localStorage dibaca ulang SETIAP kali menu tampil
@@ -230,8 +232,8 @@ export function MainMenu() {
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <motion.button whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.95 }} className="menu-tile" onClick={() => go('shop')}>
                 <ShoppingBag className="h-5 w-5 text-orange-500" />
-                <span className="text-xs font-black">TOKO</span>
-                <span className="text-[9px] font-bold opacity-70">100 karakter!</span>
+                <span className="text-xs font-black">{t('store')}</span>
+                <span className="text-[9px] font-bold opacity-70">100 {t('characters')}</span>
               </motion.button>
               <motion.button
                 whileHover={{ scale: 1.04, y: -2 }}
@@ -244,8 +246,8 @@ export function MainMenu() {
                 }}
               >
                 <BookOpen className="h-5 w-5 text-emerald-500" />
-                <span className="text-xs font-black">KOLEKSI</span>
-                <span className="text-[9px] font-bold opacity-70">{ownedCount} dimiliki</span>
+                <span className="text-xs font-black">{t('collection')}</span>
+                <span className="text-[9px] font-bold opacity-70">{ownedCount} {t('owned')}</span>
                 {ownedCount > 2 && (
                   <span className="absolute -right-1.5 -top-1.5 flex items-center gap-0.5 rounded-full border-2 border-white bg-emerald-500 px-1.5 py-0.5 text-[9px] font-black text-white shadow">
                     {ownedCount}✨
@@ -254,12 +256,12 @@ export function MainMenu() {
               </motion.button>
               <motion.button whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.95 }} className="menu-tile" onClick={() => go('levels')}>
                 <Map className="h-5 w-5 text-emerald-600" />
-                <span className="text-xs font-black">PETA</span>
+                <span className="text-xs font-black">{t('map')}</span>
                 <span className="text-[9px] font-bold opacity-70">8 level seru</span>
               </motion.button>
               <motion.button whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.95 }} className="menu-tile" onClick={() => go('settings')}>
                 <SettingsIcon className="h-5 w-5 text-sky-600" />
-                <span className="text-xs font-black">ATURAN</span>
+                <span className="text-xs font-black">{t('rules')}</span>
                 <span className="text-[9px] font-bold opacity-70">Suara & kualitas</span>
               </motion.button>
             </div>
