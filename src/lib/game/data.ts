@@ -650,7 +650,7 @@ export interface PowerupDef {
   desc: string
   color: number // warna Three.js utk kotak + partikel
   duration: number // detik (0 = instan seperti perisai)
-  kind: 'damage' | 'rate' | 'pahala' | 'shield'
+  kind: 'damage' | 'rate' | 'pahala' | 'shield' | 'star'
 }
 
 export const POWERUPS: PowerupDef[] = [
@@ -659,6 +659,27 @@ export const POWERUPS: PowerupDef[] = [
   { id: 'hujan-pahala', name: 'Hujan Pahala', emoji: '💰', desc: 'Pahala dari musuh +40% selama 25 detik!', color: 0xa8e05f, duration: 25, kind: 'pahala' },
   { id: 'perisai-masjid', name: 'Perisai Masjid', emoji: '🛡️', desc: 'Masjid kebal dari 3 musuh yang lolos!', color: 0x9ecbff, duration: 0, kind: 'shield' },
 ]
+
+/* ------------------------- P10: KOTAK BINTANG (LANGKA) ------------------------- */
+
+/** Kotak Bintang — power-up LANGKA yang mengaktifkan SEMUA berkah sekaligus
+ *  (damage + rate) plus pahala instan. Tidak masuk pool POWERUPS biasa;
+ *  muncul dengan peluang STAR_BOX_CHANCE saat spawn kotak. */
+export const STAR_POWERUP: PowerupDef = {
+  id: 'kotak-bintang',
+  name: 'Kotak Bintang',
+  emoji: '🌟',
+  desc: 'Hujan bintang! Pahala instan + SEMUA berkah aktif 12 detik!',
+  color: 0xffe066,
+  duration: 12,
+  kind: 'star',
+}
+
+/** peluang kotak bintang muncul (vs power-up biasa) saat spawn. */
+export const STAR_BOX_CHANCE = 0.14
+
+/** pahala instan dari Kotak Bintang (skala dengan wave). */
+export const starBoxPahala = (wave: number): number => 60 + wave * 5
 
 /** Konstanta siklus kotak sedekah di lapangan. */
 export const POWERUP_CONST = {

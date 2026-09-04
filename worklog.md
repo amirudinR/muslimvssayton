@@ -693,3 +693,59 @@ Isu Belum Terselesaikan / Risiko & Rekomendasi Prioritas Fase Berikutnya:
 - Statistik charUsage belum dipakai untuk rekomendasi strategi (mis. "Karakter andalanmu") — ide.
 - Cloud save & export screenshot koleksi — ide jangka panjang.
 - Prisma client dev server masih versi lama (leaderboard raw-SQL aman) — tidak mempengaruhi fungsi.
+
+---
+Task ID: P10 (14-a/14-b/14-c)
+Agent: main-agent (Z.ai Code)
+Task: FASE P10 — Kotak Bintang langka + Karakter Andalan (MVP) + funFact tema + polish styling
+
+Status Proyek Saat Ini:
+- Awal sesi: QA baseline P9 semuanya PASS (probe live, gameplay start/place/advance bersih, powerup spawn+collect+backToMenu-reset OK, lint/tsc/console 0 error). Game stabil — lanjut fitur baru sesuai rekomendasi P9-FINAL.
+
+Work Log:
+
+QA AWAL (agent-browser):
+- Dev server 200 OK; probe __pmEngine/__pmStore/__THREE lengkap; menu (weekly+daily card) render; startGame level 1 → wave 1 aktif HP 130; debugSpawn+collect powerup aktif; backToMenu shield 0/act 0 (fix 13-b masih jalan); lint & tsc bersih; 0 page error.
+
+P10-b: KOTAK BINTANG (power-up langka, Task 14-b):
+- data.ts: PowerupDef.kind + 'star'; STAR_POWERUP (id 'kotak-bintang', emoji 🌟, durasi 12s, warna 0xffe066); STAR_BOX_CHANCE = 0.14; starBoxPahala(wave) = 60 + wave×5.
+- engine.ts: spawn di updatePowerups kini 14% peluang Kotak Bintang vs POWERUPS biasa + toast khusus "🌟 KOTAK BINTANG LANGKA muncul! Buruan ketuk!" (toast biasa utk kotak reguler).
+- buildPowerupBox: varian bintang — body emas lebih metalik+emissive, skala 1.18, OCTAHEDRON bintang berputar di tutup (starTopper, bob + spin), bintang kedua mengorbit (starOrbit radius 0.55), cincin ganda; sparkleRise tiap 0.6s selama hidup (starSparkleAcc).
+- collectPowerup jalur 'star': pahala instan starBoxPahala(wave) masuk pahala+stats.starsEarned, activatePowerup('damage') + activatePowerup('rate') 12s sekaligus, VFX perayaan (firework×3 + rings×2 + sparkle×3 + showPahala), audio.buyRarity('legendaris'), toast "+N pahala & semua berkah!".
+- updatePowerupVisual: topper/orbit animasi; skala urgensi mempertahankan faktor 1.18 utk bintang.
+- debugSpawnPowerup menerima id 'kotak-bintang' (pool [STAR_POWERUP, ...POWERUPS]).
+- PowerupBadges: KIND_CLASS + 'star' → .powerup-pill-star (fallback aman TS Record).
+- CSS: .powerup-pill-star (emas berkilau + powerup-pulse 1.1s).
+
+P10-a: KARAKTER ANDALAN / MVP PEMAIN (Task 14-a):
+- achievements.ts: getFavoriteChar() → {id, placed, wins} (maks placed, tie-break wins; null bila kosong) + favoriteTitle(wins): 0-2 "Pemain Andalan 🌱" / 3-5 "Penjaga Setia 🛡️" / 6-9 "Bintang Lapangan ⭐" / 10+ "Legenda Masjid 🏆".
+- MainMenu.tsx: banner .mvp-banner (emoji karakter beranimasi wobble, label "⭐ KARAKTER ANDALAN", nama+gelar, chip 📊 N× & 🏆 N, ChevronRight) di antara kartu judul & tombol MAIN — klik → buka Koleksi.
+- [BUGFIX saat QA] mvp semula dibaca sekali via useState (stale seperti bug banner bintang P9!) → kini dihitung INLINE saat render dengan gate screen==='menu' (re-aktif tiap kembali ke menu; terverifikasi: run 3 tower → victory → backToMenu → banner langsung update 📊2×🏆1).
+- CollectionScreen.tsx: kartu sorotan .mvp-card di atas grid tab Milikku (emoji besar mvp-emoji-lg, label "⭐ KARAKTER ANDALANMU", nama, gelar, chip Dipasang/Menang, tombol Detail → modal) — dihitung dari collUsage via useMemo (ikut refresh saat data koleksi berubah) + lookup RosterChar via placeIdOf.
+- CSS (~100 baris): .mvp-banner/-emoji/-label/-name/-title/-stat(-win) ungu-lavender + emas; .mvp-card (radial+linear gradient, mvp-sheen kilau menyapu 3.2s via ::after); tombol Detail di-stack self-end di bawah chip (align fix dari feedback VLM).
+
+P10-c: funFact TEMA (Task 14-c):
+- chardb.ts: THEME_FACTS 11 kunci × 3 fakta (30 fakta baru: santri_desa/santri_kota/pesantren/yatim_ceria/juara_adzan/penjahit/petani/pedagang/dokter_cilik/imam_muda + custom khusus karakter buatan pemain).
+- synthFunFact: pool gabungan POWER_FACTS + THEME_FACTS (6 pilihan per karakter vs 3 dulu) — deterministik by id hash, tetap + label varian.
+- Terverifikasi: gen-5 dapat fakta tema petani ("Menanam 1 pohon itu sedekah jariah"), gen-10 fakta dokter_cilik (Ibnu Sina), gen-1/13 tetap fakta power — variasi nyata.
+
+VERIFIKASI (probe + DOM + VLM + mobile 390×844):
+- ✓ Kotak Bintang: debugSpawn → powerupGroup.userData.isStar true + starTopper/starOrbit ada; collect → pahala 220→285 (+65 = 60+5×wave1 ✓), pil damage:12 & rate:12 aktif; advance(15) → pil habis tepat 12s; VLM: pil emas/teal terbaca jelas.
+- ✓ Weekly + star box cross-test: startGame({weekly:true}) mode Jumat Berkah + kotak bintang berfungsi (pahala 180+65=245 ✓).
+- ✓ MVP: fresh user tanpa usage → banner TIDAK tampil (benar); place 1 tower → backToMenu → banner muncul; full victory 3 tower → semua charUsage wins+1 & banner update live; VLM menu: banner "Ali · Pemain Andalan" + stat badge jelas, layout bersih.
+- ✓ Koleksi: kartu MVP (Umar 5×/2× saat data QA lama) + tombol Detail stack rapi (chips bottom 309 → btn top 313); VLM: kartu prominent & well-formatted.
+- ✓ Mobile 390×844: banner MVP fitsX (x:0 w:390), VLM: teks tidak terpotong, semua elemen muat.
+- ✓ funFact variasi: gen-1/2/3/13 fakta power, gen-5/10 fakta tema — pool 6 bekerja.
+- ✓ Regresi: lint bersih, tsc --noEmit src/ 0 error, dev.log hanya ✓ Compiled + GET 200, agent-browser errors kosong.
+
+Stage Summary:
+- P10 SELESAI: (1) Kotak Bintang langka 14% — momen kejutan besar saat wave aktif (semua berkah + pahala instan + perayaan VFX/SFX legendaris, hiasan bintang 3D berputar + orbit + sparkle periodik); (2) Karakter Andalan memberi identitas progres personal (banner menu reaktif + kartu sorotan koleksi + sistem gelar 4 tingkat); (3) funFact koleksi kini 2× lebih variatif (48 fakta: 18 power + 30 tema, termasuk 3 khusus karakter custom pemain).
+
+Isu Belum Terselesaikan / Risiko & Rekomendasi Fase Berikutnya:
+- Menu MainMenu records/levelProg/starCur/ownedCount masih dibaca sekali via useState (stale dalam satu sesi — hanya terlihat setelah reload; pola perbaikan sama seperti mvp inline). PRIORITAS RENDAH-SEDANG.
+- Bahasa EN (i18n) belum ada — prioritas sedang, tugas besar.
+- i18n + funFact EN akan butuh map bahasa ganda.
+- Kotak Bintang belum punya efek layar penuh (flash emas sekejap) — ide pengayaan visual.
+- Statistik charUsage belum ada "hall of fame" historis (top 3 all-time) — ide.
+- Ide lain: SFX khusus spawn kotak bintang (saat ini hanya toast), tutorial micro utk kotak sedekah, wave 11+ endless mode, cloud save.
+- catatan QA: window.open popup test membuat konteks browser baru (localStorage terpisah) — gunakan tab yang sama saat QA berikutnya, atau QA ulang dari fresh state (justru berguna utk uji first-run).

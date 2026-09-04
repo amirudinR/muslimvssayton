@@ -33,6 +33,9 @@ import {
   POWERUPS,
   POWERUP_CONST,
   POWERUP_MULT,
+  STAR_POWERUP,
+  STAR_BOX_CHANCE,
+  starBoxPahala,
   type CharId,
   type EnemyId,
   type WaveDef,
@@ -166,6 +169,8 @@ export class GameEngine {
   /** waktu game untuk kemunculan kotak berikutnya (0 = belum dijadwalkan) */
   private nextPowerupAt = 0
   private powerupSpin = 0
+  /** P10: akumulator sparkle periodik utk Kotak Bintang. */
+  private starSparkleAcc = 0
   /** muatan Perisai Masjid (sinkron ke store utk HUD) */
   private shieldCharges = 0
   /** cache JSON daftar power-up utk hindari re-render spam */
@@ -1265,12 +1270,20 @@ export class GameEngine {
     return { x: -6, z: 10.8 }
   }
 
-  /** Bangun visual kotak sedekah emas + tutup warna power-up + cincin bercahaya. */
+  /** Bangun visual kotak sedekah emas + tutup warna power-up + cincin bercahaya.
+   *  Kotak Bintang (kind 'star'): lebih besar, bertabur bintang di tutup. */
   private buildPowerupBox(def: PowerupDef): THREE.Group {
+    const isStar = def.kind === 'star'
     const g = new THREE.Group()
     const box = new THREE.Mesh(
       new THREE.BoxGeometry(0.62, 0.5, 0.62),
-      new THREE.MeshStandardMaterial({ color: 0xffd76a, metalness: 0.4, roughness: 0.35 }),
+      new THREE.MeshStandardMaterial({
+        color: isStar ? 0xffe066 : 0xffd76a,
+        metalness: isStar ? 0.65 : 0.4,
+        roughness: 0.3,
+        emissive: isStar ? 0x66500a : 0x000000,
+        emissiveIntensity: isStar ? 0.5 : 0,
+      }),
     )
     box.castShadow = true
     box.position.y = 0.25
@@ -1281,6 +1294,36 @@ export class GameEngine {
     )
     lid.position.y = 0.58
     g.add(lid)
+    // P10: kotak bintang dapat hiasan bintang berputar di atas tutup
+    if (isStar) {
+      const star = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.22),
+        new THREE.MeshStandardMaterial({
+          color: 0xfff3b0,
+          metalness: 0.7,
+          roughness: 0.2,
+          emissive: 0xffd76a,
+          emissiveIntensity: 0.8,
+        }),
+      )
+      star.position.y = 0.92
+      star.name = 'starTopper'
+      g.add(star)
+      // bintang kecil kedua mengorbit (kembar)
+      const star2 = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.12),
+        new THREE.MeshStandardMaterial({
+          color: 0xfff3b0,
+          metalness: 0.6,
+          roughness: 0.25,
+          emissive: 0xffe066,
+          emissiveIntensity: 0.7,
+        }),
+      )
+      star2.name = 'starOrbit'
+      g.add(star2)
+      g.scale.setScalar(1.18)
+    }
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(0.5, 0.75, 32),
       new THREE.MeshBasicMaterial({
@@ -1293,8 +1336,18 @@ export class GameEngine {
     )
     ring.rotation.x = -Math.PI / 2
     ring.position.y = -0.75
+    if (isStar) {
+      // cincin ganda utk kotak bintang
+      const ring2 = ring.clone()
+      const r2 = ring2 as THREE.Mesh
+      ;(r2.material as THREE.MeshBasicMaterial).opacity = 0.45
+      ring2.scale.setScalar(1.5)
+      ring2.position.y = -0.76
+      g.add(ring2)
+    }
     g.add(ring)
     g.userData.lidMat = lid.material
+    g.userData.isStar = isStar
     return g
   }
 
@@ -1347,6 +1400,35 @@ export class GameEngine {
     if (!this.powerupGroup || !this.powerupDef) return false
     const def = this.powerupDef
     const { x, y, z } = this.powerupGroup.position
+
+    if (def.kind === 'star') {
+      /* --- P10: KOTAK BINTANG — perayaan besar + semua berkah --- */
+      const st0 = gameStore.get()
+      const gain = starBoxPahala(Math.max(1, st0.wave))
+      gameStore.set((s) => ({
+        ...s,
+        pahala: s.pahala + gain,
+        stats: { ...s.stats, starsEarned: s.stats.starsEarned + gain },
+      }))
+      // aktifkan damage + rate sekaligus (pil HUD muncul otomatis via sync)
+      this.manager.activatePowerup('damage', def.duration)
+      this.manager.activatePowerup('rate', def.duration)
+      // VFX meriah: kembang api ×3 + cincin + sparkles + hujan bintang
+      audio.buyRarity('legendaris')
+      this.particles.firework(x, y + 0.8, z, 0xffe066)
+      this.particles.firework(x, y + 1.4, z, 0xfff3b0)
+      this.particles.firework(x + 0.8, y + 0.6, z - 0.6, 0xffd76a)
+      this.particles.rings.spawn(x, 0.12, z, 0xffe066, 1.6)
+      this.particles.rings.spawn(x, 0.12, z, 0xfff3b0, 2.2)
+      for (let k = 0; k < 3; k++) {
+        this.particles.sparkleRise(x + (Math.random() - 0.5) * 1.6, y + 0.3 + k * 0.5, z + (Math.random() - 0.5) * 1.6, 0xffe066)
+      }
+      this.particles.showPahala(x, y + 1.8, z, gain)
+      gameStore.get().showToast(`🌟 KOTAK BINTANG! +${gain} pahala & semua berkah!`, '🌟', 'good')
+      this.despawnPowerupBox()
+      this.syncPowerupHud(true)
+      return true
+    }
 
     // VFX & SFX meriah
     audio.buyRarity('epik')
@@ -1403,10 +1485,15 @@ export class GameEngine {
     // spawn kotak baru — hanya saat wave AKTIF, tanpa kotak lain di lapangan,
     // dan jadwal sudah tiba (semua mode: klasik / level / harian / mingguan)
     if (this.powerupGroup === null && waveActive && this.nextPowerupAt > 0 && now >= this.nextPowerupAt) {
-      const def = POWERUPS[Math.floor(Math.random() * POWERUPS.length)]
+      // P10: 14% peluang Kotak Bintang LANGKA (semua berkah + pahala instan)
+      const def = Math.random() < STAR_BOX_CHANCE ? STAR_POWERUP : POWERUPS[Math.floor(Math.random() * POWERUPS.length)]
       const spot = this.randomPowerupSpot()
       this.spawnPowerupAt(def, spot.x, spot.z)
-      gameStore.get().showToast('🎁 Kotak Sedekah muncul! Ketuk cepat!', '🎁', 'info')
+      if (def.kind === 'star') {
+        gameStore.get().showToast('🌟 KOTAK BINTANG LANGKA muncul! Buruan ketuk!', '🌟', 'good')
+      } else {
+        gameStore.get().showToast('🎁 Kotak Sedekah muncul! Ketuk cepat!', '🎁', 'info')
+      }
     }
     // kedaluwarsa → menghilang dengan asap lucu
     if (this.powerupGroup && now >= this.powerupExpiresAt) {
@@ -1433,10 +1520,34 @@ export class GameEngine {
     g.rotation.y = this.powerupSpin
     g.position.y =
       POWERUP_CONST.baseY + Math.sin(now * 2.2) * POWERUP_CONST.bobHeight * 0.5 + POWERUP_CONST.bobHeight
+    // P10: kotak bintang — hiasan bintang berputar + sparkle periodik
+    if (g.userData.isStar) {
+      const topper = g.getObjectByName('starTopper')
+      if (topper) {
+        topper.rotation.y += dt * 3.2
+        topper.position.y = 0.92 + Math.sin(now * 3) * 0.06
+      }
+      const orbit = g.getObjectByName('starOrbit')
+      if (orbit) {
+        const ang = now * 2.4
+        orbit.position.set(Math.cos(ang) * 0.55, 0.75, Math.sin(ang) * 0.55)
+        orbit.rotation.y += dt * 4
+      }
+      this.starSparkleAcc += dt
+      if (this.starSparkleAcc > 0.6) {
+        this.starSparkleAcc = 0
+        this.particles.sparkleRise(
+          g.position.x + (Math.random() - 0.5) * 1.1,
+          g.position.y + 0.2,
+          g.position.z + (Math.random() - 0.5) * 1.1,
+          0xffe066,
+        )
+      }
+    }
     const left = this.powerupExpiresAt - now
     if (left < 3 && this.powerupDef) {
       // urgensi: denyut skala + kedip emisif
-      g.scale.setScalar(1 + 0.18 * Math.sin(now * 10))
+      g.scale.setScalar((g.userData.isStar ? 1.18 : 1) * (1 + 0.18 * Math.sin(now * 10)))
       const lidMat = g.userData.lidMat as THREE.MeshStandardMaterial
       lidMat.emissive.setHex(this.powerupDef.color)
       lidMat.emissiveIntensity = 0.7 + 0.7 * Math.abs(Math.sin(now * 10))
@@ -1446,7 +1557,7 @@ export class GameEngine {
   /** QA: paksa kotak sedekah muncul SEKARANG (melewati syarat spawn/wave). */
   debugSpawnPowerup(defId?: string): boolean {
     const def =
-      (defId ? POWERUPS.find((p) => p.id === defId) : undefined) ??
+      (defId ? [STAR_POWERUP, ...POWERUPS].find((p) => p.id === defId) : undefined) ??
       POWERUPS[Math.floor(Math.random() * POWERUPS.length)]
     if (!def) return false
     const spot = this.randomPowerupSpot()

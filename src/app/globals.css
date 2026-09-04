@@ -940,10 +940,122 @@
   box-shadow: 0 3px 0 #5c96e8, 0 8px 16px rgba(40, 90, 180, 0.28);
 }
 
+/* P10: pil Kotak Bintang — emas berkilau khusus */
+.powerup-pill-star {
+  background: linear-gradient(180deg, #fffbe6 0%, #ffedb0 100%);
+  border-color: #f0c030;
+  color: #92400e;
+  box-shadow: 0 3px 0 #d9a520, 0 8px 18px rgba(190, 140, 30, 0.35);
+  animation: powerup-pulse 1.1s ease-in-out infinite;
+}
+
 /* denyut lembut — kesan buff "hidup" */
 @keyframes powerup-pulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.04); }
+}
+
+/* ==================== P10: KARAKTER ANDALAN (MVP) ==================== */
+
+/* banner MVP di Main Menu — antara kartu judul & tombol MAIN */
+.mvp-banner {
+  border: 3px solid #f5d0fa;
+  border-radius: 1.4rem;
+  background:
+    radial-gradient(120% 160% at 85% 0%, rgba(255, 244, 189, 0.9) 0%, rgba(255, 244, 189, 0) 55%),
+    linear-gradient(180deg, #fdf4ff 0%, #f5e9ff 100%);
+  padding: 0.55rem 0.9rem;
+  box-shadow: 0 4px 0 #d8b7f0, 0 10px 22px rgba(124, 58, 237, 0.18);
+  transition: transform 0.15s ease;
+}
+.mvp-banner:hover {
+  border-color: #e9b6ff;
+  box-shadow: 0 4px 0 #c9a0ec, 0 12px 26px rgba(124, 58, 237, 0.24);
+}
+.mvp-emoji {
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  flex-shrink: 0;
+  font-size: 1.5rem;
+  border-radius: 0.9rem;
+  background: linear-gradient(180deg, #ffffff 0%, #fdf0ff 100%);
+  border: 2px solid #e9b6ff;
+  box-shadow: 0 3px 0 #d09bee;
+}
+.mvp-label {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: #9333ea;
+}
+.mvp-name {
+  font-size: 12px;
+  font-weight: 900;
+  color: #4a1d6e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mvp-title {
+  font-size: 10px;
+  font-weight: 800;
+  color: #b45309;
+}
+.mvp-stat {
+  font-size: 10px;
+  font-weight: 900;
+  color: #6d28d9;
+  white-space: nowrap;
+}
+.mvp-stat-win {
+  color: #b45309;
+}
+
+/* kartu sorotan MVP di layar KOLEKSI (tab Milikku) */
+.mvp-card {
+  background:
+    radial-gradient(130% 170% at 90% 10%, rgba(255, 246, 197, 0.95) 0%, rgba(255, 246, 197, 0) 60%),
+    linear-gradient(180deg, #fdf4ff 0%, #f1e5ff 100%);
+  border: 3px solid #e9b6ff;
+  box-shadow: 0 4px 0 #d09bee, 0 12px 24px rgba(124, 58, 237, 0.16);
+}
+.mvp-emoji-lg {
+  display: grid;
+  place-items: center;
+  width: 3.4rem;
+  height: 3.4rem;
+  flex-shrink: 0;
+  font-size: 2rem;
+  border-radius: 1.1rem;
+  background: linear-gradient(180deg, #ffffff 0%, #fdf0ff 100%);
+  border: 2px solid #e9b6ff;
+  box-shadow: 0 3px 0 #d09bee;
+}
+.mvp-card .mvp-label { font-size: 10px; }
+.mvp-card .mvp-name {
+  font-size: 14px;
+  color: #3b1160;
+}
+.mvp-card .mvp-title {
+  font-size: 11px;
+  color: #b45309;
+}
+/* kilau lembut menyapu kartu MVP koleksi */
+@keyframes mvp-sheen {
+  0% { background-position: -60% 0; }
+  100% { background-position: 160% 0; }
+}
+.mvp-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.55) 50%, transparent 60%);
+  background-size: 220% 100%;
+  animation: mvp-sheen 3.2s ease-in-out infinite;
 }
 
 /* ============================ POLISH TAMBAHAN ============================ */

@@ -16,7 +16,7 @@ import { X, Star, Search, Check, Lock, Sparkles, BookOpen, Hand, Heart, Zap } fr
 import { useGameStore } from '@/lib/game/store'
 import { getEngine } from '@/lib/game/engine'
 import { audio } from '@/lib/game/audio'
-import { buyChar } from '@/lib/game/achievements'
+import { buyChar, favoriteTitle, type FavoriteChar } from '@/lib/game/achievements'
 import { closeCollection, refreshCollData } from '@/lib/game/collection'
 import {
   ROSTER, RARITY_INFO, POWERS,
@@ -54,6 +54,23 @@ export function CollectionScreen() {
   const [toastMsg, setToastMsg] = useState<{ text: string; tone: 'good' | 'bad' } | null>(null)
 
   const allChars = useMemo(() => [...ROSTER, ...customs], [customs])
+  /* P10: karakter andalan (dihitung dari usage; ikut refresh saat data koleksi berubah) */
+  const mvp: FavoriteChar | null = useMemo(() => {
+    let best: FavoriteChar | null = null
+    for (const [id, u] of Object.entries(usage)) {
+      if (u.placed <= 0) continue
+      if (!best || u.placed > best.placed || (u.placed === best.placed && u.wins > best.wins)) {
+        best = { id, placed: u.placed, wins: u.wins }
+      }
+    }
+    return best
+  }, [usage])
+  /* cari RosterChar dari id gameplay (hero prefixed dibalik via placeIdOf) */
+  const mvpChar = useMemo(() => {
+    if (!mvp) return null
+    const pid = mvp.id
+    return allChars.find((c) => placeIdOf(c) === pid) ?? null
+  }, [mvp, allChars])
   const ownedSet = useMemo(() => {
     const s = new Set(owned)
     customs.forEach((c) => s.add(c.id)) // karya sendiri selalu dimiliki
@@ -262,6 +279,42 @@ export function CollectionScreen() {
 
       {/* ================= grid kartu ================= */}
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-6 sm:px-5">
+        {/* P10: kartu sorotan Karakter Andalan di tab Milikku */}
+        {tab === 'milik' && mvp && mvpChar && (
+          <motion.div
+            initial={{ opacity: 0, y: 14, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+            className="mvp-card relative mx-auto mb-3 flex max-w-5xl items-center gap-3 overflow-hidden rounded-2xl p-3"
+          >
+            <motion.span
+              aria-hidden
+              animate={{ rotate: [0, -10, 10, 0], scale: [1, 1.15, 1] }}
+              transition={{ repeat: Infinity, duration: 2.4, ease: 'easeInOut' }}
+              className="mvp-emoji-lg"
+            >
+              {mvpChar.emoji}
+            </motion.span>
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="mvp-label">⭐ KARAKTER ANDALANMU</span>
+              <span className="mvp-name">{mvpChar.name}</span>
+              <span className="mvp-title">{favoriteTitle(mvp.wins)}</span>
+            </div>
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              <span className="coll-usage-chip">📊 Dipasang {mvp.placed}×</span>
+              <span className="coll-usage-chip">🏆 Menang {mvp.wins}×</span>
+              <button
+                className="btn-cute-secondary self-end !px-3 !py-1 !text-[11px]"
+                onClick={() => {
+                  audio.chime()
+                  setSelected(mvpChar)
+                }}
+              >
+                Detail
+              </button>
+            </div>
+          </motion.div>
+        )}
         <div className="mx-auto grid max-w-5xl grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {filtered.map((c, i) => {
             const isOwned = ownedSet.has(c.id)

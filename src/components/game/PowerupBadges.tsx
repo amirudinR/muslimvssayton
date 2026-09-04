@@ -14,6 +14,7 @@ const KIND_CLASS: Record<ActivePowerup['kind'], string> = {
   rate: 'powerup-pill-rate',
   pahala: 'powerup-pill-pahala',
   shield: 'powerup-pill-shield',
+  star: 'powerup-pill-star',
 }
 
 const pillMotion = {

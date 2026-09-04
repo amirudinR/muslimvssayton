@@ -14,9 +14,13 @@ import {
 import { useGameStore } from '@/lib/game/store'
 import { getEngine } from '@/lib/game/engine'
 import { audio } from '@/lib/game/audio'
-import { getRecords, BADGES, getLevelProgress, getStarCurrency, getOwnedChars } from '@/lib/game/achievements'
+import {
+  getRecords, BADGES, getLevelProgress, getStarCurrency, getOwnedChars,
+  getFavoriteChar, favoriteTitle,
+} from '@/lib/game/achievements'
 import { openCollection } from '@/lib/game/collection'
 import { LEVELS, MAX_STARS } from '@/lib/game/levels'
+import { getCharDef } from '@/lib/game/chardb'
 import {
   BadgesModal,
   LeaderboardModal,
@@ -39,6 +43,11 @@ export function MainMenu() {
   const [ownedCount] = useState(
     () => (typeof window !== 'undefined' ? 2 + getOwnedChars().filter((id) => id !== 'hero-ali' && id !== 'hero-aisyah').length : 0),
   )
+  /* P10: karakter andalan — dibaca ulang SETIAP kali menu tampil (render saat
+   * screen==='menu') agar statistik pemakaian dari run terbaru langsung terlihat
+   * (pengalaman bug serupa: banner bintang toko yang basi di P9). */
+  const mvp = screen === 'menu' && typeof window !== 'undefined' ? getFavoriteChar() : null
+  const mvpDef = mvp ? getCharDef(mvp.id) : null
 
   if (screen !== 'menu') return null
 
@@ -150,6 +159,42 @@ export function MainMenu() {
               </div>
             )}
           </motion.div>
+
+          {/* P10: banner Karakter Andalan (paling sering dipasang) */}
+          {mvp && mvpDef && (
+            <motion.button
+              initial={{ opacity: 0, y: 16, scale: 0.92 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ delay: 0.3, type: 'spring', stiffness: 260, damping: 20 }}
+              whileHover={{ scale: 1.03, y: -2 }}
+              whileTap={{ scale: 0.97 }}
+              className="mvp-banner pointer-events-auto mx-4 flex w-full max-w-lg items-center gap-3"
+              onClick={() => {
+                audio.ensure()
+                audio.chime()
+                openCollection()
+              }}
+              title="Lihat di Koleksi"
+            >
+              <motion.span
+                aria-hidden
+                animate={{ rotate: [0, -8, 8, 0], scale: [1, 1.12, 1] }}
+                transition={{ repeat: Infinity, duration: 2.6, ease: 'easeInOut' }}
+                className="mvp-emoji"
+              >
+                {mvpDef.emoji}
+              </motion.span>
+              <div className="flex min-w-0 flex-1 flex-col text-left">
+                <span className="mvp-label">⭐ KARAKTER ANDALAN</span>
+                <span className="mvp-name">{mvpDef.shortName} · <span className="mvp-title">{favoriteTitle(mvp.wins)}</span></span>
+              </div>
+              <div className="flex flex-col items-end gap-0.5">
+                <span className="mvp-stat">📊 {mvp.placed}×</span>
+                <span className="mvp-stat mvp-stat-win">🏆 {mvp.wins}</span>
+              </div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-amber-500/80" />
+            </motion.button>
+          )}
 
           {/* ---------- Tombol besar MENU UTAMA ---------- */}
           <motion.div

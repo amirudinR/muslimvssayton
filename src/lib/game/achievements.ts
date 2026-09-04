@@ -355,6 +355,41 @@ export function getCharUsage(): Record<string, { placed: number; wins: number }>
   return out
 }
 
+/* ------------------ P10: KARAKTER ANDALAN (MVP PEMAIN) ------------------ */
+
+export interface FavoriteChar {
+  /** id gameplay (mis. 'ali', 'gen-13', 'custom-1') */
+  id: string
+  placed: number
+  wins: number
+}
+
+/** Karakter andalan = pemakaian terbanyak (tie-break kemenangan terbanyak).
+ *  null bila belum ada riwayat pemakaian. */
+export function getFavoriteChar(): FavoriteChar | null {
+  const usage = getCharUsage()
+  let best: FavoriteChar | null = null
+  for (const [id, u] of Object.entries(usage)) {
+    if (u.placed <= 0) continue
+    if (
+      !best ||
+      u.placed > best.placed ||
+      (u.placed === best.placed && u.wins > best.wins)
+    ) {
+      best = { id, placed: u.placed, wins: u.wins }
+    }
+  }
+  return best
+}
+
+/** gelar kebanggaan utk karakter andalan berdasar jumlah kemenangan. */
+export function favoriteTitle(wins: number): string {
+  if (wins >= 10) return 'Legenda Masjid 🏆'
+  if (wins >= 6) return 'Bintang Lapangan ⭐'
+  if (wins >= 3) return 'Penjaga Setia 🛡️'
+  return 'Pemain Andalan 🌱'
+}
+
 /** catat satu penempatan karakter (engine → setelah placeTower sukses). */
 export function recordCharPlaced(charId: string): void {
   const s = getSave()

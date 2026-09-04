@@ -52,6 +52,68 @@ const POWER_FACTS: Record<string, string[]> = {
   ],
 }
 
+/* ---------------- P10: fakta edukatif tambahan per TEMA ---------------- */
+
+/** Fakta islami ramah anak per tema asal karakter (kombinasi dengan fakta power
+ *  memberi variasi jauh lebih banyak — 18 fakta power + 30 fakta tema). */
+const THEME_FACTS: Record<string, string[]> = {
+  santri_desa: [
+    'Santri desa belajar sambil membantu orang tua — ilmu + amal jalan bareng! 🌾',
+    'Belajar sambil memakai pengajaran "talaqqi" — guru membaca, santri mengulang, hati pun tenang 📖',
+    'Di desa, suara kicau burung pagi menemani hafalan Quran — alam itu musik dakwah! 🐦',
+  ],
+  santri_kota: [
+    'Santri kota hafal jadwal sholat di masjid terdekat — teknologi + ibadah seimbang! 🏙️',
+    'Belajar agama sambil main itu boleh — Rasulullah ﷺ juga berlomba dengan anak kecil! 🏃',
+    'Kota ramai? Hati yang berdzikir tetap tenang seperti tamanku hijau 🌳',
+  ],
+  pesantren: [
+    'Di pesantren, santri belajar "Adab sebelum ilmu" — sopan santun lebih dulu! 📚',
+    'Kamar pesantren sederhana tapi penuh barokah — makan bareng, doa bareng! 🙏',
+    'Santri juga latihan mandiri: cuci baju sendiri, rapikan kasur sendiri — keren! 💪',
+  ],
+  yatim_ceria: [
+    'Menyayangi anak yatim itu dekat sekali dengan Nabi ﷺ di surga kelak 💝',
+    'Mengusap kepala anak yatim bisa melapangkan hati dan rezeki — coba deh! 🤗',
+    'Anak yatim yang sabar punya ganjaran besar — mereka bukan sendiri, ada Allah! 🌈',
+  ],
+  juara_adzan: [
+    'Lomba adzan itu seru — tapi niatkan utk mengajak orang sholat, bukan sekadar menang! 🏆',
+    'Suara merdu itu anugerah — latihan tiap hari bikin makin mantap! 🎵',
+    'Doa setelah adzan dijanjikan mustajab — jangan sampai ketinggalan! 🤲',
+  ],
+  penjahit: [
+    'Kerajinan tangan itu ibadah kalau niatnya menolong sesama 🧵',
+    'Menjahit sabar banget — satu jahitan salah, rapikan lagi — persis koreksi kesalahan dengan taubat! ✂️',
+    'Pakaian rapi itu sunnah — Rasulullah ﷺ menyukai kebersihan & kerapian! 👕',
+  ],
+  petani: [
+    'Petani syukur panen — dari tanah kering jadi makanan lezat, subhanallah! 🌱',
+    'Menanam 1 pohon itu sedekah jariah — buahnya dimakan burung pun dapat pahala! 🌳',
+    'Air hujan itu nikmat Allah — petani paling paham arti syukur! 🌧️',
+  ],
+  pedagang: [
+    'Pedagang jujur akan bersama para nabi & syuhada di akhirat — jujur itu kunci! 🛒',
+    'Tolak menolak dalam jual beli itu sunnah — tawar dengan sopan! 😊',
+    'Rezeki halal walau sedikit lebih barokah daripada banyak tapi haram! 💰',
+  ],
+  dokter_cilik: [
+    'Menyembuhkan hati lebih utama — senyum itu sedekah, dokter cilik! 🩺',
+    'Ilmu kedokteran diawali Ibnu Sina — kitab "Al-Qanun" jadi rujukan dunia! 📜',
+    'Membantu orang sakit itu ibadah — niatkan menolong sesama! 💚',
+  ],
+  imam_muda: [
+    'Imam muda itu latihan tanggung jawab — memimpin sholat butuh khusyuk! 🕌',
+    'Barangsiapa mengimami sholat, amanahnya berat: bacaan lurus & rapi! 📖',
+    'Baca surat pendek dulu saat jadi imam — perhatikan yang sholat di belakang! 🤲',
+  ],
+  custom: [
+    'Karya sendirimu, kemenanganmu sendiri — rawat dia seperti sahabat! 🎨',
+    'Karakter buatanmu punya doa favorit — hafalkan satu doa harian yuk! 🤲',
+    'Setiap karya unik — begitu pula setiap anak sholeh, tak ada yang sama! ✨',
+  ],
+}
+
 /** hash string kecil → indeks deterministik. */
 function hashPick(id: string, arr: string[]): string {
   let h = 0
@@ -59,9 +121,11 @@ function hashPick(id: string, arr: string[]): string {
   return arr[Math.abs(h) % arr.length]
 }
 
-/** funFact unik per karakter: fakta power (hash) + rasa varian. */
+/** funFact unik per karakter: kolam gabungan fakta power + fakta tema
+ *  (P10 — variasi 6 pilihan per karakter, bukan 3) + rasa varian. */
 function synthFunFact(rc: RosterChar, variantLabel: string): string {
-  const fact = hashPick(rc.id, POWER_FACTS[rc.power] ?? POWER_FACTS.cahaya)
+  const pool = [...(POWER_FACTS[rc.power] ?? POWER_FACTS.cahaya), ...(THEME_FACTS[rc.theme] ?? [])]
+  const fact = hashPick(rc.id, pool)
   return `${fact} (${variantLabel})`
 }
 
