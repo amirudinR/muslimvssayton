@@ -115,7 +115,12 @@ export class Enemy {
     this.maxHp = Math.round(this.def.hp * (1 + 0.12 * (wave - 1)) * RUN_MODS.enemyHpMult)
     this.hp = this.maxHp
     this.group = getEnemyModel(enemyId)
-    this.headY = { pocong: 1.55, kunti: 1.85, genderuwo: 1.7, tuyul: 1.35, wewe: 1.95, kuyang: 1.35, banaspati: 2.6 }[enemyId]
+    this.headY = {
+      pocong: 1.55, kunti: 1.85, genderuwo: 1.7, tuyul: 1.35, wewe: 1.95, kuyang: 1.35, banaspati: 2.6,
+      // P5:
+      sundel: 2.0, leak: 1.65, kolongwewe: 1.45, jailangkung: 1.7, bunian: 1.6, butoijo: 2.35,
+      nyiblorong: 1.75, palasik: 1.55, suster: 1.65, cindaku: 1.75, gendruwo: 2.25, wewerawa: 2.0, kober: 1.55,
+    }[enemyId]
     // bintang kliyengan (orbit di atas kepala)
     const starMat = new THREE.MeshStandardMaterial({ color: 0xffd93d, emissive: 0xffb520, emissiveIntensity: 0.9 })
     for (let i = 0; i < 3; i++) {
@@ -299,6 +304,115 @@ export class Enemy {
       if (parts?.ribbon) (parts.ribbon as THREE.Object3D).rotation.z = Math.sin(this.animT * 6) * 0.2
     } else if (this.def.id === 'banaspati') {
       y = 0.3 + Math.sin(this.animT * 2.2) * 0.2
+    } else if (this.def.id === 'sundel') {
+      // melayang pelan + pita berkibar
+      y = 0.55 + Math.sin(this.animT * 2.6) * 0.22
+      const strands = parts?.strands as THREE.Object3D[] | undefined
+      if (strands) {
+        strands.forEach((s, i) => {
+          s.rotation.x = 0.5 + Math.sin(this.animT * 3.4 + i) * 0.4
+          s.rotation.z = Math.cos(this.animT * 2.8 + i) * 0.3
+        })
+      }
+      this.group.rotation.z = Math.sin(this.animT * 2.0) * 0.06
+    } else if (this.def.id === 'leak') {
+      // zig-zag cepat + ekor pita warna-warni memuntir
+      y = 1.0 + Math.sin(this.animT * 4.2) * 0.28
+      const lateral = Math.sin(this.animT * 5.5) * 0.8
+      const dir = laneDir(this.lane, this.dist)
+      tmpVec.x += -dir.y * lateral
+      tmpVec.y += dir.x * lateral
+      const strands = parts?.strands as THREE.Object3D[] | undefined
+      if (strands) {
+        strands.forEach((s, i) => {
+          s.rotation.z = Math.sin(this.animT * 8 + i * 1.3) * 0.5
+        })
+      }
+    } else if (this.def.id === 'kolongwewe') {
+      // jongkok goyang — mata ngintip kiri-kanan
+      this.group.rotation.z = Math.sin(this.animT * 6) * 0.08
+      if (parts?.head) (parts.head as THREE.Object3D).rotation.z = Math.sin(this.animT * 2.4) * 0.35
+      y = Math.abs(Math.sin(this.animT * 5)) * 0.08
+    } else if (this.def.id === 'jailangkung') {
+      // gerakan patah-patah (stop-motion) — kaku tiap 0.2 detik
+      const stepT = Math.floor(this.animT * 5) / 5
+      this.group.rotation.y += Math.sin(stepT * 8) * 0.02
+      y = Math.abs(Math.sin(stepT * 7)) * 0.3
+      if (parts?.armL) {
+        ;(parts.armL as THREE.Object3D).rotation.z = -0.5 + Math.sin(stepT * 10) * 0.7
+        ;(parts.armR as THREE.Object3D).rotation.z = 0.5 - Math.sin(stepT * 10) * 0.7
+      }
+    } else if (this.def.id === 'bunian') {
+      // jalan cepat malu-malu + topi daun goyang
+      y = Math.abs(Math.sin(this.animT * 8)) * 0.16
+      if (parts?.hat) (parts.hat as THREE.Object3D).rotation.z = Math.sin(this.animT * 6) * 0.18
+      this.group.rotation.z = Math.sin(this.animT * 9) * 0.1
+    } else if (this.def.id === 'butoijo') {
+      // badan besar goyangan lambat + lengan ayun
+      this.group.rotation.z = Math.sin(this.animT * 3) * 0.05
+      if (parts?.armL) {
+        ;(parts.armL as THREE.Object3D).rotation.x = Math.sin(this.animT * 3) * 0.4
+        ;(parts.armR as THREE.Object3D).rotation.x = -Math.sin(this.animT * 3) * 0.4
+      }
+      y = Math.abs(Math.sin(this.animT * 4)) * 0.12
+    } else if (this.def.id === 'nyiblorong') {
+      // meliuk-meliuk ular + ekor bergelombang
+      const lateral = Math.sin(this.animT * 3.5) * 0.6
+      const dir = laneDir(this.lane, this.dist)
+      tmpVec.x += -dir.y * lateral
+      tmpVec.y += dir.x * lateral
+      const strands = parts?.strands as THREE.Object3D[] | undefined
+      if (strands) {
+        strands.forEach((s, i) => {
+          s.position.x = Math.sin(this.animT * 4 + i * 1.1) * 0.25
+        })
+      }
+      y = Math.abs(Math.sin(this.animT * 6)) * 0.14
+    } else if (this.def.id === 'palasik') {
+      // melayang ringan + selimut berkibar
+      y = 0.5 + Math.sin(this.animT * 3.0) * 0.2
+      this.group.rotation.z = Math.sin(this.animT * 2.5) * 0.08
+      if (parts?.body) (parts.body as THREE.Object3D).rotation.z = Math.sin(this.animT * 4) * 0.12
+      const strands = parts?.strands as THREE.Object3D[] | undefined
+      if (strands) strands.forEach((s, i) => { s.rotation.x = 0.4 + Math.sin(this.animT * 5 + i) * 0.3 })
+    } else if (this.def.id === 'suster') {
+      // ngesot breakdance — condong belakang + kaki geser
+      this.group.rotation.x = -0.22 + Math.sin(this.animT * 8) * 0.06
+      y = Math.abs(Math.sin(this.animT * 6)) * 0.05
+      const lateral = Math.sin(this.animT * 7) * 0.3
+      const dir = laneDir(this.lane, this.dist)
+      tmpVec.x += -dir.y * lateral
+      tmpVec.y += dir.x * lateral
+    } else if (this.def.id === 'cindaku') {
+      // jalan tegak gesit + ekor goyang
+      y = Math.abs(Math.sin(this.animT * 6.5)) * 0.18
+      const strands = parts?.strands as THREE.Object3D[] | undefined
+      if (strands) strands.forEach((s) => { s.rotation.z = Math.sin(this.animT * 7) * 0.5 })
+      this.group.rotation.z = Math.sin(this.animT * 6) * 0.06
+    } else if (this.def.id === 'gendruwo') {
+      // gempal goyang + lengan ayun lebar
+      this.group.rotation.z = Math.sin(this.animT * 2.8) * 0.06
+      if (parts?.armL) {
+        ;(parts.armL as THREE.Object3D).rotation.x = Math.sin(this.animT * 2.6) * 0.5
+        ;(parts.armR as THREE.Object3D).rotation.x = -Math.sin(this.animT * 2.6) * 0.5
+      }
+      y = Math.abs(Math.sin(this.animT * 3.5)) * 0.14
+    } else if (this.def.id === 'wewerawa') {
+      // santai gemoy + payung teratai bergoyang
+      this.group.rotation.z = Math.sin(this.animT * 2.2) * 0.05
+      if (parts?.umbrella) {
+        (parts.umbrella as THREE.Object3D).rotation.z = Math.sin(this.animT * 2.4) * 0.16
+      }
+      y = Math.abs(Math.sin(this.animT * 3.2)) * 0.1
+    } else if (this.def.id === 'kober') {
+      // lari usil cepat + cape berkibar + zigzag kecil
+      const lateral = Math.sin(this.animT * 8) * 0.4
+      const dir = laneDir(this.lane, this.dist)
+      tmpVec.x += -dir.y * lateral
+      tmpVec.y += dir.x * lateral
+      y = Math.abs(Math.sin(this.animT * 9)) * 0.2
+      if (parts?.cape) (parts.cape as THREE.Object3D).rotation.x = 0.4 + Math.sin(this.animT * 6) * 0.25
+      this.group.rotation.z = Math.sin(this.animT * 9) * 0.12
     }
 
     // wobble kena pukul

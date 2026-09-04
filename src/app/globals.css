@@ -783,3 +783,349 @@
 .safe-bottom {
   padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
+
+/* ============================ P2: NAVIGASI KAMERA MOBILE ============================ */
+
+/* tombol zoom & recenter kecil semi-transparan */
+.nav-cam-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, #fffdf5 0%, #ffedb8 100%);
+  border: 2px solid #ffd98a;
+  color: #6a4d1a;
+  box-shadow: 0 3px 0 #e8c065;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.25s ease, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s;
+}
+.nav-cam-btn:hover, .nav-cam-btn:active {
+  opacity: 1;
+  transform: translateY(-2px) scale(1.05);
+}
+.nav-cam-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #e8c065; }
+
+.nav-cam-recenter {
+  background: linear-gradient(180deg, #d4f5e0 0%, #a8e8c0 100%);
+  border-color: #7dd8a2;
+  color: #2a6a48;
+  box-shadow: 0 3px 0 #4a9a6a;
+}
+.nav-cam-recenter:active { box-shadow: 0 1px 0 #4a9a6a; }
+
+/* D-pad semi transparan — grid 3×3 */
+.nav-dpad {
+  display: grid;
+  grid-template-columns: repeat(3, 2.4rem);
+  grid-template-rows: repeat(3, 2.4rem);
+  gap: 3px;
+  padding: 5px;
+  border-radius: 1.15rem;
+  background: rgba(255, 251, 235, 0.55);
+  border: 2.5px solid rgba(255, 217, 138, 0.75);
+  backdrop-filter: blur(3px);
+  opacity: 0.55;
+  transition: opacity 0.25s ease;
+  touch-action: none;
+}
+.nav-dpad-active, .nav-dpad:hover { opacity: 1; }
+
+.nav-dpad-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.8rem;
+  background: linear-gradient(180deg, #fffdf5 0%, #ffedb8 100%);
+  border: 2px solid #f0dfae;
+  color: #6a4d1a;
+  cursor: pointer;
+  transition: transform 0.1s ease, background 0.1s ease;
+  touch-action: none;
+  user-select: none;
+}
+.nav-dpad-cell:active {
+  transform: scale(0.92);
+  background: linear-gradient(180deg, #ffd76a 0%, #ffb84d 100%);
+}
+
+.nav-dpad-up { grid-column: 2; grid-row: 1; }
+.nav-dpad-left { grid-column: 1; grid-row: 2; }
+.nav-dpad-center { grid-column: 2; grid-row: 2; }
+.nav-dpad-right { grid-column: 3; grid-row: 2; }
+.nav-dpad-down { grid-column: 2; grid-row: 3; }
+
+.nav-dpad-center {
+  background: linear-gradient(180deg, #d4f5e0 0%, #a8e8c0 100%);
+  border-color: #7dd8a2;
+  color: #2a6a48;
+}
+
+/* ikon mengikuti ukuran tombol (class tailwind h-4.5 fallback) */
+.nav-dpad-cell svg, .nav-cam-btn svg { pointer-events: none; }
+
+/* ============================ P3: MENU UTAMA PROFESIONAL ============================ */
+
+/* chip profil pemain pojok atas */
+.profile-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.9rem 0.35rem 0.45rem;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, #fffdf5 0%, #fff6dd 100%);
+  border: 3px solid #ffd98a;
+  box-shadow: 0 4px 0 #eec96b, 0 8px 18px rgba(120, 90, 30, 0.2);
+}
+
+.profile-avatar {
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  font-size: 1.25rem;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 35% 30%, #ffffff, #e8f7ee 60%, #c9ecd8);
+  border: 2.5px solid #7dd8a2;
+  box-shadow: 0 2px 0 #4a9a6a;
+}
+
+/* ubin menu sekunder (Toko/Peta/Aturan) */
+.menu-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.6rem 0.4rem;
+  border-radius: 1.1rem;
+  background: linear-gradient(180deg, #fffdf5 0%, #fff3d0 100%);
+  border: 3px solid #ffd98a;
+  box-shadow: 0 4px 0 #eec96b, 0 8px 16px rgba(120, 90, 30, 0.18);
+  color: #4a3b20;
+  cursor: pointer;
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s;
+}
+.menu-tile:hover { box-shadow: 0 6px 0 #eec96b, 0 12px 22px rgba(120, 90, 30, 0.25); }
+.menu-tile:active { transform: translateY(3px); box-shadow: 0 1px 0 #eec96b; }
+
+/* ============================ P3: LEVEL SELECT ============================ */
+
+/* node level di peta */
+.level-node {
+  cursor: pointer;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  min-width: 4.6rem;
+  z-index: 1;
+}
+.level-node-unlocked {
+  background: linear-gradient(180deg, #fffdf5 0%, #fff3d0 100%);
+  border: 3px solid #ffd98a;
+  box-shadow: 0 4px 0 #eec96b, 0 8px 18px rgba(120, 90, 30, 0.25);
+}
+.level-node-locked {
+  background: linear-gradient(180deg, #f5f2ea 0%, #ece7d8 100%);
+  border: 3px solid #d8d0ba;
+  box-shadow: 0 4px 0 #d8d0ba;
+  cursor: not-allowed;
+}
+.level-node-emoji {
+  font-size: 1.6rem;
+  line-height: 1;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.15));
+}
+.level-node-current {
+  animation: level-node-bounce 1.6s ease-in-out infinite;
+}
+@keyframes level-node-bounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-5px) scale(1.12); }
+}
+
+/* ============================ P3: SETTINGS ============================ */
+
+.settings-card {
+  border-radius: 1.4rem;
+  border: 3px solid #ffd98a;
+  background: linear-gradient(180deg, #fffdf5 0%, #fff6dd 100%);
+  box-shadow: 0 4px 0 #eec96b, 0 10px 22px rgba(120, 90, 30, 0.18);
+  padding: 0.9rem 1rem;
+}
+
+.settings-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8a6a30;
+}
+
+.quality-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.5rem 0.3rem;
+  border-radius: 0.9rem;
+  background: #fffdf5;
+  border: 2px solid #f0dfae;
+  color: #6a4d1a;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.quality-opt:hover { border-color: #ffce6b; }
+.quality-opt-active {
+  background: linear-gradient(180deg, #6cc97b, #4dab5c);
+  border-color: #3c8a49;
+  color: #fff;
+}
+
+/* slider lucu */
+.cute-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 0.8rem;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #ffd76a, #ffb84d);
+  border: 2px solid #e8c065;
+  outline: none;
+  cursor: pointer;
+}
+.cute-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 35% 30%, #ffffff, #fff3d0);
+  border: 3px solid #ffb84d;
+  box-shadow: 0 2px 4px rgba(120, 90, 30, 0.35);
+  cursor: grab;
+}
+.cute-range::-webkit-slider-thumb:active { cursor: grabbing; transform: scale(1.1); }
+.cute-range::-moz-range-thumb {
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 35% 30%, #ffffff, #fff3d0);
+  border: 3px solid #ffb84d;
+  box-shadow: 0 2px 4px rgba(120, 90, 30, 0.35);
+  cursor: grab;
+}
+
+/* ============================ P4: TOKO ============================ */
+
+.shop-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1.2rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 900;
+  color: #6a4d1a;
+  background: #fffdf5;
+  border: 3px solid #f0dfae;
+  box-shadow: 0 3px 0 #e0d0a0;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.shop-tab:hover { transform: translateY(-2px); border-color: #ffce6b; }
+.shop-tab-active {
+  background: linear-gradient(180deg, #ffd76a, #ffb84d);
+  border-color: #e8a53a;
+  color: #7a4210;
+  box-shadow: 0 4px 0 #d9962e;
+}
+
+.chip-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.22rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.66rem;
+  font-weight: 900;
+  color: #6a4d1a;
+  background: #fffdf5;
+  border: 2px solid #f0dfae;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.chip-filter:hover { border-color: #ffce6b; transform: translateY(-1px); }
+.chip-filter-on {
+  background: linear-gradient(180deg, #6cc97b, #4dab5c);
+  border-color: #3c8a49;
+  color: #fff;
+}
+
+.shop-card {
+  cursor: pointer;
+  transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.shop-card-owned {
+  filter: none;
+}
+
+/* swatch warna (character creator) */
+.swatch {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 0 rgba(120, 90, 30, 0.3), inset 0 -3px 6px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.swatch:hover { transform: scale(1.15) rotate(-4deg); }
+.swatch-on {
+  transform: scale(1.2);
+  box-shadow: 0 0 0 4px #ffd76a, 0 2px 0 rgba(120, 90, 30, 0.3);
+}
+
+/* tombol power di creator */
+.creator-power {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.8rem;
+  border-radius: 1rem;
+  background: #fffdf5;
+  border: 2px solid #f0dfae;
+  cursor: pointer;
+  transition: all 0.15s;
+  width: 100%;
+}
+.creator-power:hover { border-color: #ffce6b; }
+.creator-power-on {
+  background: linear-gradient(180deg, #f2eaff 0%, #e8d5ff 100%);
+  border-color: #c79ae8;
+  box-shadow: 0 3px 0 rgba(154, 95, 208, 0.4);
+}
+
+/* scrollbar vertikal lucu untuk shop/level/settings */
+.overflow-y-auto::-webkit-scrollbar,
+[class*='overflow-y-auto']::-webkit-scrollbar {
+  width: 10px;
+}
+.overflow-y-auto::-webkit-scrollbar-track,
+[class*='overflow-y-auto']::-webkit-scrollbar-track {
+  background: rgba(255, 240, 200, 0.75);
+  border-radius: 9999px;
+}
+.overflow-y-auto::-webkit-scrollbar-thumb,
+[class*='overflow-y-auto']::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #ffd76a, #ffb84d);
+  border-radius: 9999px;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+}
+.overflow-y-auto::-webkit-scrollbar-thumb:hover,
+[class*='overflow-y-auto']::-webkit-scrollbar-thumb:hover {
+  background: #ffb84d;
+}

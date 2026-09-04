@@ -8,6 +8,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { CHAR_DEFS, ENEMY_DEFS, LANES } from './data'
 import type { CharId, EnemyId } from './data'
+import type { RosterChar, CharCustom } from './roster'
 
 /* ------------------------------ Helpers ------------------------------ */
 
@@ -880,6 +881,278 @@ export function getCharacterModel(charId: CharId, level: number): THREE.Group {
   return clone
 }
 
+/* ------------------ P4/P6: Chibi generatif (roster & custom) ------------------ */
+
+const genTemplateCache = new Map<string, THREE.Group>()
+
+/** Membangun chibi generatif dari RosterChar (tema × rarity × power). */
+export function getRosterModel(rc: RosterChar, level = 1): THREE.Group {
+  const key = `roster:${rc.id}:${level}`
+  let tpl = genTemplateCache.get(key)
+  if (!tpl) {
+    tpl = buildGenChibi({
+      robe: rc.robe,
+      accent: rc.accent,
+      skin: rc.skin,
+      presentation: rc.presentation,
+      rarity: rc.rarity,
+      accessory: defaultAccessoryForPower(rc.power, rc.rarity),
+      expression: 'ceria',
+      hair: defaultHairForPresentation(rc.presentation),
+      level,
+    })
+    genTemplateCache.set(key, tpl)
+  }
+  return cloneGenChibi(tpl)
+}
+
+/** Membangun chibi dari hasil character creator (kustomisasi pemain). */
+export function getCustomModel(cc: CharCustom, level = 1): THREE.Group {
+  const key = `custom:${cc.presentation}:${cc.robeColor}:${cc.accentColor}:${cc.skinColor}:${cc.hairColor}:${cc.accessory}:${cc.expression}:${level}`
+  let tpl = genTemplateCache.get(key)
+  if (!tpl) {
+    tpl = buildGenChibi({
+      robe: cc.robeColor,
+      accent: cc.accentColor,
+      skin: cc.skinColor,
+      presentation: cc.presentation,
+      rarity: 'umum',
+      accessory: cc.accessory,
+      expression: cc.expression,
+      hair: cc.hairColor,
+      level,
+    })
+    genTemplateCache.set(key, tpl)
+  }
+  return cloneGenChibi(tpl)
+}
+
+function defaultAccessoryForPower(power: string, rarity: string): 'none' | 'tasbih' | 'tas-kecil' | 'sajadah' | 'buku' | 'lampion' {
+  if (rarity === 'umum') return 'none'
+  switch (power) {
+    case 'dzikir': return 'buku'
+    case 'nasihat': return 'lampion'
+    case 'cahaya': return 'sajadah'
+    default: return 'tasbih'
+  }
+}
+
+function defaultHairForPresentation(p: string): number {
+  return p === 'kakek' ? 0xf2f0ea : 0x3a3550
+}
+
+interface GenChibiOpts {
+  robe: number
+  accent: number
+  skin: number
+  presentation: 'anak-laki' | 'anak-perempuan' | 'kakek'
+  rarity: 'umum' | 'langka' | 'epik' | 'legendaris'
+  accessory: 'none' | 'tasbih' | 'tas-kecil' | 'sajadah' | 'buku' | 'lampion'
+  expression: 'ceria' | 'pemalu' | 'semangat'
+  hair: number
+  level: number
+}
+
+function buildGenChibi(o: GenChibiOpts): THREE.Group {
+  const g = new THREE.Group()
+
+  // pedestal (senada warna accent)
+  const ped = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.88, 1.0, 0.24, 20),
+    std(0xfff3d6, { roughness: 0.75 }),
+  )
+  ped.position.y = 0.12
+  ped.receiveShadow = true
+  g.add(ped)
+  const pedRing = new THREE.Mesh(
+    new THREE.TorusGeometry(0.88, 0.07, 8, 22),
+    new THREE.MeshStandardMaterial({ color: o.accent, roughness: 0.5 }),
+  )
+  pedRing.rotation.x = Math.PI / 2
+  pedRing.position.y = 0.24
+  g.add(pedRing)
+
+  const rarityGlow: Record<string, number> = { umum: 0, langka: 0.06, epik: 0.12, legendaris: 0.2 }
+  const robe = new THREE.MeshStandardMaterial({
+    color: o.robe,
+    roughness: [0.85, 0.7, 0.55][o.level - 1],
+    emissive: new THREE.Color(o.robe).multiplyScalar(rarityGlow[o.rarity] ?? 0),
+  })
+
+  // badan
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.52, 18, 16), robe)
+  body.name = 'body'
+  body.position.y = 0.78
+  body.scale.y = 1.18
+  body.castShadow = true
+  g.add(body)
+
+  // kaki
+  for (const s of [-1, 1]) {
+    const foot = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), std(o.skin, { roughness: 0.7 }))
+    foot.position.set(s * 0.2, 0.22, 0.28)
+    g.add(foot)
+  }
+
+  // kepala
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.55, 20, 16), std(o.skin, { roughness: 0.65 }))
+  head.name = 'head'
+  head.position.y = 1.62
+  head.castShadow = true
+  g.add(head)
+
+  const faceOpts: Parameters<typeof addFace>[2] = { y: 0.06, spread: 0.24, eyeScale: 1.15, smileScale: 1.1, cheeks: true }
+  if (o.expression === 'pemalu') {
+    faceOpts.eyeScale = 0.9
+    faceOpts.smileScale = 0.8
+  }
+  if (o.expression === 'semangat') {
+    faceOpts.eyeScale = 1.35
+    faceOpts.smileScale = 1.3
+  }
+  if (o.presentation === 'kakek') faceOpts.eyeScale = 0.95
+  addFace(head, 0.55, faceOpts)
+
+  // lengan
+  const armGeo = new THREE.CapsuleGeometry(0.13, 0.34, 4, 8)
+  const armL = new THREE.Mesh(armGeo, robe)
+  armL.name = 'armL'
+  armL.position.set(-0.55, 1.02, 0.05)
+  armL.rotation.z = 0.5
+  const armR = new THREE.Mesh(armGeo, robe)
+  armR.name = 'armR'
+  armR.position.set(0.55, 1.02, 0.05)
+  armR.rotation.z = -0.5
+  g.add(armL, armR)
+
+  /* --- kepala: peci / hijab / rambut --- */
+  if (o.presentation === 'anak-perempuan') {
+    // hijab: hood + tepi wajah (warna accent)
+    const hood = new THREE.Mesh(
+      new THREE.SphereGeometry(0.6, 18, 14, 0, Math.PI * 2, 0, Math.PI * 0.55),
+      std(o.accent, { roughness: 0.8 }),
+    )
+    hood.name = 'hood'
+    hood.position.y = 1.66
+    hood.rotation.x = Math.PI * 0.78
+    g.add(hood)
+    // bunga kecil
+    const flower = new THREE.Group()
+    const fMat = std(0xff9ecb)
+    for (let p = 0; p < 5; p++) {
+      const ang = (p / 5) * Math.PI * 2
+      const petal = new THREE.Mesh(new THREE.SphereGeometry(0.055, 6, 5), fMat)
+      petal.position.set(Math.cos(ang) * 0.07, Math.sin(ang) * 0.07, 0)
+      flower.add(petal)
+    }
+    flower.position.set(0.42, 1.95, 0.18)
+    g.add(flower)
+  } else if (o.presentation === 'kakek') {
+    // turban + jenggot
+    const turban = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.17, 10, 20), std(0xfdfdf6, { roughness: 0.85 }))
+    turban.position.y = 2.0
+    turban.rotation.x = 0.25
+    g.add(turban)
+    const beard = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10), std(0xf2f0ea, { roughness: 1 }))
+    beard.position.set(0, 1.36, 0.34)
+    beard.scale.set(1, 1.25, 0.55)
+    g.add(beard)
+  } else {
+    // rambut + peci (warna accent)
+    const hair = new THREE.Mesh(
+      new THREE.SphereGeometry(0.57, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.5),
+      std(o.hair, { roughness: 1 }),
+    )
+    hair.position.y = 1.66
+    hair.rotation.x = Math.PI * 0.8
+    g.add(hair)
+    const peci = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.32, 0.2, 14), std(o.accent, { roughness: 0.85 }))
+    peci.name = 'peci'
+    peci.position.y = 2.05
+    g.add(peci)
+  }
+
+  /* --- aksesoris --- */
+  if (o.accessory === 'tasbih') {
+    const beads = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.035, 6, 14), std(0xd9a25f))
+    beads.position.set(0.68, 0.82, 0.1)
+    g.add(beads)
+  } else if (o.accessory === 'tas-kecil') {
+    const bag = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.24, 0.12), std(0x9a6a3f, { roughness: 0.9 }))
+    bag.position.set(-0.6, 0.7, 0.25)
+    bag.rotation.z = 0.2
+    g.add(bag)
+    const strap = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.03, 6, 12), std(0x6a4a2c))
+    strap.position.set(-0.35, 1.0, 0.2)
+    strap.rotation.y = Math.PI / 2
+    g.add(strap)
+  } else if (o.accessory === 'sajadah') {
+    const mat = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.03, 0.7), std(o.accent, { roughness: 0.9 }))
+    mat.position.set(0, 0.28, 0.55)
+    g.add(mat)
+    const arch = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.035, 6, 12, Math.PI), std(o.robe))
+    arch.position.set(0, 0.3, 0.75)
+    g.add(arch)
+  } else if (o.accessory === 'buku') {
+    const book = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.26, 0.08), std(0x2ea36a, { roughness: 0.6 }))
+    book.position.set(0, 1.0, 0.55)
+    book.rotation.x = -0.4
+    g.add(book)
+  } else if (o.accessory === 'lampion') {
+    const lantern = new THREE.Mesh(
+      new THREE.SphereGeometry(0.13, 10, 8),
+      new THREE.MeshStandardMaterial({ color: 0xffe9a8, emissive: 0xffd76a, emissiveIntensity: 0.9, roughness: 0.4 }),
+    )
+    lantern.name = 'lampion'
+    lantern.position.set(-0.72, 1.44, 0.1)
+    g.add(lantern)
+  }
+
+  /* --- rarity: elemen bercahaya (epik+ / legendaris aura) --- */
+  if (o.rarity === 'epik' || o.rarity === 'legendaris') {
+    const halo = new THREE.Mesh(
+      new THREE.TorusGeometry(0.82, 0.045, 8, 24),
+      basic(o.rarity === 'legendaris' ? 0xffd76a : 0xc79ae8),
+    )
+    halo.name = 'glow'
+    halo.rotation.x = Math.PI / 2
+    halo.position.y = 0.05
+    g.add(halo)
+  }
+
+  // bintang level
+  const stars: THREE.Object3D[] = []
+  const starMat = new THREE.MeshStandardMaterial({ color: 0xffd76a, metalness: 0.8, roughness: 0.25, emissive: 0x8a6a10, emissiveIntensity: 0.6 })
+  for (let i = 0; i < o.level; i++) {
+    const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.13), starMat)
+    star.name = 'star'
+    star.position.set((i - (o.level - 1) / 2) * 0.34, 2.45, 0)
+    star.userData.baseY = 2.45
+    g.add(star)
+    stars.push(star)
+  }
+
+  g.scale.setScalar([1, 1.1, 1.2][o.level - 1])
+  return g
+}
+
+function cloneGenChibi(tpl: THREE.Group): THREE.Group {
+  const clone = tpl.clone(true)
+  const named = collectNamed(clone)
+  const parts: ChibiParts = {
+    head: named.head!,
+    body: named.body!,
+    armL: named.armL!,
+    armR: named.armR!,
+    stars: collectListed(clone, 'star'),
+    glow: (named.glow as THREE.Mesh) ?? null,
+    koinSedekah: null,
+    lampion: named.lampion ?? null,
+  }
+  clone.userData.parts = parts
+  return clone
+}
+
 /* --------------------------- Setan lucu (musuh) --------------------------- */
 
 const enemyTemplateCache = new Map<EnemyId, THREE.Group>()
@@ -1090,6 +1363,466 @@ function buildEnemy(enemyId: EnemyId): THREE.Group {
       g.add(strand)
     }
     addFace(head, 0.5, { y: 0.02, spread: 0.21, eyeScale: 1.35, smileScale: 1.25, cheeks: true })
+  } else if (enemyId === 'sundel') {
+    /* Sundel Bolong Comel — terbang melayang dgn pita pink panjang (versi sopan). */
+    const dress = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.2, 12), std(0xf8f0ff, { roughness: 0.8 }))
+    dress.name = 'body'
+    dress.position.y = 0.7
+    dress.castShadow = true
+    g.add(dress)
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.44, 14, 12), std(0xfffaf2, { roughness: 0.6 }))
+    head.name = 'head'
+    head.position.y = 1.5
+    head.castShadow = true
+    g.add(head)
+    // rambut panjang hitam lembut
+    const hair = new THREE.Mesh(
+      new THREE.SphereGeometry(0.46, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.55),
+      std(0x35281e, { roughness: 1 }),
+    )
+    hair.position.y = 1.53
+    hair.rotation.x = Math.PI * 0.8
+    g.add(hair)
+    // pita pink besar di punggung (menutupi "bolong" dengan manis)
+    const ribbonMat = std(0xff9ecb, { roughness: 0.5 })
+    const ribbon = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.07, 6, 12), ribbonMat)
+    ribbon.name = 'ribbon'
+    ribbon.position.set(0, 1.15, -0.45)
+    g.add(ribbon)
+    // dua ekor pita panjang berkibar
+    for (const s of [-1, 1]) {
+      const tail = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.8, 4, 8), ribbonMat)
+      tail.name = 'strand'
+      tail.position.set(s * 0.14, 0.9, -0.5)
+      tail.rotation.x = 0.5
+      g.add(tail)
+    }
+    addFace(head, 0.44, { y: 0.02, spread: 0.19, eyeScale: 1.2, smileScale: 1.1, cheeks: true })
+  } else if (enemyId === 'leak') {
+    /* Leak Mini (Bali) — kepala terbang dgn ekor pita warna-warni (kartun). */
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 12), std(0xffe0c8, { roughness: 0.5 }))
+    head.name = 'head'
+    head.position.y = 1.15
+    head.castShadow = true
+    g.add(head)
+    // rambut gelap mengembang
+    const hair = new THREE.Mesh(
+      new THREE.SphereGeometry(0.48, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.6),
+      std(0x2c1e2a, { roughness: 1 }),
+    )
+    hair.position.y = 1.2
+    hair.scale.y = 1.2
+    g.add(hair)
+    // ekor pita warna-warni panjang (3 helai)
+    const tailColors = [0xffd76a, 0x9ff2c8, 0xff9ecb]
+    tailColors.forEach((col, i) => {
+      const tail = new THREE.Mesh(new THREE.CapsuleGeometry(0.05, 1.1, 4, 8), std(col, { roughness: 0.6 }))
+      tail.name = 'strand'
+      tail.position.set((i - 1) * 0.14, 0.55, -0.1)
+      tail.rotation.x = 0.35
+      g.add(tail)
+    })
+    // taring putih kecil lucu
+    for (const s of [-1, 1]) {
+      const fang = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.14, 6), std(0xffffff))
+      fang.position.set(s * 0.12, 0.85, 0.32)
+      g.add(fang)
+    }
+    addFace(head, 0.42, { y: 0.04, spread: 0.19, eyeScale: 1.3, smileScale: 1.15, angry: true, cheeks: false })
+  } else if (enemyId === 'kolongwewe') {
+    /* Kolong Wewe Penggemas — badan kecil jongkok, mata besar ngintip. */
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 14, 12), std(0xa8b8d0, { roughness: 0.85 }))
+    body.name = 'body'
+    body.position.y = 0.42
+    body.scale.y = 0.72
+    body.castShadow = true
+    g.add(body)
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 14, 12), std(0xd8cfc0, { roughness: 0.7 }))
+    head.name = 'head'
+    head.position.y = 0.95
+    head.castShadow = true
+    g.add(head)
+    // rambut gelap acak-acakan comel
+    const hair = new THREE.Mesh(
+      new THREE.SphereGeometry(0.44, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.5),
+      std(0x4a4440, { roughness: 1 }),
+    )
+    hair.position.y = 1.0
+    hair.rotation.x = Math.PI * 0.85
+    hair.scale.x = 1.15
+    g.add(hair)
+    // tangan di dagu (pose pengintip)
+    for (const s of [-1, 1]) {
+      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.32, 4, 8), std(0xd8cfc0))
+      arm.name = s < 0 ? 'armL' : 'armR'
+      arm.position.set(s * 0.42, 0.55, 0.3)
+      arm.rotation.x = -0.9
+      g.add(arm)
+    }
+    addFace(head, 0.4, { y: 0.05, spread: 0.16, eyeScale: 1.5, smileScale: 0.85, cheeks: true })
+  } else if (enemyId === 'jailangkung') {
+    /* Jailangkung Jenaka — boneka kayu patah-patah. */
+    const wood = std(0xc9a86a, { roughness: 0.9, flatShading: true })
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 0.7, 8), wood)
+    body.name = 'body'
+    body.position.y = 0.6
+    body.castShadow = true
+    g.add(body)
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.38, 12, 10), wood)
+    head.name = 'head'
+    head.position.y = 1.3
+    head.castShadow = true
+    g.add(head)
+    // anggota gerak patah-patah (kapsul sendi kayu)
+    for (const s of [-1, 1]) {
+      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.4, 4, 6), wood)
+      arm.name = s < 0 ? 'armL' : 'armR'
+      arm.position.set(s * 0.45, 0.85, 0)
+      arm.rotation.z = s * 0.5
+      g.add(arm)
+      const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.3, 4, 6), wood)
+      leg.position.set(s * 0.16, 0.2, 0)
+      g.add(leg)
+    }
+    // wajah boneka digambar (mata bulat + pipi merah)
+    addFace(head, 0.38, { y: 0.04, spread: 0.16, eyeScale: 1.2, smileScale: 1.2, cheeks: true })
+    // tali jailangkung di pergelangan
+    const rope = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.03, 6, 12), std(0xe8d9a9))
+    rope.position.y = 1.05
+    rope.rotation.x = Math.PI / 2
+    g.add(rope)
+  } else if (enemyId === 'bunian') {
+    /* Orang Bunian Pemalu — makhluk hutan bertopi daun. */
+    const skinMat = std(0xf5e8d8, { roughness: 0.6 })
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.32, 0.55, 8, 12), std(0x8fd6b4, { roughness: 0.8 }))
+    body.name = 'body'
+    body.position.y = 0.55
+    body.castShadow = true
+    g.add(body)
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.38, 14, 12), skinMat)
+    head.name = 'head'
+    head.position.y = 1.2
+    head.castShadow = true
+    g.add(head)
+    // topi daun besar (kerucut hijau)
+    const leafHat = new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.5, 9), std(0x4da848, { roughness: 1, flatShading: true }))
+    leafHat.name = 'hat'
+    leafHat.position.y = 1.55
+    g.add(leafHat)
+    // daun kecil menempel di tophi
+    for (let i = 0; i < 4; i++) {
+      const ang = (i / 4) * Math.PI * 2
+      const lf = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 5), std(0x63b94e))
+      lf.scale.set(1, 0.4, 1.4)
+      lf.position.set(Math.cos(ang) * 0.42, 1.38, Math.sin(ang) * 0.42)
+      lf.rotation.y = ang
+      g.add(lf)
+    }
+    addFace(head, 0.38, { y: 0.02, spread: 0.15, eyeScale: 1.05, smileScale: 0.8, cheeks: true })
+  } else if (enemyId === 'butoijo') {
+    /* Buto Ijo Mini — raksasa hijau gembul polos. */
+    const green = std(0x74c95a, { roughness: 0.9, flatShading: true })
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.82, 14, 12), green)
+    body.name = 'body'
+    body.position.y = 0.85
+    body.castShadow = true
+    g.add(body)
+    // perut gembul lebih terang
+    const belly = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 10), std(0xa8e6ff, { roughness: 0.8 }))
+    belly.position.set(0, 0.7, 0.45)
+    belly.scale.set(1, 0.9, 0.5)
+    g.add(belly)
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.52, 14, 12), green)
+    head.name = 'head'
+    head.position.y = 1.75
+    head.castShadow = true
+    g.add(head)
+    // telinga raksasa
+    for (const s of [-1, 1]) {
+      const ear = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), green)
+      ear.position.set(s * 0.6, 1.8, 0)
+      ear.scale.y = 1.4
+      g.add(ear)
+    }
+    // taring kecil polos
+    for (const s of [-1, 1]) {
+      const fang = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.16, 6), std(0xffffff))
+      fang.position.set(s * 0.16, 1.58, 0.4)
+      g.add(fang)
+    }
+    // lengan panjang santai
+    for (const s of [-1, 1]) {
+      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.17, 0.55, 4, 8), green)
+      arm.name = s < 0 ? 'armL' : 'armR'
+      arm.position.set(s * 0.85, 0.9, 0.05)
+      arm.rotation.z = s * 0.6
+      g.add(arm)
+    }
+    addFace(head, 0.52, { y: 0.06, spread: 0.2, eyeScale: 1.1, smileScale: 1.2, cheeks: false })
+  } else if (enemyId === 'nyiblorong') {
+    /* Nyi Blorong Comel — putri ular emas-hijau. */
+    const body = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.9, 12), std(0xf6e8ff, { roughness: 0.7 }))
+    body.name = 'body'
+    body.position.y = 0.5
+    body.castShadow = true
+    g.add(body)
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 14, 12), std(0xfffaf2, { roughness: 0.55 }))
+    head.name = 'head'
+    head.position.y = 1.3
+    head.castShadow = true
+    g.add(head)
+    // rambut hitam panjang
+    const hair = new THREE.Mesh(
+      new THREE.SphereGeometry(0.42, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.55),
+      std(0x2c2620, { roughness: 1 }),
+    )
+    hair.position.y = 1.33
+    hair.rotation.x = Math.PI * 0.78
+    g.add(hair)
+    // ekor ular emas-hijau meliuk (nama: strand utk animasi)
+    for (let i = 0; i < 4; i++) {
+      const seg = new THREE.Mesh(new THREE.SphereGeometry(0.16 - i * 0.02, 8, 6), std(i % 2 ? 0xffd76a : 0x6fc25e, { roughness: 0.5 }))
+      seg.name = 'strand'
+      seg.position.set(Math.sin(i * 1.2) * 0.25, 0.35 - i * 0.06, -0.2 - i * 0.18)
+      g.add(seg)
+    }
+    // mahkota kecil emas
+    const crown = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.05, 6, 10), std(0xffd76a, { metalness: 0.8, roughness: 0.3 }))
+    crown.position.y = 1.68
+    crown.rotation.x = Math.PI / 2
+    g.add(crown)
+    addFace(head, 0.4, { y: 0.03, spread: 0.17, eyeScale: 1.25, smileScale: 1.15, cheeks: true })
+  } else if (enemyId === 'palasik') {
+    /* Palasik Kecil (Minang) — melayang wajah kucing-kucingan. */
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 12), std(0xf0e8f8, { roughness: 0.5 }))
+    head.name = 'head'
+    head.position.y = 1.1
+    head.castShadow = true
+    g.add(head)
+    // telinga kucing
+    for (const s of [-1, 1]) {
+      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.24, 6), std(0xe8d8f5))
+      ear.position.set(s * 0.26, 1.45, 0)
+      ear.rotation.z = s * -0.3
+      g.add(ear)
+    }
+    // kumis tipis
+    for (const s of [-1, 1]) {
+      for (let i = 0; i < 2; i++) {
+        const whisker = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.28, 4), std(0xd8c8e8))
+        whisker.position.set(s * 0.32, 1.02 + i * 0.06, 0.3)
+        whisker.rotation.z = Math.PI / 2 + s * 0.2
+        g.add(whisker)
+      }
+    }
+    // selimut kecil melayang di bawah
+    const blanket = new THREE.Mesh(new THREE.ConeGeometry(0.36, 0.6, 10), std(0xd8c8f0, { roughness: 0.9, transparent: true, opacity: 0.85 }))
+    blanket.name = 'body'
+    blanket.position.y = 0.55
+    g.add(blanket)
+    // ekor pita kecil
+    const tail = new THREE.Mesh(new THREE.CapsuleGeometry(0.04, 0.4, 4, 8), std(0xff9ecb))
+    tail.name = 'strand'
+    tail.position.set(0.1, 0.35, -0.25)
+    tail.rotation.x = 0.4
+    g.add(tail)
+    addFace(head, 0.42, { y: 0.05, spread: 0.18, eyeScale: 1.4, smileScale: 0.9, cheeks: true })
+  } else if (enemyId === 'suster') {
+    /* Suster Ngesot Ceria — seragam perawat lucu, ngesot breakdance. */
+    const dress = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.0, 14), std(0xffffff, { roughness: 0.6 }))
+    dress.name = 'body'
+    dress.position.y = 0.5
+    dress.castShadow = true
+    g.add(dress)
+    // aksen salib merah kecil
+    const cross = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.06, 0.02), std(0xf47474))
+    cross.position.set(0, 0.75, 0.48)
+    g.add(cross)
+    const cross2 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.02), std(0xf47474))
+    cross2.position.set(0, 0.75, 0.48)
+    g.add(cross2)
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.42, 14, 12), std(0xffe9d6, { roughness: 0.6 }))
+    head.name = 'head'
+    head.position.y = 1.25
+    head.castShadow = true
+    g.add(head)
+    // topi perawat
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.45, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.4), std(0xffffff, { roughness: 0.7 }))
+    cap.position.y = 1.32
+    g.add(cap)
+    // rambut pirang kuncir
+    const hair = new THREE.Mesh(
+      new THREE.SphereGeometry(0.44, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.5),
+      std(0xe8c05a, { roughness: 1 }),
+    )
+    hair.position.y = 1.28
+    hair.rotation.x = Math.PI * 0.82
+    g.add(hair)
+    // kaki terlipat ke depan (pose ngesot)
+    for (const s of [-1, 1]) {
+      const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.4, 4, 8), std(0xffe9d6))
+      leg.position.set(s * 0.2, 0.15, 0.35)
+      leg.rotation.x = 1.2
+      g.add(leg)
+    }
+    addFace(head, 0.42, { y: 0.02, spread: 0.18, eyeScale: 1.25, smileScale: 1.3, cheeks: true })
+  } else if (enemyId === 'cindaku') {
+    /* Cindaku Comel — anak harimau jalan 2 kaki. */
+    const orange = std(0xf5a83d, { roughness: 0.85, flatShading: true })
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 0.5, 8, 12), orange)
+    body.name = 'body'
+    body.position.y = 0.6
+    body.castShadow = true
+    g.add(body)
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.44, 14, 12), orange)
+    head.name = 'head'
+    head.position.y = 1.3
+    head.castShadow = true
+    g.add(head)
+    // telinga bundar harimau
+    for (const s of [-1, 1]) {
+      const ear = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), orange)
+      ear.position.set(s * 0.32, 1.62, 0)
+      g.add(ear)
+    }
+    // loreng harimau (bintik gelap)
+    for (let i = 0; i < 7; i++) {
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.14, 0.02), std(0x8a5a20))
+      const ang = (i / 7) * Math.PI * 2
+      stripe.position.set(Math.cos(ang) * 0.36, 0.55 + (i % 3) * 0.22, Math.sin(ang) * 0.34)
+      stripe.lookAt(0, stripe.position.y, 0)
+      g.add(stripe)
+    }
+    // ekor bergaris melingkar
+    const tail = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.5, 4, 8), orange)
+    tail.name = 'strand'
+    tail.position.set(0, 0.6, -0.45)
+    tail.rotation.x = 0.8
+    g.add(tail)
+    // kaki 2 (jalan tegak)
+    for (const s of [-1, 1]) {
+      const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.3, 4, 8), orange)
+      leg.position.set(s * 0.16, 0.18, 0)
+      g.add(leg)
+    }
+    // moncong putih kecil
+    const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), std(0xfff5e8))
+    muzzle.position.set(0, 1.2, 0.36)
+    muzzle.scale.set(1, 0.7, 0.6)
+    g.add(muzzle)
+    addFace(head, 0.44, { y: 0.06, spread: 0.18, eyeScale: 1.2, smileScale: 1.1, cheeks: true })
+  } else if (enemyId === 'gendruwo') {
+    /* Gendruwo Bukit — genderuwo berlumut & berbunga (varian gunung). */
+    const fur = std(0x8a9a5a, { roughness: 1, flatShading: true })
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.78, 14, 12), fur)
+    body.name = 'body'
+    body.position.y = 0.85
+    body.castShadow = true
+    g.add(body)
+    // lumut (bintik hijau tua)
+    for (let i = 0; i < 8; i++) {
+      const ang = (i / 8) * Math.PI * 2
+      const moss = new THREE.Mesh(new THREE.SphereGeometry(0.15, 6, 5), std(0x4d7a3a))
+      moss.position.set(Math.cos(ang) * 0.7, 1.1 + Math.sin(i * 1.7) * 0.2, Math.sin(ang) * 0.7)
+      moss.scale.y = 0.5
+      g.add(moss)
+    }
+    // bunga kecil pink tersebar
+    for (let i = 0; i < 4; i++) {
+      const fl = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 5), std(0xffb3d1))
+      fl.position.set(Math.cos(i * 2.4) * 0.65, 0.75 + (i % 2) * 0.5, Math.sin(i * 2.4) * 0.65)
+      g.add(fl)
+    }
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 10), fur)
+    head.name = 'head'
+    head.position.y = 1.7
+    head.castShadow = true
+    g.add(head)
+    // daun kecil di kepala
+    const sprout = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.3, 6), std(0x63b94e))
+    sprout.position.set(0.15, 2.05, 0)
+    g.add(sprout)
+    for (const s of [-1, 1]) {
+      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.45, 4, 8), fur)
+      arm.name = s < 0 ? 'armL' : 'armR'
+      arm.position.set(s * 0.82, 0.9, 0)
+      arm.rotation.z = s * 0.8
+      g.add(arm)
+    }
+    addFace(head, 0.5, { y: 0.05, spread: 0.2, eyeScale: 1, smileScale: 1.15, cheeks: false })
+  } else if (enemyId === 'wewerawa') {
+    /* Wewe Rawa — bawa payung daun teratai, jalan santai. */
+    const dress = new THREE.Mesh(new THREE.ConeGeometry(0.6, 1.25, 14), std(0x8aa8b8, { roughness: 0.9 }))
+    dress.name = 'body'
+    dress.position.y = 0.62
+    dress.castShadow = true
+    g.add(dress)
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.44, 14, 12), std(0xd8cfc0, { roughness: 0.7 }))
+    head.name = 'head'
+    head.position.y = 1.55
+    head.castShadow = true
+    g.add(head)
+    // rambut ibu-ibu + sanggul
+    const hair = new THREE.Mesh(
+      new THREE.SphereGeometry(0.46, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.5),
+      std(0x5a5a6a, { roughness: 1 }),
+    )
+    hair.position.y = 1.58
+    hair.rotation.x = Math.PI * 0.82
+    g.add(hair)
+    const bun = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), std(0x5a5a6a))
+    bun.position.set(0, 1.95, -0.12)
+    g.add(bun)
+    // PAYUNG DAUN TERATAI PINK besar (ciri khas!)
+    const umbrella = new THREE.Group()
+    umbrella.name = 'umbrella'
+    const canopy = new THREE.Mesh(new THREE.ConeGeometry(0.65, 0.35, 9), std(0xffb3d1, { roughness: 0.7, flatShading: true }))
+    canopy.position.y = 2.15
+    umbrella.add(canopy)
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 6), std(0x8a5a2b))
+    pole.position.set(0.35, 1.8, 0.1)
+    umbrella.add(pole)
+    g.add(umbrella)
+    // kaki lumpur comel
+    for (const s of [-1, 1]) {
+      const foot = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), std(0x6a5648))
+      foot.position.set(s * 0.2, 0.12, 0.1)
+      g.add(foot)
+    }
+    addFace(head, 0.44, { y: 0.02, spread: 0.18, eyeScale: 1.1, smileScale: 0.9 })
+  } else if (enemyId === 'kober') {
+    /* Setan Kober Jahil — merah kecil colong gigi comel, cape merah. */
+    const red = std(0xe85a5a, { roughness: 0.7 })
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.4, 8, 12), red)
+    body.name = 'body'
+    body.position.y = 0.5
+    body.castShadow = true
+    g.add(body)
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.42, 14, 12), red)
+    head.name = 'head'
+    head.position.y = 1.1
+    head.castShadow = true
+    g.add(head)
+    // tanduk kecil lucu
+    for (const s of [-1, 1]) {
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.22, 6), std(0xd9a25f))
+      horn.position.set(s * 0.2, 1.45, 0)
+      horn.rotation.z = s * -0.35
+      g.add(horn)
+    }
+    // cape merah kecil berkibar
+    const cape = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.55, 8, 1, true), std(0xc43c3c, { side: THREE.DoubleSide, roughness: 0.9 }))
+    cape.name = 'cape'
+    cape.position.set(0, 0.85, -0.2)
+    cape.rotation.x = 0.4
+    g.add(cape)
+    // ekor panjang bergaris
+    const tail = new THREE.Mesh(new THREE.CapsuleGeometry(0.045, 0.55, 4, 8), red)
+    tail.name = 'strand'
+    tail.position.set(0, 0.5, -0.35)
+    tail.rotation.x = 0.9
+    g.add(tail)
+    addFace(head, 0.42, { y: 0.05, spread: 0.18, eyeScale: 1.3, smileScale: 1.25, angry: true, cheeks: true })
   } else {
     // banaspati (boss) — bola api gembul lucu
     const fireMat = new THREE.MeshStandardMaterial({
@@ -1155,6 +1888,9 @@ export function getEnemyModel(enemyId: EnemyId): THREE.Group {
     wingR: named.wingR ?? null,
     ribbon: named.ribbon ?? null,
     strands: collectListed(clone, 'strand'),
+    cape: named.cape ?? null,
+    umbrella: named.umbrella ?? null,
+    hat: named.hat ?? null,
   }
   return clone
 }

@@ -12,6 +12,7 @@ import {
 import { useGameStore } from '@/lib/game/store'
 import { getEngine } from '@/lib/game/engine'
 import { CHAR_DEFS, WAVES, ENEMY_DEFS, type EnemyId } from '@/lib/game/data'
+import { levelWaves } from '@/lib/game/levels'
 import { audio } from '@/lib/game/audio'
 
 /* enemy yang muncul pertama kali per wave (untuk banner "setan baru!") */
@@ -20,7 +21,6 @@ const FIRST_APPEARANCE: Partial<Record<EnemyId, number>> = (() => {
   WAVES.forEach((w, i) => w.spawns.forEach((s) => { if (map[s.type] === undefined) map[s.type] = i + 1 }))
   return map
 })()
-
 export function Hud() {
   const screen = useGameStore((s) => s.screen)
   const paused = useGameStore((s) => s.paused)
@@ -38,6 +38,9 @@ export function Hud() {
   const bossHp = useGameStore((s) => s.bossHp)
   const bossMaxHp = useGameStore((s) => s.bossMaxHp)
   const wavePreview = useGameStore((s) => s.wavePreview)
+  const totalWaves = useGameStore((s) => s.totalWaves)
+  const levelId = useGameStore((s) => s.levelId)
+  const waves = levelId > 0 ? levelWaves(levelId) : WAVES
 
   const [banner, setBanner] = useState<{ text: string; kind: 'normal' | 'boss' | 'newEnemy'; enemyEmoji?: string } | null>(null)
   const prevWave = useRef(0)
@@ -48,7 +51,7 @@ export function Hud() {
       return
     }
     prevWave.current = wave
-    const isBoss = WAVES[wave - 1]?.isBoss
+    const isBoss = waves[wave - 1]?.isBoss
     // setan yang baru pertama kali muncul di wave ini?
     const newEnemies = (Object.keys(FIRST_APPEARANCE) as EnemyId[]).filter((t) => FIRST_APPEARANCE[t] === wave)
     const newEnemy = newEnemies[0]
@@ -117,11 +120,11 @@ export function Hud() {
           <div className="flex items-center gap-1.5">
             <span className="text-lg sm:text-xl">🛡️</span>
             <span className="text-sm font-extrabold text-[#4a3b20] sm:text-base">
-              Gelombang {wave}/{WAVES.length}
+              Gelombang {wave}/{totalWaves}
             </span>
           </div>
           <div className="flex items-center gap-1" aria-label="Progres gelombang">
-            {WAVES.map((_, i) => (
+            {waves.map((_, i) => (
               <span
                 key={i}
                 className={`h-1.5 w-1.5 rounded-full transition-all ${
@@ -324,7 +327,7 @@ export function Hud() {
 
       {/* ---------- Countdown / tombol MULAI + preview wave berikutnya ---------- */}
       <AnimatePresence>
-        {!waveActive && wave < WAVES.length && (
+        {!waveActive && wave < totalWaves && (
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}

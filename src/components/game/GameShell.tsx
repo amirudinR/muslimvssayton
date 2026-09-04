@@ -13,6 +13,10 @@ import { TowerPanel } from './TowerPanel'
 import { EndScreens, PhotoControls } from './EndScreens'
 import { DuaButton, BadgeToastLayer } from './DuaButton'
 import { TutorialLayer } from './TutorialLayer'
+import { MobileNav } from './MobileNav'
+import { ShopScreen } from './ShopScreen'
+import { LevelSelectScreen } from './LevelSelectScreen'
+import { SettingsScreen } from './SettingsScreen'
 
 export default function GameShell() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -73,6 +77,10 @@ export default function GameShell() {
       <Hud />
       <TowerPanel />
       <CharacterBar />
+      <MobileNav />
+      <ShopScreen />
+      <LevelSelectScreen />
+      <SettingsScreen />
       <EndScreens />
       <PhotoControls />
       <DuaButton />

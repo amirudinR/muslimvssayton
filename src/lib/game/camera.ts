@@ -3,6 +3,10 @@
  * Mode: menu (auto-orbit), iso (top-down pan/zoom ramah anak),
  * follow (ikuti karakter, bouncy), photo (orbit bebas + screenshot),
  * boss (intro sinematik lucu). Transisi via GSAP ease bouncy.
+ *
+ * P2: drag dgn INERTIA (meluncur saat dilepas), zoom damping
+ * halus (scroll & pinch), panClamp per mode, recenter() untuk
+ * tombol navigasi mobile.
  * ============================================================ */
 
 import * as THREE from 'three'
@@ -18,7 +22,22 @@ interface CamState {
   dist: number
 }
 
-const BOUNDS = { x: 36, z: 24 }
+/** Batas pan — world baru jauh lebih luas, tapi tetap dibatasi. */
+const BOUNDS = { x: 88, z: 62 }
+/** Posisi default (recenter). */
+const HOME = { x: 0, z: 2, dist: 40, elevation: 0.98 }
+
+/** P3: sensitivitas kamera dari settings (0.3..2.2), default 1 */
+export function readDragSens(): number {
+  if (typeof window === 'undefined') return 1
+  const v = Number(window.localStorage.getItem('pm-drag-sens'))
+  return Number.isFinite(v) && v > 0 ? v / 100 : 1
+}
+export function readZoomSens(): number {
+  if (typeof window === 'undefined') return 1
+  const v = Number(window.localStorage.getItem('pm-zoom-sens'))
+  return Number.isFinite(v) && v > 0 ? v / 100 : 1
+}
 
 export class CameraController {
   camera: THREE.PerspectiveCamera
@@ -34,9 +53,19 @@ export class CameraController {
   private tmp = new THREE.Vector3()
   private tween: gsap.core.Tween | null = null
 
+  /* ---------- P2: inertia / momentum ---------- */
+  /** kecepatan pan saat drag (unit/detik) — dipakai untuk momentum */
+  private velX = 0
+  private velZ = 0
+  /** momentum aktif setelah drag dilepas */
+  private momentumT = 0
+  /** zoom halus: target dist yang di-lerp (damping) */
+  private targetDist = 40
+
   constructor(aspect: number) {
-    this.camera = new THREE.PerspectiveCamera(42, aspect, 0.5, 300)
+    this.camera = new THREE.PerspectiveCamera(42, aspect, 0.5, 480)
     this.applyState(1)
+    this.targetDist = this.state.dist
   }
 
   resize(aspect: number) {
@@ -77,6 +106,7 @@ export class CameraController {
         duration: 1.0, ease: 'back.out(1.6)',
       })
     }
+    if (instant) this.applyState(1)
   }
 
   setFollowTarget(pos: THREE.Vector3 | null) {
@@ -106,6 +136,7 @@ export class CameraController {
     this.lastX = x
     this.lastY = y
     this.tween?.kill()
+    this.stopMomentum()
   }
 
   onPointerMove(x: number, y: number): boolean {
@@ -122,17 +153,20 @@ export class CameraController {
       return true
     }
     if (this.mode === 'iso' || this.mode === 'menu') {
-      // pan di bidang tanah (kecepatan skala dist)
-      const panSpeed = this.state.dist * 0.0016
+      // pan di bidang tanah (kecepatan skala dist × sensitivitas)
+      const panSpeed = this.state.dist * 0.0016 * readDragSens()
       const cos = Math.cos(this.state.azimuth)
       const sin = Math.sin(this.state.azimuth)
       // geser tegak lurus arah pandang
       const mx = -dx * panSpeed
       const mz = dy * panSpeed
-      this.state.tx += mx * cos - mz * sin
-      this.state.tz += mx * sin + mz * cos
-      this.state.tx = THREE.MathUtils.clamp(this.state.tx, -BOUNDS.x, BOUNDS.x)
-      this.state.tz = THREE.MathUtils.clamp(this.state.tz, -BOUNDS.z, BOUNDS.z)
+      const wx = mx * cos - mz * sin
+      const wz = mx * sin + mz * cos
+      this.panBy(wx, wz)
+      // catat kecepatan untuk momentum (dengan smoothing eksponensial)
+      this.velX = THREE.MathUtils.lerp(this.velX, wx * 60, 0.28)
+      this.velZ = THREE.MathUtils.lerp(this.velZ, wz * 60, 0.28)
+      this.momentumT = 0.16 // jendela "baru saja drag"
       return true
     }
     return false
@@ -140,23 +174,77 @@ export class CameraController {
 
   onPointerUp() {
     this.dragBtn = -1
+    // momentum hanya kalau kecepatan cukup terasa
+    if (Math.hypot(this.velX, this.velZ) < 4) {
+      this.stopMomentum()
+    } else {
+      this.momentumT = 0.85 // durasi luncuran (detik)
+    }
+  }
+
+  /** Batalkan momentum (dipakai saat pointer baru menyentuh). */
+  stopMomentum() {
+    this.velX = 0
+    this.velZ = 0
+    this.momentumT = 0
+  }
+
+  /** Geser target pan (dengan clamp BOUNDS). */
+  panBy(wx: number, wz: number) {
+    this.state.tx = THREE.MathUtils.clamp(this.state.tx + wx, -BOUNDS.x, BOUNDS.x)
+    this.state.tz = THREE.MathUtils.clamp(this.state.tz + wz, -BOUNDS.z, BOUNDS.z)
+  }
+
+  /** Zoom dengan damping halus — target di-lerp di update(). */
+  zoomBy(delta: number): boolean {
+    if (this.mode === 'boss') return false
+    const min = this.mode === 'photo' ? 10 : this.mode === 'follow' ? 8 : 16
+    const max = this.mode === 'photo' ? 80 : this.mode === 'follow' ? 20 : 58
+    this.targetDist = THREE.MathUtils.clamp(this.targetDist + delta * readZoomSens(), min, max)
+    return true
+  }
+
+  /** Pinch-to-zoom: rasio jarak dua jari → delta dist. */
+  applyPinch(scaleRatio: number) {
+    if (this.mode === 'boss') return
+    // scaleRatio > 1 → jari membuka → zoom in (dist mengecil)
+    const delta = (1 - scaleRatio) * this.state.dist * 0.9
+    const min = this.mode === 'photo' ? 10 : this.mode === 'follow' ? 8 : 16
+    const max = this.mode === 'photo' ? 80 : this.mode === 'follow' ? 20 : 58
+    this.targetDist = THREE.MathUtils.clamp(this.targetDist + delta, min, max)
   }
 
   onWheel(delta: number): boolean {
-    if (this.mode === 'boss') return false
-    const min = this.mode === 'photo' ? 10 : this.mode === 'follow' ? 8 : 18
-    const max = this.mode === 'photo' ? 70 : this.mode === 'follow' ? 20 : 55
-    this.state.dist = THREE.MathUtils.clamp(this.state.dist + delta * 0.02, min, max)
-    return true
+    return this.zoomBy(delta * 0.5)
   }
 
   rotateBy(delta: number) {
     this.tween?.kill()
+    this.stopMomentum()
     gsap.to(this.state, {
       azimuth: this.state.azimuth + delta,
       duration: 0.7,
       ease: 'back.out(1.8)',
     })
+  }
+
+  /** P2: kembali ke posisi default papan (tombol Recenter mobile). */
+  recenter() {
+    this.tween?.kill()
+    this.stopMomentum()
+    this.followPos = null
+    if (this.mode === 'iso') {
+      this.tween = gsap.to(this.state, {
+        tx: HOME.x, tz: HOME.z, azimuth: 0, elevation: HOME.elevation, dist: HOME.dist,
+        duration: 0.85, ease: 'back.out(1.4)',
+      })
+    } else {
+      this.tween = gsap.to(this.state, {
+        tx: 0, tz: 0, azimuth: 0,
+        duration: 0.85, ease: 'back.out(1.4)',
+      })
+    }
+    this.targetDist = this.mode === 'iso' ? HOME.dist : this.targetDist
   }
 
   /* ------------------------------ update ------------------------------ */
@@ -172,6 +260,23 @@ export class CameraController {
       this.state.tx += (this.followPos.x - this.state.tx) * Math.min(1, dt * 3)
       this.state.tz += (this.followPos.z - this.state.tz) * Math.min(1, dt * 3)
       this.bobT += dt
+    }
+
+    /* ---- P2: momentum pan (drag dilepas → meluncur) ---- */
+    if (this.momentumT > 0 && this.dragBtn < 0) {
+      this.momentumT -= dt
+      const damp = Math.max(0, this.momentumT / 0.85) // pelan berhenti
+      this.panBy(this.velX * damp * dt, this.velZ * damp * dt)
+      this.velX *= 1 - Math.min(1, dt * 0.9)
+      this.velZ *= 1 - Math.min(1, dt * 0.9)
+      if (this.momentumT <= 0) this.stopMomentum()
+    }
+
+    /* ---- P2: zoom damping halus ---- */
+    if (this.dragBtn < 0 && !this.tween?.isActive()) {
+      this.state.dist = THREE.MathUtils.lerp(this.state.dist, this.targetDist, Math.min(1, dt * 7))
+    } else {
+      this.targetDist = this.state.dist
     }
 
     this.applyState(dt)

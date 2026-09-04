@@ -1,16 +1,21 @@
 'use client'
 
-/* Menu utama: judul besar, tombol MULAI, pilihan kualitas, suara,
-   rekor tersimpan, lencana, papan rekor, dan footer sticky kredit. */
+/* P3: MAIN MENU PROFESIONAL — logo + judul dengan scene 3D masjid hidup
+   (background engine menu orbit), profil pemain (avatar + bintang total),
+   tombol besar: Main (level select), Toko, Tantangan Harian, Pengaturan,
+   plus lencana & papan rekor. */
 
 import { useState } from 'react'
-import { motion } from 'framer-motion'
-import { Play, Volume2, VolumeX, Music, Music2, Sparkles, Star, Trophy, Medal, Users, GraduationCap } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Play, ShoppingBag, Map, Settings as SettingsIcon, Star, Trophy, Medal,
+  GraduationCap, ChevronRight,
+} from 'lucide-react'
 import { useGameStore } from '@/lib/game/store'
 import { getEngine } from '@/lib/game/engine'
 import { audio } from '@/lib/game/audio'
-import { getRecords, BADGES } from '@/lib/game/achievements'
-import type { Quality } from '@/lib/game/data'
+import { getRecords, BADGES, getLevelProgress, getStarCurrency } from '@/lib/game/achievements'
+import { LEVELS, MAX_STARS } from '@/lib/game/levels'
 import {
   BadgesModal,
   LeaderboardModal,
@@ -19,35 +24,23 @@ import {
 } from './MenuModals'
 import { DailyChallengeCard } from './DailyChallenge'
 
-const HOW_TO = [
-  { emoji: '🤲', text: 'Tarik anak sholeh ke lingkaran hijau' },
-  { emoji: '👻', text: 'Halau setan jahil yang datang' },
-  { emoji: '✨', text: 'Tekan DOA BERSAMA saat penuh!' },
-  { emoji: '🕌', text: 'Jaga masjid sampai 10 gelombang!' },
-]
-
-const QUALITY_OPTS: { id: Quality; label: string; hint: string }[] = [
-  { id: 'low', label: 'Ringan', hint: 'HP/tablet' },
-  { id: 'medium', label: 'Sedang', hint: 'Laptop' },
-  { id: 'high', label: 'Jempolan', hint: 'Keren full!' },
-]
+const AVATARS = ['🤲', '📖', '💝', '💧', '💡', '📢']
 
 export function MainMenu() {
   const screen = useGameStore((s) => s.screen)
-  const quality = useGameStore((s) => s.quality)
-  const soundOn = useGameStore((s) => s.soundOn)
-  const musicOn = useGameStore((s) => s.musicOn)
   const [showBadges, setShowBadges] = useState(false)
   const [showBoard, setShowBoard] = useState(false)
-  // rekor dibaca saat menu aktif (localStorage — hanya client)
+  // data dibaca saat menu aktif (localStorage — hanya client)
   const [records] = useState(() => (typeof window !== 'undefined' ? getRecords() : null))
+  const [levelProg] = useState(() => (typeof window !== 'undefined' ? getLevelProgress() : null))
+  const [starCur] = useState(() => (typeof window !== 'undefined' ? getStarCurrency() : 0))
 
   if (screen !== 'menu') return null
 
-  const start = () => {
+  const go = (s: 'levels' | 'shop' | 'settings') => {
     audio.ensure()
-    audio.tada()
-    getEngine()?.startGame()
+    audio.chime()
+    useGameStore.getState().setScreen(s)
   }
 
   const replayTutorial = () => {
@@ -56,6 +49,9 @@ export function MainMenu() {
     getEngine()?.startGame({ forceTutorial: true })
   }
 
+  const nextLevel = Math.min((levelProg?.bestLevelDone ?? 0) + 1, LEVELS.length)
+  const nextLvlDef = LEVELS[nextLevel - 1]
+
   return (
     <div className="pointer-events-none fixed inset-0 z-40 flex flex-col">
       {/* hiasan melayang lucu di belakang panel */}
@@ -63,7 +59,7 @@ export function MainMenu() {
         aria-hidden
         animate={{ y: [0, -14, 0], rotate: [0, 12, 0] }}
         transition={{ repeat: Infinity, duration: 5, ease: 'easeInOut' }}
-        className="pointer-events-none absolute left-[6%] top-[16%] text-5xl opacity-70 drop-shadow-lg"
+        className="pointer-events-none absolute left-[5%] top-[14%] text-5xl opacity-70 drop-shadow-lg"
       >
         🌟
       </motion.span>
@@ -71,7 +67,7 @@ export function MainMenu() {
         aria-hidden
         animate={{ y: [0, 12, 0], rotate: [0, -10, 0] }}
         transition={{ repeat: Infinity, duration: 6.5, ease: 'easeInOut' }}
-        className="pointer-events-none absolute right-[7%] top-[24%] text-5xl opacity-70 drop-shadow-lg"
+        className="pointer-events-none absolute right-[6%] top-[22%] text-5xl opacity-70 drop-shadow-lg"
       >
         🎈
       </motion.span>
@@ -79,114 +75,133 @@ export function MainMenu() {
         aria-hidden
         animate={{ y: [0, -10, 0] }}
         transition={{ repeat: Infinity, duration: 4.5, ease: 'easeInOut' }}
-        className="pointer-events-none absolute right-[12%] bottom-[30%] text-4xl opacity-60 drop-shadow-lg"
+        className="pointer-events-none absolute right-[12%] bottom-[32%] text-4xl opacity-60 drop-shadow-lg"
       >
         🦋
       </motion.span>
 
-      {/* Area utama — bisa scroll di layar pendek */}
-      <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto py-4">
-        <div className="flex w-full max-w-lg flex-col items-center gap-3">
-        {/* Kartu judul */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.7, y: 40 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 200, damping: 18, delay: 0.15 }}
-          className="panel-cute pointer-events-auto mx-4 flex max-w-lg flex-col items-center gap-2.5 px-6 py-5 text-center sm:px-8 sm:py-6"
-        >
-        <motion.div
-          animate={{ y: [0, -8, 0], rotate: [0, 2, 0] }}
-          transition={{ repeat: Infinity, duration: 3.5, ease: 'easeInOut' }}
-          className="text-6xl drop-shadow-md sm:text-7xl"
-        >
-          🕌
-        </motion.div>
-        <h1 className="title-shimmer text-3xl font-black leading-tight tracking-wide drop-shadow-sm sm:text-4xl">
-          PENJAGA MASJID
-        </h1>
-        <p className="-mt-2 rounded-full bg-amber-100 px-4 py-1 text-sm font-extrabold text-amber-700 shadow-inner sm:text-base">
-          Anak Sholeh vs Setan Jahil 👻
-        </p>
-        <p className="rounded-xl bg-[#fff3d6]/90 px-3 py-1.5 text-xs font-bold text-[#5a4520] [text-shadow:0_1px_0_rgba(255,255,255,0.7)] sm:text-sm">
-          Game 3D seru buat anak sholeh — halau setan jahil dengan cahaya,
-          dzikir, sedekah, dan wangi wudhu!
-        </p>
-
-        {/* Cara main — 2 kolom agar hemat tinggi */}
-        <div className="mt-0.5 grid w-full grid-cols-1 gap-1.5 sm:grid-cols-2">
-          {HOW_TO.map((h, i) => (
-            <motion.div
-              key={h.text}
-              initial={{ opacity: 0, x: -24 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.5 + i * 0.18 }}
-              className="flex items-center gap-2.5 rounded-2xl border-2 border-emerald-200 bg-emerald-50/95 px-3.5 py-1.5 text-left shadow-sm"
-            >
-              <span className="text-xl sm:text-2xl">{h.emoji}</span>
-              <span className="text-xs font-bold text-[#3d5a3a] sm:text-sm">{h.text}</span>
-            </motion.div>
-          ))}
-        </div>
-
-        {/* Rekor tersimpan */}
-        {records && records.gamesPlayed > 0 && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 1.2 }}
-            className="flex w-full flex-col items-center gap-1 rounded-2xl border-2 border-amber-200 bg-gradient-to-b from-[#fffbe8] to-[#fff3c9] px-3 py-1.5 shadow-sm"
-          >
-            <span className="text-[10px] font-black uppercase tracking-widest text-amber-600">
-              Rekor Kamu
+      {/* ---------- PROFIL PEMAIN (pojok atas) ---------- */}
+      <motion.div
+        initial={{ opacity: 0, y: -24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.25 }}
+        className="pointer-events-auto mx-auto flex w-full max-w-lg items-center justify-between gap-2 px-4 pt-3"
+      >
+        <div className="profile-chip">
+          <span className="profile-avatar">{AVATARS[(records?.gamesPlayed ?? 0) % AVATARS.length]}</span>
+          <div className="flex min-w-0 flex-col">
+            <span className="truncate text-xs font-black text-[#4a3b20]">
+              {records?.playerName || 'Penjaga Masjid'}
             </span>
-            <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
-              <span className="record-pill !px-2 !py-0.5 text-[11px]">
-                {[1, 2, 3].map((i) => (
-                  <span key={i} className={i <= records.bestStars ? '' : 'opacity-25 grayscale'}>
-                    ⭐
-                  </span>
-                ))}
-                <span className="ml-1">terbaik</span>
-              </span>
-              <span className="record-pill !px-2 !py-0.5 text-[11px]">
-                <Trophy className="h-3 w-3 text-amber-500" /> {records.wins} menang
-              </span>
-              <span className="record-pill !px-2 !py-0.5 text-[11px]">
-                <Users className="h-3 w-3 text-emerald-500" /> {records.gamesPlayed} main
-              </span>
-              <span className="record-pill !px-2 !py-0.5 text-[11px]">
-                <Medal className="h-3 w-3 text-rose-400" /> {records.achievements.length}/{BADGES.length} lencana
-              </span>
-            </div>
-          </motion.div>
-        )}
-
-        <motion.button
-          whileHover={{ scale: 1.06, rotate: -1 }}
-          whileTap={{ scale: 0.94 }}
-          className="btn-cute-lg mt-1.5"
-          onClick={start}
-        >
-          <Play className="h-6 w-6 fill-current sm:h-7 sm:w-7" />
-          MULAI BERMAIN!
-        </motion.button>
-
-        <div className="mt-0.5 flex items-center gap-1 text-[11px] font-bold text-amber-600 sm:text-xs">
-          <Star className="h-3 w-3 fill-current" /> Kumpulkan pahala · upgrade karakter · kalahkan BOSS
-          <Star className="h-3 w-3 fill-current" />
+            <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600">
+              <Star className="h-3 w-3 fill-amber-400 text-amber-500" />
+              {levelProg ? `${levelProg.totalStars}/${MAX_STARS} bintang` : '0 bintang'}
+            </span>
+          </div>
+        </div>
+        {/* currency toko */}
+        <div className="profile-chip !gap-1.5">
+          <Star className="h-4 w-4 fill-amber-400 text-amber-500" />
+          <span className="text-sm font-black text-amber-600">{starCur}</span>
         </div>
       </motion.div>
+
+      {/* ---------- Area utama ---------- */}
+      <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto py-2">
+        <div className="flex w-full max-w-lg flex-col items-center gap-2.5">
+          {/* Kartu judul */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.7, y: 40 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ type: 'spring', stiffness: 200, damping: 18, delay: 0.15 }}
+            className="panel-cute pointer-events-auto mx-4 flex max-w-lg flex-col items-center gap-2 px-6 py-4 text-center sm:px-8 sm:py-5"
+          >
+            <motion.div
+              animate={{ y: [0, -8, 0], rotate: [0, 2, 0] }}
+              transition={{ repeat: Infinity, duration: 3.5, ease: 'easeInOut' }}
+              className="text-5xl drop-shadow-md sm:text-6xl"
+            >
+              🕌
+            </motion.div>
+            <h1 className="title-shimmer text-3xl font-black leading-tight tracking-wide drop-shadow-sm sm:text-4xl">
+              PENJAGA MASJID
+            </h1>
+            <p className="-mt-1.5 rounded-full bg-amber-100 px-4 py-1 text-xs font-extrabold text-amber-700 shadow-inner sm:text-sm">
+              Anak Sholeh vs Setan Jahil 👻
+            </p>
+
+            {/* Rekor ringkas */}
+            {records && records.gamesPlayed > 0 && (
+              <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+                <span className="record-pill !px-2 !py-0.5 text-[11px]">
+                  <Trophy className="h-3 w-3 text-amber-500" /> {records.wins} menang
+                </span>
+                <span className="record-pill !px-2 !py-0.5 text-[11px]">
+                  <Medal className="h-3 w-3 text-rose-400" /> {records.achievements.length}/{BADGES.length} lencana
+                </span>
+                <span className="record-pill !px-2 !py-0.5 text-[11px]">
+                  🗺️ Lv.{levelProg?.bestLevelDone ?? 0}/{LEVELS.length}
+                </span>
+              </div>
+            )}
+          </motion.div>
+
+          {/* ---------- Tombol besar MENU UTAMA ---------- */}
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35 }}
+            className="pointer-events-auto mx-4 flex w-full max-w-lg flex-col gap-2"
+          >
+            {/* MAIN — lanjut level berikutnya */}
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
+              className="btn-cute-lg relative w-full !py-3.5"
+              onClick={() => {
+                audio.ensure()
+                audio.tada()
+                useGameStore.getState().setScreen('levels')
+              }}
+            >
+              <Play className="h-6 w-6 fill-current" />
+              MAIN!
+              <span className="ml-2 hidden rounded-full bg-white/40 px-2.5 py-0.5 text-[11px] font-black text-amber-800 sm:inline">
+                {nextLvlDef ? `Lanjut: Lv.${nextLevel} ${nextLvlDef.emoji}` : 'Semua level selesai! 🏆'}
+              </span>
+              <ChevronRight className="absolute right-4 h-5 w-5 opacity-70" />
+            </motion.button>
+
+            {/* Baris menu sekunder */}
+            <div className="grid grid-cols-3 gap-2">
+              <motion.button whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.95 }} className="menu-tile" onClick={() => go('shop')}>
+                <ShoppingBag className="h-5 w-5 text-orange-500" />
+                <span className="text-xs font-black">TOKO</span>
+                <span className="text-[9px] font-bold opacity-70">100 karakter!</span>
+              </motion.button>
+              <motion.button whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.95 }} className="menu-tile" onClick={() => go('levels')}>
+                <Map className="h-5 w-5 text-emerald-600" />
+                <span className="text-xs font-black">PETA</span>
+                <span className="text-[9px] font-bold opacity-70">8 level seru</span>
+              </motion.button>
+              <motion.button whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.95 }} className="menu-tile" onClick={() => go('settings')}>
+                <SettingsIcon className="h-5 w-5 text-sky-600" />
+                <span className="text-xs font-black">ATURAN</span>
+                <span className="text-[9px] font-bold opacity-70">Suara & kualitas</span>
+              </motion.button>
+            </div>
+          </motion.div>
 
           {/* Kartu Tantangan Hari Ini */}
           <DailyChallengeCard />
         </div>
       </div>
 
-      {/* Kontrol bawah — selalu terlihat (toolbar tetap) */}
+      {/* ---------- Kontrol bawah ---------- */}
       <motion.div
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.7 }}
+        transition={{ delay: 0.55 }}
         className="pointer-events-auto mx-auto mb-2 flex w-full max-w-lg shrink-0 flex-col items-center gap-1.5 px-4"
       >
         <div className="flex flex-wrap items-center justify-center gap-2">
@@ -199,54 +214,15 @@ export function MainMenu() {
               title="Ulangi tutorial interaktif"
             >
               <GraduationCap className="h-4 w-4" />
-              Ulangi Tutorial
+              Tutorial
             </button>
           )}
-        </div>
-
-        <div className="panel-cute flex items-center gap-2 px-3 py-1.5">
-          <Sparkles className="h-4 w-4 text-emerald-600" />
-          <span className="text-xs font-black text-[#4a3b20]">KUALITAS:</span>
-          {QUALITY_OPTS.map((q) => (
-            <button
-              key={q.id}
-              className={`btn-quality ${quality === q.id ? 'btn-quality-active' : ''}`}
-              title={q.hint}
-              onClick={() => getEngine()?.applyQuality(q.id)}
-            >
-              {q.label}
-            </button>
-          ))}
-          <div className="mx-0.5 h-5 w-0.5 rounded bg-amber-200" />
-          <button
-            className="btn-icon !h-9 !w-9"
-            aria-label="Efek suara"
-            onClick={() => {
-              const st = useGameStore.getState()
-              st.setSoundOn(!st.soundOn)
-              audio.setSound(!st.soundOn)
-              if (!st.soundOn) audio.chime()
-            }}
-          >
-            {soundOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-          </button>
-          <button
-            className="btn-icon !h-9 !w-9"
-            aria-label="Musik"
-            onClick={() => {
-              const st = useGameStore.getState()
-              st.setMusicOn(!st.musicOn)
-              audio.setMusic(!st.musicOn)
-            }}
-          >
-            {musicOn ? <Music className="h-4 w-4" /> : <Music2 className="h-4 w-4" />}
-          </button>
         </div>
 
         {/* Footer sticky bawah */}
         <footer className="pointer-events-none w-full bg-gradient-to-t from-emerald-900/40 to-transparent py-1 text-center">
           <p className="text-[11px] font-bold text-white/85 drop-shadow sm:text-xs">
-            🌟 Dibuat dengan cinta untuk anak-anak sholeh — bermainlah dengan bijak, jangan lupa sholat ya! 🌟
+            🌟 Dibuat dengan cinta untuk anak-anak sholeh — jangan lupa sholat ya! 🌟
           </p>
         </footer>
       </motion.div>

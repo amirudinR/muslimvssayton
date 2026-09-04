@@ -30,16 +30,19 @@ import {
   dailyKey,
   type CharId,
   type EnemyId,
+  type WaveDef,
   type Quality,
   type DailyModifier,
 } from './data'
 import { createGround, createMosque, createSlotPad, createTree, createFlowerField, createCloud, createBird, createButterfly, createRangeRing, getCharacterModel } from './models'
+import { buildWorldExpansion, createMegaGround, createHighClouds, type WorldExpansion } from './world'
 import { ParticleSystem } from './particles'
 import { EntityManager, type Enemy, type Tower } from './entities'
 import { CameraController } from './camera'
 import { audio } from './audio'
 import { gameStore, type CameraMode } from './store'
 import { computeStars } from './persist'
+import { getLevel, levelWaves } from './levels'
 import {
   checkBadges,
   recordSessionEnd,
@@ -48,6 +51,8 @@ import {
   bumpLossStreak,
   clearLossStreak,
   recordDailyWin,
+  recordLevelResult,
+  grantRunReward,
 } from './achievements'
 
 interface SlotObj {
@@ -97,6 +102,8 @@ export class GameEngine {
   private wanderers: Wanderer[] = []
   private critters: AmbientCritter[] = []
   private trees: THREE.Group[] = []
+  /** P1: dunia luas (bukit, hutan, sungai, gunung parallax) */
+  private worldExp: WorldExpansion | null = null
 
   private raycaster = new THREE.Raycaster()
   private pointerNdc = new THREE.Vector2()
@@ -131,6 +138,11 @@ export class GameEngine {
   /** kunci tanggal tantangan harian yang sedang berjalan */
   private dailyKeyRun: string | null = null
 
+  /* P3: wave aktif per level (level select) */
+  private levelWaves: WaveDef[] = WAVES
+  /** P4: bintang toko yang didapat dari run terakhir (untuk layar menang) */
+  runStarGain = 0
+
   private lastFrameTime = performance.now()
 
   /* =============================== INIT =============================== */
@@ -152,7 +164,7 @@ export class GameEngine {
 
     this.scene = new THREE.Scene()
     this.scene.background = new THREE.Color(0x8fd4ff)
-    this.scene.fog = new THREE.Fog(0xbfe8ff, 90, 170)
+    this.scene.fog = new THREE.Fog(0xbfe8ff, 110, 230)
 
     // environment reflections untuk kubah emas berkilau
     const pmrem = new THREE.PMREMGenerator(this.renderer)
@@ -205,9 +217,20 @@ export class GameEngine {
   }
 
   private setupWorld() {
-    // tanah + jalur
+    /* ---- P1: rumput mega-luas (230×150) — tidak ada void abu-abu lagi ---- */
+    const mega = createMegaGround()
+    this.scene.add(mega)
+
+    // arena inti (tekstur lama dengan halaman masjid + jalur)
     const ground = createGround()
     this.scene.add(ground)
+
+    // P1: ekspansi — perbukitan, hutan, taman, sungai, kolam, desa, jembatan, gunung parallax
+    this.worldExp = buildWorldExpansion()
+    this.scene.add(this.worldExp.group)
+
+    // P1: awan tinggi jauh (kesan dunia luas)
+    this.scene.add(createHighClouds())
 
     // masjid
     this.mosque = createMosque()
@@ -332,6 +355,17 @@ export class GameEngine {
   private isDown = false
   private moved = 0
 
+  /* ---------- P2: pinch-to-zoom ---------- */
+  private activePointers = new Map<number, { x: number; y: number }>()
+  private pinchDist = 0
+  private pinchMode = false
+
+  private calcPinchDist(): number {
+    const pts = Array.from(this.activePointers.values())
+    if (pts.length < 2) return 0
+    return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)
+  }
+
   private bindEvents() {
     const c = this.canvas
     c.addEventListener('pointerdown', this.onPointerDown)
@@ -340,6 +374,7 @@ export class GameEngine {
     c.addEventListener('wheel', this.onWheel, { passive: false })
     c.addEventListener('contextmenu', this.onContextMenu)
     window.addEventListener('resize', this.resize)
+    window.addEventListener('pointercancel', this.onPointerUp)
   }
 
   private onContextMenu = (e: Event) => e.preventDefault()
@@ -349,7 +384,18 @@ export class GameEngine {
       this.cancelPlacing()
       return
     }
+    // P2: catat pointer untuk pinch tracking
+    this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (this.activePointers.size >= 2) {
+      // dua jari turun → mulai pinch, batalkan drag kamera
+      this.pinchMode = true
+      this.isDown = false
+      this.pinchDist = this.calcPinchDist()
+      this.cameraCtrl.stopMomentum()
+      return
+    }
     this.isDown = true
+    this.pinchMode = false
     this.moved = 0
     this.downPos = { x: e.clientX, y: e.clientY }
     const st = gameStore.get()
@@ -370,21 +416,27 @@ export class GameEngine {
   }
 
   private onPointerMove = (e: PointerEvent) => {
+    // P2: perbarui posisi pointer aktif
+    if (this.activePointers.has(e.pointerId)) {
+      this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    }
+    // P2: pinch-to-zoom (dua jari aktif)
+    if (this.pinchMode && this.activePointers.size >= 2) {
+      const d = this.calcPinchDist()
+      if (this.pinchDist > 0 && d > 0) {
+        this.cameraCtrl.applyPinch(d / this.pinchDist)
+      }
+      this.pinchDist = d
+      return
+    }
     if (this.isDown) {
       this.moved += Math.abs(e.clientX - this.downPos.x) + Math.abs(e.clientY - this.downPos.y)
     }
     const st = gameStore.get()
     // hover slot saat drag / memilih
-    if (st.selectedCharId && st.cameraMode === 'iso') {
+    if (st.selectedCharId && st.cameraMode === 'iso' && !this.pinchMode) {
       this.updatePointerNdc(e)
       this.updateHoverSlot(st.selectedCharId)
-    }
-    if (st.cameraMode === 'iso' && !st.selectedCharId) {
-      // klik tower (tanpa drag)
-      if (!this.isDown) {
-        this.updatePointerNdc(e)
-        // raycast tower untuk hover kursor? (opsional — skip untuk perf)
-      }
     }
     if (this.isDown) {
       this.cameraCtrl.onPointerMove(e.clientX, e.clientY)
@@ -393,10 +445,17 @@ export class GameEngine {
 
   private onPointerUp = (e: PointerEvent) => {
     const st = gameStore.get()
-    const wasClick = this.isDown && this.moved < 8
+    // P2: lepas pointer dari pinch tracking
+    this.activePointers.delete(e.pointerId)
+    if (this.activePointers.size < 2) {
+      if (this.pinchMode && this.activePointers.size === 0) this.pinchMode = false
+      this.pinchDist = 0
+    }
+    const wasClick = this.isDown && this.moved < 8 && !this.pinchMode
     this.isDown = false
     this.cameraCtrl.onPointerUp()
 
+    if (this.pinchMode) return
     if (st.cameraMode !== 'iso') return
 
     // drag-drop: lepas di atas slot
@@ -660,6 +719,19 @@ export class GameEngine {
     this.cameraCtrl.rotateBy(dir * Math.PI / 4)
   }
 
+  /* ---- P2: navigasi kamera dari tombol UI (mobile D-pad) ---- */
+  panCamera(dx: number, dz: number) {
+    this.cameraCtrl.panBy(dx, dz)
+  }
+
+  zoomCamera(delta: number) {
+    this.cameraCtrl.zoomBy(delta)
+  }
+
+  recenterCamera() {
+    this.cameraCtrl.recenter()
+  }
+
   screenshot() {
     try {
       if (this.usePost && this.composer) this.composer.render()
@@ -684,7 +756,7 @@ export class GameEngine {
 
   /* =============================== GAME FLOW =============================== */
 
-  startGame(opts?: { daily?: boolean; forceTutorial?: boolean }) {
+  startGame(opts?: { daily?: boolean; forceTutorial?: boolean; levelId?: number }) {
     audio.ensure()
     audio.setSound(gameStore.get().soundOn)
     audio.setMusic(gameStore.get().musicOn)
@@ -692,11 +764,15 @@ export class GameEngine {
     this.clearDuaOverlay()
     gameStore.get().resetForNewGame()
 
+    /* ---- P3: Level Select — konfigurasi level aktif ---- */
+    const level = opts?.levelId ? getLevel(opts.levelId) : undefined
+    this.levelWaves = level ? levelWaves(level.id) : WAVES
+
     /* ---- Tantangan Harian: terapkan modifier tanggal hari ini ---- */
     resetRunMods()
     this.dailyKeyRun = null
-    let maxHp = GAME_CONST.mosqueMaxHp
-    let startPahala = GAME_CONST.startPahala
+    let maxHp = level ? level.mosqueHp : GAME_CONST.mosqueMaxHp
+    let startPahala = level ? level.startPahala : GAME_CONST.startPahala
     let dailyMod: DailyModifier | null = null
     if (opts?.daily) {
       const key = dailyKey()
@@ -715,6 +791,8 @@ export class GameEngine {
       dailyMode: !!opts?.daily,
       dailyMod,
       tutorialStep: 0,
+      levelId: level?.id ?? 0,
+      totalWaves: this.levelWaves.length,
     }))
     this.manager.reset()
     this.slots.forEach((s) => (s.occupied = false))
@@ -764,7 +842,10 @@ export class GameEngine {
       coachTips: null,
       dailyMode: false,
       dailyMod: null,
+      levelId: 0,
+      totalWaves: 10,
     }))
+    this.levelWaves = WAVES
     this.manager.reset()
     this.slots.forEach((s) => (s.occupied = false))
     this.setCameraMode('menu')
@@ -780,7 +861,7 @@ export class GameEngine {
   private beginWave() {
     const st = gameStore.get()
     const waveNum = st.wave + 1
-    const waveDef = WAVES[waveNum - 1]
+    const waveDef = this.levelWaves[waveNum - 1]
     if (!waveDef) return
 
     gameStore.set((s) => ({ ...s, wave: waveNum, waveActive: true, nextWaveIn: 0 }))
@@ -824,7 +905,7 @@ export class GameEngine {
   }
 
   private updateWavePreview(waveNum: number) {
-    const waveDef = WAVES[waveNum - 1]
+    const waveDef = this.levelWaves[waveNum - 1]
     if (!waveDef) {
       gameStore.set((s) => ({ ...s, wavePreview: [] }))
       return
@@ -862,7 +943,7 @@ export class GameEngine {
       gsap.delayedCall(1.6, () => gameStore.get().showToast(tip, '💡', 'info'))
     }
 
-    if (waveNum >= WAVES.length) {
+    if (waveNum >= this.levelWaves.length) {
       this.onVictory()
       return
     }
@@ -884,6 +965,12 @@ export class GameEngine {
     checkBadges({ event: 'victory', stars, pahala: st.stats.starsEarned })
     recordSessionEnd(st.stats.starsEarned)
     clearLossStreak()
+    /* ---- P3: Level Select — catat rating & buka level berikutnya ---- */
+    if (st.levelId > 0) {
+      recordLevelResult(st.levelId, stars)
+    }
+    /* ---- P4: hadiah bintang toko dari pahala run (20 pahala = 1 ⭐) ---- */
+    this.runStarGain = grantRunReward(st.stats.starsEarned)
     /* ---- Tantangan Harian menang → catat streak ---- */
     if (st.dailyMode && this.dailyKeyRun) {
       const streak = recordDailyWin(this.dailyKeyRun)
@@ -1155,6 +1242,9 @@ export class GameEngine {
 
     /* ---- ambient ceria (selalu jalan) ---- */
     this.updateAmbient(dt, st.screen)
+
+    /* ---- P1: animasi air dunia luas ---- */
+    this.worldExp?.update(this.elapsed)
 
     /* ---- partikel & kamera ---- */
     this.particles.update(dt)

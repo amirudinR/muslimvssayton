@@ -33,6 +33,14 @@ export interface SaveData {
   dailyStreak: number
   /** tanggal (YYYY-MM-DD) terakhir menang tantangan harian */
   lastDailyWin: string | null
+  /** P3: rating bintang terbaik per level (index = levelId-1, nilai 0..3) */
+  levelStars: number[]
+  /** P3: level tertinggi yang sudah selesai (0 = belum ada) */
+  bestLevelDone: number
+  /** P4: karakter yang dibeli di toko (id generatif) */
+  ownedChars: string[]
+  /** P4: bintang currency untuk belanja di toko */
+  starCurrency: number
 }
 
 const KEY = 'penjaga-masjid-save-v1'
@@ -52,6 +60,10 @@ const DEFAULT_SAVE: SaveData = {
   lossStreak: 0,
   dailyStreak: 0,
   lastDailyWin: null,
+  levelStars: [],
+  bestLevelDone: 0,
+  ownedChars: [],
+  starCurrency: 0,
 }
 
 export function loadSave(): SaveData {
@@ -68,6 +80,10 @@ export function loadSave(): SaveData {
       lossStreak: typeof parsed.lossStreak === 'number' ? parsed.lossStreak : 0,
       dailyStreak: typeof parsed.dailyStreak === 'number' ? parsed.dailyStreak : 0,
       lastDailyWin: typeof parsed.lastDailyWin === 'string' ? parsed.lastDailyWin : null,
+      levelStars: Array.isArray(parsed.levelStars) ? parsed.levelStars.map((n) => Math.max(0, Math.min(3, n | 0))) : [],
+      bestLevelDone: typeof parsed.bestLevelDone === 'number' ? parsed.bestLevelDone : 0,
+      ownedChars: Array.isArray(parsed.ownedChars) ? parsed.ownedChars : [],
+      starCurrency: typeof parsed.starCurrency === 'number' ? Math.max(0, Math.round(parsed.starCurrency)) : 0,
     }
   } catch {
     return { ...DEFAULT_SAVE, achievements: [] }

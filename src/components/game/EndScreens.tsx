@@ -190,8 +190,10 @@ export function EndScreens() {
   const dailyMode = useGameStore((s) => s.dailyMode)
   const dailyMod = useGameStore((s) => s.dailyMod)
   const dailyStreakResult = useGameStore((s) => s.dailyStreakResult)
+  const levelId = useGameStore((s) => s.levelId)
+  const [starGain] = useState(() => (typeof window !== 'undefined' ? (window as unknown as { __pmEngine?: { runStarGain: number } }).__pmEngine?.runStarGain ?? 0 : 0))
 
-  const restart = () => getEngine()?.startGame(dailyMode ? { daily: true } : undefined)
+  const restart = () => getEngine()?.startGame(dailyMode ? { daily: true } : levelId > 0 ? { levelId } : undefined)
   const toMenu = () => getEngine()?.backToMenu()
 
   return (
@@ -271,6 +273,30 @@ export function EndScreens() {
                   <span className="font-black text-sky-600">{mosqueHp}/{mosqueMaxHp}</span>
                 </p>
               </div>
+
+              {/* P4: hadiah bintang toko dari pahala run */}
+              {starGain > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  transition={{ delay: 0.9, type: 'spring', stiffness: 300, damping: 16 }}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-amber-300 bg-gradient-to-r from-[#fffbe8] to-[#fff3d0] px-4 py-2.5 shadow-inner"
+                >
+                  <motion.span
+                    animate={{ rotate: [0, -12, 12, 0], scale: [1, 1.2, 1] }}
+                    transition={{ repeat: Infinity, duration: 1.6 }}
+                    className="text-xl"
+                  >
+                    ⭐
+                  </motion.span>
+                  <span className="text-sm font-black text-amber-700">
+                    +{starGain} Bintang Toko!
+                  </span>
+                  <span className="text-[10px] font-bold text-amber-500">
+                    (belanja karakter di TOKO 🛒)
+                  </span>
+                </motion.div>
+              )}
 
               {/* Mode tantangan tidak masuk papan rekor */}
               {dailyMode ? (

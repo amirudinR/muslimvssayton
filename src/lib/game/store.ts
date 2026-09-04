@@ -6,7 +6,7 @@
 import { create } from 'zustand'
 import { GAME_CONST, DUA_CONST, RUN_MODS, type CharId, type DailyModifier } from './data'
 
-export type Screen = 'menu' | 'playing' | 'victory' | 'gameover'
+export type Screen = 'menu' | 'playing' | 'victory' | 'gameover' | 'shop' | 'levels' | 'settings'
 export type CameraMode = 'iso' | 'follow' | 'photo' | 'menu' | 'boss'
 export type Quality = 'low' | 'medium' | 'high'
 
@@ -72,6 +72,10 @@ export interface GameStore {
   coachTips: string[] | null
   /* --- streak Tantangan Harian hasil kemenangan (untuk layar menang) --- */
   dailyStreakResult: number
+  /* --- P3: level aktif (0 = mode klasik 10 wave) --- */
+  levelId: number
+  /* --- P3: total gelombang level aktif (dinamis utk level select) --- */
+  totalWaves: number
 }
 
 interface GameActions {
@@ -111,6 +115,7 @@ interface GameActions {
   clearBadgeToast: () => void
   setTutorialStep: (n: number) => void
   setCoachTips: (tips: string[] | null) => void
+  setLevelInfo: (levelId: number, totalWaves: number) => void
 }
 
 let toastId = 0
@@ -152,6 +157,8 @@ export const useGameStore = create<GameStore & GameActions>()((set) => ({
   dailyMod: null,
   coachTips: null,
   dailyStreakResult: 0,
+  levelId: 0,
+  totalWaves: 10,
 
   setScreen: (s) => set({ screen: s }),
   setPaused: (p) => set({ paused: p }),
@@ -219,6 +226,7 @@ export const useGameStore = create<GameStore & GameActions>()((set) => ({
 
   setTutorialStep: (n) => set({ tutorialStep: n }),
   setCoachTips: (tips) => set({ coachTips: tips }),
+  setLevelInfo: (levelId: number, totalWaves: number) => set({ levelId, totalWaves }),
 
   resetForNewGame: () =>
     set({
@@ -253,6 +261,8 @@ export const useGameStore = create<GameStore & GameActions>()((set) => ({
       dailyMod: null,
       coachTips: null,
       dailyStreakResult: 0,
+      levelId: 0,
+      totalWaves: 10,
     }),
 }))
 

@@ -320,6 +320,20 @@ class GameAudio {
     this.musicOn = on
     if (!on) this.stopBgm()
   }
+
+  /* ---- P3: volume slider (0..1) ---- */
+  sfxVolume = 0.5
+  musicVolume = 0.16
+
+  setSfxVolume(v: number) {
+    this.sfxVolume = Math.max(0, Math.min(1, v))
+    if (this.sfxBus) this.sfxBus.gain.value = this.soundOn ? this.sfxVolume : 0
+  }
+
+  setMusicVolume(v: number) {
+    this.musicVolume = Math.max(0, Math.min(1, v * 0.34)) // skala musik lebih kecil dari SFX
+    if (this.musicBus) this.musicBus.gain.value = this.musicOn ? this.musicVolume : 0
+  }
 }
 
 export const audio = new GameAudio()

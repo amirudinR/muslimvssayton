@@ -254,3 +254,64 @@ export function recordDailyWin(todayKey: string): number {
   flush()
   return s.dailyStreak
 }
+
+/* ---------------- P3: Level Select ---------------- */
+
+export interface LevelProgressView {
+  levelStars: number[]
+  bestLevelDone: number
+  totalStars: number
+}
+
+export function getLevelProgress(): LevelProgressView {
+  const s = getSave()
+  const total = s.levelStars.reduce((a, b) => a + b, 0)
+  return { levelStars: [...s.levelStars], bestLevelDone: s.bestLevelDone, totalStars: total }
+}
+
+/** catat hasil level: simpan rating bintang terbaik + buka level berikutnya. */
+export function recordLevelResult(levelId: number, stars: number): { newUnlock: boolean; newBest: boolean } {
+  const s = getSave()
+  const idx = levelId - 1
+  while (s.levelStars.length < idx + 1) s.levelStars.push(0)
+  const prev = s.levelStars[idx] ?? 0
+  const newBest = stars > prev
+  if (newBest) s.levelStars[idx] = stars
+  const newUnlock = levelId > s.bestLevelDone
+  if (levelId > s.bestLevelDone) s.bestLevelDone = levelId
+  flush()
+  return { newUnlock, newBest }
+}
+
+/* ---------------- P4: Toko (currency bintang + koleksi) ---------------- */
+
+export function getStarCurrency(): number {
+  return getSave().starCurrency
+}
+
+export function addStarCurrency(amount: number) {
+  const s = getSave()
+  s.starCurrency = Math.max(0, Math.round(s.starCurrency + amount))
+  flush()
+}
+
+/** konversi pahala akhir run → bintang toko (20 pahala = 1 bintang). */
+export function grantRunReward(pahala: number): number {
+  const gain = Math.floor(pahala / 20)
+  if (gain > 0) addStarCurrency(gain)
+  return gain
+}
+
+export function getOwnedChars(): string[] {
+  return [...getSave().ownedChars]
+}
+
+export function buyChar(id: string, cost: number): boolean {
+  const s = getSave()
+  if (s.ownedChars.includes(id)) return false
+  if (s.starCurrency < cost) return false
+  s.starCurrency -= cost
+  s.ownedChars = [...s.ownedChars, id]
+  flush()
+  return true
+}
