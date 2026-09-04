@@ -103,7 +103,7 @@ export function MainMenu() {
         initial={{ opacity: 0, y: -24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.25 }}
-        className="pointer-events-auto mx-auto flex w-full max-w-lg items-center justify-between gap-2 px-4 pt-3"
+        className="pointer-events-auto mx-auto flex w-full max-w-lg items-center justify-between gap-2 px-4 pt-[max(1rem,env(safe-area-inset-top))]"
       >
         <div className="profile-chip">
           <span className="profile-avatar">{AVATARS[(records?.gamesPlayed ?? 0) % AVATARS.length]}</span>
@@ -125,7 +125,7 @@ export function MainMenu() {
       </motion.div>
 
       {/* ---------- Area utama ---------- */}
-      <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto py-2">
+      <div className="flex min-h-0 flex-1 items-start justify-center overflow-y-auto py-2 lg:items-center">
         <div className="flex w-full max-w-lg flex-col items-center gap-2.5">
           {/* Kartu judul */}
           <motion.div
