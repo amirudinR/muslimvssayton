@@ -71,9 +71,9 @@ export function LevelSelectScreen() {
           </div>
 
           {/* garis jalur SVG */}
-          <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden>
+          <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
             <polyline
-              points={LEVELS.map((l) => `${l.mapX}%,${l.mapY}%`).join(' ')}
+              points={LEVELS.map((l) => `${l.mapX},${l.mapY}`).join(' ')}
               fill="none"
               stroke="#c4a86a"
               strokeWidth="5"

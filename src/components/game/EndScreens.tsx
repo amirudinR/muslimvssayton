@@ -3,7 +3,7 @@
 /* Layar akhir: kemenangan (bintang rating + kirim skor ke papan rekor +
    kembang api), kekalahan lembut, dan menu jeda. Semua ramah anak. */
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Play, RotateCcw, Home, Pause, Volume2, VolumeX, Music, Music2,
@@ -84,17 +84,11 @@ function ScoreSubmit({ stars, wave, defeated, pahala }: { stars: number; wave: n
   const weeklyMode = useGameStore((s) => s.weeklyMode)
   const endlessMode = useGameStore((s) => s.endlessMode)
   const levelId = useGameStore((s) => s.levelId)
-  const [name, setName] = useState('')
+  const [name, setName] = useState(() => getRecords().playerName || '')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showBoard, setShowBoard] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    // default: nama terakhir dipakai
-    const saved = getRecords().playerName
-    if (saved) setName(saved)
-  }, [])
 
   if (scoreSubmitted) {
     return (

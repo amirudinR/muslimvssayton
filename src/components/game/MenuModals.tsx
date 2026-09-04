@@ -160,7 +160,8 @@ export function LeaderboardModal({ open, onClose }: { open: boolean; onClose: ()
   }, [])
 
   useEffect(() => {
-    if (open && entries === null && !loading) void fetchBoard(tab)
+    if (!open || entries !== null || loading) return
+    queueMicrotask(() => void fetchBoard(tab))
   }, [open, entries, loading, fetchBoard, tab])
 
   const switchTab = (next: 'best' | 'far') => {
