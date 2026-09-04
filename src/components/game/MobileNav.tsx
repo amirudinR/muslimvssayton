@@ -62,7 +62,7 @@ export function MobileNav() {
 
   return (
     <div
-      className="pointer-events-none fixed bottom-36 right-3 z-30 flex flex-col items-end gap-2 sm:bottom-28"
+      className="camera-nav pointer-events-none fixed bottom-36 right-3 z-30 flex flex-col items-end gap-2 sm:bottom-28"
       onPointerEnter={wake}
       onPointerDown={wake}
     >

@@ -1277,6 +1277,12 @@
 /* ikon mengikuti ukuran tombol (class tailwind h-4.5 fallback) */
 .nav-dpad-cell svg, .nav-cam-btn svg { pointer-events: none; }
 
+@media (max-height: 520px) {
+  .camera-nav {
+    bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+}
+
 /* ============================ P3: MENU UTAMA PROFESIONAL ============================ */
 
 /* chip profil pemain pojok atas */
