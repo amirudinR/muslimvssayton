@@ -195,6 +195,13 @@ export class CameraController {
     this.state.tz = THREE.MathUtils.clamp(this.state.tz + wz, -BOUNDS.z, BOUNDS.z)
   }
 
+  /** Geser mengikuti arah layar, bukan sumbu dunia setelah kamera berputar. */
+  panScreenBy(dx: number, dz: number) {
+    const cos = Math.cos(this.state.azimuth)
+    const sin = Math.sin(this.state.azimuth)
+    this.panBy(dx * cos - dz * sin, dx * sin + dz * cos)
+  }
+
   /** Zoom dengan damping halus — target di-lerp di update(). */
   zoomBy(delta: number): boolean {
     if (this.mode === 'boss') return false

@@ -797,7 +797,7 @@ export class GameEngine {
 
   /* ---- P2: navigasi kamera dari tombol UI (mobile D-pad) ---- */
   panCamera(dx: number, dz: number) {
-    this.cameraCtrl.panBy(dx, dz)
+    this.cameraCtrl.panScreenBy(dx, dz)
   }
 
   zoomCamera(delta: number) {
