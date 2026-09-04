@@ -210,6 +210,8 @@ export function EndScreens() {
   const weeklyStreakResult = useGameStore((s) => s.weeklyStreakResult)
   const endlessMode = useGameStore((s) => s.endlessMode)
   const endlessNewRecord = useGameStore((s) => s.endlessNewRecord)
+  const endlessMilestones = useGameStore((s) => s.endlessMilestones)
+  const endlessMilestoneStars = useGameStore((s) => s.endlessMilestoneStars)
   const wave = useGameStore((s) => s.wave)
   const levelId = useGameStore((s) => s.levelId)
   /* P4/P9/P11: bintang toko run terakhir — dibaca saat layar hasil dirender
@@ -342,13 +344,13 @@ export function EndScreens() {
                 </p>
               </div>
 
-              {/* P4: hadiah bintang toko dari pahala run */}
+              {/* P4: hadiah bintang toko dari pahala run (P12: kilau menyapu) */}
               {starGain > 0 && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.8, y: 10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   transition={{ delay: 0.9, type: 'spring', stiffness: 300, damping: 16 }}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-amber-300 bg-gradient-to-r from-[#fffbe8] to-[#fff3d0] px-4 py-2.5 shadow-inner"
+                  className="star-gain-banner flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#fffbe8] to-[#fff3d0] px-4 py-2.5 shadow-inner"
                 >
                   <motion.span
                     animate={{ rotate: [0, -12, 12, 0], scale: [1, 1.2, 1] }}
@@ -467,13 +469,37 @@ export function EndScreens() {
                 </motion.div>
               )}
 
-              {/* P11: hadiah ⭐ delta pahala Tak Berujung */}
+              {/* P11: hadiah ⭐ delta pahala Tak Berujung (P12: kilau menyapu) */}
               {endlessMode && starGain > 0 && (
-                <div className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-amber-300 bg-gradient-to-r from-[#fffbe8] to-[#fff3d0] px-4 py-2 shadow-inner">
+                <div className="star-gain-banner flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#fffbe8] to-[#fff3d0] px-4 py-2 shadow-inner">
                   <span className="text-lg">⭐</span>
                   <span className="text-sm font-black text-amber-700">+{starGain} Bintang Toko!</span>
                   <span className="text-[10px] font-bold text-amber-500">(dari pahala bertahan)</span>
                 </div>
+              )}
+
+              {/* P12: rekap milestone Tak Berujung — ⭐ sudah diterima SELAMA run */}
+              {endlessMode && endlessMilestones > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9, y: 8 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  transition={{ delay: 0.45, type: 'spring', stiffness: 300, damping: 18 }}
+                  className="milestone-recap"
+                >
+                  <motion.span
+                    className="inline-block text-xl"
+                    animate={{ y: [0, -3, 0] }}
+                    transition={{ repeat: Infinity, duration: 2.2, ease: 'easeInOut' }}
+                  >
+                    🏁
+                  </motion.span>
+                  <span className="text-sm font-black text-amber-800">
+                    {endlessMilestones} milestone tercapai!
+                  </span>
+                  <span className="text-[11px] font-bold text-amber-600">
+                    +{endlessMilestoneStars}⭐ bonus sudah diterima selama bertahan ✨
+                  </span>
+                </motion.div>
               )}
 
               {/* P11: skor Tak Berujung masuk papan rekor — tier bintang diturunkan

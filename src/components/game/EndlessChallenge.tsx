@@ -61,6 +61,7 @@ export function EndlessChallengeCard() {
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="endless-effect-chip">♾️ Gelombang tanpa batas</span>
         <span className="endless-effect-chip">🔥 Boss tiap 5 gelombang</span>
+        <span className="endless-effect-chip">🏁 Milestone ⭐ tiap 5 gel.</span>
         <span className="endless-effect-chip">🏆 Rekor gelombang terjauh</span>
       </div>
 
@@ -77,7 +78,7 @@ export function EndlessChallengeCard() {
       </motion.button>
 
       <p className="text-center text-[10px] font-bold text-teal-700/70">
-        Skor mode ini masuk papan rekor 🏆 — gelombang terjauh jadi kenangan!
+        Skor mode ini masuk papan rekor (tab ♾️ Terjauh) 🏆 — gelombang terjauh jadi kenangan!
       </p>
     </motion.div>
   )

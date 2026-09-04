@@ -37,6 +37,8 @@ import {
   STAR_BOX_CHANCE,
   starBoxPahala,
   generateEndlessWave,
+  milestoneReward,
+  ENDLESS_MILESTONE_STEP,
   type CharId,
   type EnemyId,
   type WaveDef,
@@ -972,8 +974,11 @@ export class GameEngine {
       dailyMod: null,
       weeklyMode: false,
       weeklyMod: null,
+      /* P11/P12: bersihkan flag endless + milestone (pola 13-b) */
       endlessMode: false,
       endlessNewRecord: false,
+      endlessMilestones: 0,
+      endlessMilestoneStars: 0,
       levelId: 0,
       totalWaves: 10,
       // bersihkan sisa power-up mid-run (P9 QA fix: nilai basi tertinggal di store)
@@ -1089,11 +1094,42 @@ export class GameEngine {
       gsap.delayedCall(1.6, () => gameStore.get().showToast(tip, '💡', 'info'))
     }
 
+    /* ---- P12: MILESTONE TAK BERUJUNG — tiap 5 gelombang selamat → bonus ⭐ ----
+       (gel. 5→5⭐, 10→6⭐, 15→7⭐ … cap 12⭐) + hujan bintang + lencana.
+       Diletakkan DI LUAR gerbang panjang levelWaves agar gel. 5 (masih wave
+       klasik) juga berhitung — milestone = gelombang selesai, apa pun asalnya. ---- */
+    if (st.endlessMode && waveNum % ENDLESS_MILESTONE_STEP === 0) {
+      const bonus = milestoneReward(waveNum)
+      addStarCurrency(bonus)
+      gameStore.set((s) => ({
+        ...s,
+        endlessMilestones: s.endlessMilestones + 1,
+        endlessMilestoneStars: s.endlessMilestoneStars + bonus,
+      }))
+      this.particles.starRain(0, 0, 26)
+      this.showStarFlash()
+      audio.tada()
+      gsap.delayedCall(2.6, () =>
+        gameStore
+          .get()
+          .showToast(
+            `🏁 MILESTONE! ${waveNum} gelombang bertahan! +${bonus}⭐ bonus toko!`,
+            '🏁',
+            'good',
+          ),
+      )
+      checkBadges({ event: 'endlessMilestone', wave: waveNum })
+    }
+
     if (waveNum >= this.levelWaves.length) {
       if (st.endlessMode) {
         /* ---- P11: TAK BERUJUNG — generasi gelombang berikutnya, terus bertahan ---- */
         this.levelWaves.push(generateEndlessWave(waveNum + 1))
         const isNextBoss = this.levelWaves[waveNum].isBoss
+        /* [FIX P12] totalWaves store ikut bertumbuh agar tombol "MULAI GELOMBANG"
+           + preview gelombang berikutnya tetap tampil setelah gel. 10 (dulu hilang
+           karena totalWaves mentok di 10 → pemain menunggu 16 dtk tanpa tombol skip). */
+        gameStore.set((s) => ({ ...s, totalWaves: this.levelWaves.length }))
         gsap.delayedCall(1.2, () =>
           gameStore
             .get()
@@ -1131,7 +1167,8 @@ export class GameEngine {
     while (this.levelWaves.length < st.wave + 1) {
       this.levelWaves.push(generateEndlessWave(this.levelWaves.length + 1))
     }
-    gameStore.set((s) => ({ ...s, nextWaveIn: GAME_CONST.betweenWaveDelay }))
+    /* [FIX P12] sinkron totalWaves (tombol MULAI GELOMBANG tetap tampil di endless) */
+    gameStore.set((s) => ({ ...s, totalWaves: this.levelWaves.length, nextWaveIn: GAME_CONST.betweenWaveDelay }))
     this.updateWavePreview(st.wave + 1)
     gameStore.get().showToast('♾️ TAK BERUJUNG DIMULAI! Semua penjaga dipertahankan!', '♾️', 'good')
   }
@@ -1189,6 +1226,11 @@ export class GameEngine {
       endlessRecord = recordEndlessWave(st.wave)
       const delta = Math.max(0, st.stats.starsEarned - this.runRewardBase)
       this.runStarGain = delta > 0 ? grantRunReward(delta) : 0
+      /* P12: rekor baru → hujan bintang perayaan di atas masjid */
+      if (endlessRecord && st.wave >= 5) {
+        this.particles.starRain(0, 0, 22)
+        audio.cheer()
+      }
     }
     gameStore.set((s) => ({ ...s, screen: 'gameover', funFact: null, endlessNewRecord: endlessRecord }))
     audio.stopBgm()

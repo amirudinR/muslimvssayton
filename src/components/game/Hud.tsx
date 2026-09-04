@@ -44,6 +44,8 @@ export function Hud() {
   const totalWaves = useGameStore((s) => s.totalWaves)
   const levelId = useGameStore((s) => s.levelId)
   const endlessMode = useGameStore((s) => s.endlessMode)
+  const endlessMilestones = useGameStore((s) => s.endlessMilestones)
+  const endlessMilestoneStars = useGameStore((s) => s.endlessMilestoneStars)
   const waves = levelId > 0 ? levelWaves(levelId) : WAVES
 
   const [banner, setBanner] = useState<{ text: string; kind: 'normal' | 'boss' | 'newEnemy'; enemyEmoji?: string } | null>(null)
@@ -247,7 +249,7 @@ export function Hud() {
             </div>
             <div className="h-4 overflow-hidden rounded-full bg-stone-200">
               <motion.div
-                className="h-full rounded-full bg-gradient-to-r from-orange-400 via-amber-400 to-yellow-300"
+                className="boss-hp-fill h-full rounded-full bg-gradient-to-r from-orange-400 via-amber-400 to-yellow-300"
                 animate={{ width: `${Math.max(0, (bossHp / Math.max(1, bossMaxHp)) * 100)}%` }}
                 transition={{ duration: 0.3 }}
               />
@@ -322,6 +324,29 @@ export function Hud() {
         )}
       </AnimatePresence>
 
+      {/* ---------- P12: Chip milestone Tak Berujung (muncul setelah milestone pertama) ---------- */}
+      <AnimatePresence>
+        {endlessMode && endlessMilestones > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.7 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 20 }}
+            className="milestone-chip pointer-events-none mt-1"
+            role="status"
+          >
+            <motion.span
+              className="inline-block"
+              animate={{ y: [0, -3, 0], rotate: [0, -8, 8, 0] }}
+              transition={{ repeat: Infinity, duration: 2.2, ease: 'easeInOut' }}
+            >
+              🏁
+            </motion.span>
+            {endlessMilestones} MILESTONE · +{endlessMilestoneStars}⭐
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ---------- Banner wave ---------- */}
       <AnimatePresence>
         {banner && (
@@ -334,7 +359,15 @@ export function Hud() {
               rotate: banner.kind === 'boss' ? [0, -2, 2, -1, 0] : 0,
             }}
             exit={{ opacity: 0, scale: 1.1, y: 12 }}
-            transition={{ type: 'spring', stiffness: 320, damping: 18 }}
+            transition={{
+              type: 'spring',
+              stiffness: 320,
+              damping: 18,
+              /* [FIX P12] keyframes >2 frame TIDAK didukung spring (framer-motion
+                 melempar error tiap banner boss muncul) — rotate dianimasikan
+                 tween tersendiri agar goyangan boss tetap jalan tanpa error. */
+              rotate: { type: 'tween', duration: 0.55, ease: 'easeInOut' },
+            }}
             className={`mt-2 rounded-3xl px-6 py-3 text-center ${
               banner.kind === 'boss'
                 ? 'boss-banner'
@@ -374,9 +407,11 @@ export function Hud() {
         )}
       </AnimatePresence>
 
-      {/* ---------- Countdown / tombol MULAI + preview wave berikutnya ---------- */}
+      {/* ---------- Countdown / tombol MULAI + preview wave berikutnya ----------
+          [P12] endless: tombol MULAI tetap tampil (totalWaves kini ikut bertumbuh,
+          plus guard || endlessMode agar tak pernah hilang) ---------- */}
       <AnimatePresence>
-        {!waveActive && wave < totalWaves && (
+        {!waveActive && (wave < totalWaves || endlessMode) && (
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}

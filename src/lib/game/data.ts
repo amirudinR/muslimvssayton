@@ -671,6 +671,17 @@ export const TIPS: string[] = [
   'Dzikir bikin hati jadi tenang 😊',
 ]
 
+/* ---------------- P12: MILESTONE TAK BERUJUNG (bonus ⭐ tiap 5 wave) ---------------- */
+
+/** setiap N gelombang Tak Berujung yang selamat → bonus milestone. */
+export const ENDLESS_MILESTONE_STEP = 5
+
+/** Bonus ⭐ toko saat milestone tercapai (naik pelan, dibatasi biar seimbang):
+ *  gel. 5 → 5⭐, 10 → 6⭐, 15 → 7⭐, 25 → 9⭐, 40+ → 12⭐ (cap). */
+export function milestoneReward(waveNum: number): number {
+  return Math.min(12, 4 + Math.floor(waveNum / ENDLESS_MILESTONE_STEP))
+}
+
 /* ------------------------------ KONSTANTA GAME ------------------------------ */
 
 export const GAME_CONST = {

@@ -562,4 +562,38 @@ export class ParticleSystem {
   showPahala(x: number, y: number, z: number, amount: number) {
     this.damage.show(x, y, z, `+${amount}`, '#2ea36a')
   }
+
+  /* P12: HUJAN BINTANG — perayaan milestone Tak Berujung / rekor baru.
+   * Bintang emas jatuh dari langit di sekitar masjid + kilau lembut. */
+  starRain(x = 0, z = 0, count = 26) {
+    const palette = [0xffd93d, 0xffe066, 0xfff3b0, 0xffc93d]
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2
+      const rr = Math.random() * 6
+      this.tmpColor.setHex(palette[i % palette.length])
+      this.star.spawn(x + Math.cos(a) * rr, 5.5 + Math.random() * 2.5, z + Math.sin(a) * rr, this.tmpColor, {
+        vx: (Math.random() - 0.5) * 1.2,
+        vy: -(2 + Math.random() * 2),
+        vz: (Math.random() - 0.5) * 1.2,
+        life: 1.2 + Math.random() * 0.7,
+        sizeStart: 0.45 + Math.random() * 0.25,
+        sizeEnd: 0.15,
+        gravity: 6,
+        drag: 0.995,
+      })
+    }
+    // kilau glow lembut yang mengikuti hujan
+    this.tmpColor.setHex(0xfff3b0)
+    for (let i = 0; i < 8; i++) {
+      const a = Math.random() * Math.PI * 2
+      const rr = Math.random() * 5
+      this.glow.spawn(x + Math.cos(a) * rr, 4 + Math.random() * 2, z + Math.sin(a) * rr, this.tmpColor, {
+        vx: 0, vy: -1.2, vz: 0,
+        life: 1.6, sizeStart: 0.6, sizeEnd: 0.1, fadeIn: true,
+      })
+    }
+    // cincin emas menyapu tanah sebagai "dentuman" perayaan
+    this.rings.spawn(x, 0.1, z, 0xffd76a, 10, 1.2, 0.6)
+    this.rings.spawn(x, 0.1, z, 0xfff1b8, 14, 1.5, 0.8)
+  }
 }

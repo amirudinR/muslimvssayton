@@ -819,3 +819,74 @@ Isu Belum Terselesaikan / Risiko & Rekomendasi Fase Berikutnya:
 - Kartu endless menambah tinggi scroll menu (4 kartu sekarang) — pertimbangkan tab/kategori di mobile bila feedback pengain sempit.
 - Tutorial bubble sempat tertangkap kamera QA di gameplay (screen playing) — by design; pastikan markTutorialDone jalan di run nyata.
 - Ide: wave milestone reward (⭐ bonus tiap 5 wave), enemy speed scale pelan di wave sangat tinggi (HP saja sekarang — wave 50+ hanya HP naik), hujan bintang VFX boss endless, save mid-run.
+
+---
+Task ID: P12 (16-a/16-b/16-c/16-d)
+Agent: main-agent (Z.ai Code)
+Task: FASE P12 — Milestone Tak Berujung + Papan Rekor "Terjauh" + Hujan Bintang VFX + polish styling
+
+Status Proyek Saat Ini:
+- Awal sesi: QA baseline P11 semua PASS (probe live, startGame/tryPlace/advance/backToMenu bersih, star box +65 pahala, lint/tsc/0 error) → game stabil, lanjut fitur sesuai rekomendasi P11: milestone reward endless, papan rekor khusus endless, VFX, kecepatan musuh wave tinggi.
+
+Work Log:
+
+QA AWAL (agent-browser):
+- 200 OK; probe lengkap; endless mode regression (startGame({endless:true}) + 2 tower + wave 2); star box collect (+65); backToMenu shield/act 0 (fix 13-b masih jalan); lint & tsc bersih; dev.log bersih.
+
+P12-a: MILESTONE TAK BERUJUNG (bonus ⭐ tiap 5 gelombang):
+- data.ts: ENDLESS_MILESTONE_STEP = 5; milestoneReward(waveNum) = min(12, 4 + floor(wave/5)) → gel.5=5⭐, 10=6⭐, 15=7⭐, 40+=12⭐ (cap).
+- store.ts: field baru endlessMilestones + endlessMilestoneStars (default 0, reset di resetForNewGame).
+- engine.ts onWaveComplete: saat st.endlessMode && waveNum % 5 === 0 → addStarCurrency(bonus) + store counter + particles.starRain(26) + showStarFlash + audio.tada + toast tertunda "🏁 MILESTONE! N gelombang bertahan! +N⭐ bonus toko!" + checkBadges({event:'endlessMilestone', wave}). [BUGFIX-DEV] semula ditaruh DI DALAM gerbang waveNum >= levelWaves.length → milestone gel. 5 tidak pernah terpicu (wave 5 masih def klasik); DIPINDAH ke luar gerbang agar semua kelipatan 5 berhitung.
+- [BUGFIX P12 — UX laten P11] totalWaves store tidak pernah bertumbuh di endless (mentok 10) → tombol "MULAI GELOMBANG!" + preview gelombang berikutnya HILANG setelah gel. 10 (pemain menunggu 16 dtk tanpa tombol skip). FIX: onWaveComplete endless set totalWaves = levelWaves.length setelah push; continueEndless ikut sinkron; + guard kondisi HUD (wave < totalWaves || endlessMode).
+- onGameOver: rekor baru (wave ≥ 5) → starRain(22) + audio.cheer. backToMenu: reset endlessMilestones/Stars (pola 13-b).
+- achievements.ts: BADGES 16→17 — 'endless_15' "Penjelajah Abadi ♾️ (Milestone gel. 15 di Tak Berujung)"; BadgeCtx event 'endlessMilestone'.
+- Hud.tsx: chip emas .milestone-chip "🏁 N MILESTONE · +N⭐" di bawah chip endless (AnimtePresence, muncul setelah milestone pertama, emoji wobble).
+- EndScreens.tsx gameover endless: kartu rekap .milestone-recap "🏁 N milestone tercapai! +N⭐ bonus sudah diterima selama bertahan ✨".
+- EndlessChallenge.tsx: chip efek baru "🏁 Milestone ⭐ tiap 5 gel." + footnote menyebut tab ♾️ Terjauh.
+
+P12-b: PAPAN REKOR "TERJAUH" (rekomendasi P11 — ranking endless pakai wave):
+- API route.ts: GET menerima ?sort=wave → WHERE mode='Tak Berujung' ORDER BY wave DESC, stars DESC, defeated DESC (SQL string tetap, aman injeksi); default tak berubah (RANK_SQL_BEST sama spt sebelumnya).
+- MenuModals.tsx LeaderboardModal: state tab 'best' | 'far' + switchTab (chime + refetch) + tombol .lb-tab "🏆 Terbaik" / .lb-tab-far "♾️ Terjauh" (role=tablist, aria-selected); baris mode far menampilkan metrik utama .lb-wave-big (angka besar + label "gel.") menggantikan StarRow, subjudul hanya 👻+🌟; empty state khusus; catatan teal penjelasan; key baris prefixed tab agar animasi re-mount.
+- CSS: .lb-tabs/.lb-tab(-active emas)/.lb-tab-far(-active teal)/.lb-wave-big/.lb-wave-num/.lb-wave-label.
+
+P12-c: HUJAN BINTANG VFX + KECEPATAN MUSUH WAVE TINGGI:
+- particles.ts: starRain(x, z, count=26) — bintang emas 4-palet jatuh dari y 5.5-8 (gravity 6, life 1.2-1.9, drag 0.995) radius 6 + 8 glow turun + 2 cincin emas menyapu tanah; dipakai milestone & rekor baru.
+- entities.ts Enemy: waveSpeedMul = wave > 30 ? 1 + min(0.18, (wave-30)*0.006) : 1 (gel. 31 +0.6% … gel. 60+ cap +18%) — diterapkan di speed efektif update() agar wave 50+ tetap menantang (dulu hanya HP yang naik).
+
+P12-d: POLISH STYLING (wajib):
+- .star-gain-banner: banner "+N Bintang Toko!" (victory + gameover endless) kini bershine-sweep + tepi emas (mvp-sheen reuse 2.4s).
+- .boss-hp-fill: HP bar boss kini bergaris diagonal berjalan (boss-stripes 0.9s) — kesan "panas".
+- Hover lift: .daily-card/.weekly-card/.endless-card translateY(-3px) scale(1.012) + shadow deepen per warna tema (transisi bouncy cubic-bezier).
+- Scrollbar Firefox: scrollbar-width thin + scrollbar-color amber (lintas browser, sebelumnya hanya webkit).
+- CSS P12 total ~150 baris (milestone-chip/-recap + milestone-glow + lb-tab family + wave-big + polish).
+
+BUGFIX BONUS (pre-existing laten, ditemukan QA):
+- [framer-motion] banner boss HUD: animate rotate [0,-2,2,-1,0] (5 keyframe) + transition spring → framer-motion melempar error "Only two keyframes currently supported with spring" TIAP banner boss muncul (terlihat di console errors, tidak crash). FIX: per-property transition rotate: {type:'tween', duration:0.55, ease:'easeInOut'} — goyangan boss tetap jalan, error hilang (verifikasi: browser session fresh + trigger banner boss → 0 error; sebelumnya 2 error ter-log).
+
+VERIFIKASI (probe + DOM + VLM + DB + mobile):
+- ✓ Milestone berurutan: gel.5 selesai → ms=1 +5⭐; gel.10 → ms=2 +6⭐ DAN totalWaves 10→11; gel.15 → ms=3 +7⭐ (totalWaves tumbuh 10→16 via wave 11-15); run lanjut wave 16 tanpa error.
+- ✓ HUD: .milestone-chip "🏁3 MILESTONE · +18⭐" + .endless-chip; sim state wave 12/12 → tombol "MULAI GELOMBANG! (11s)" TETAP tampil (bugfix totalWaves) — VLM: chip teal + chip emas + tombol + panel "Gelombang 12 ∞" semuanya jelas, no overlap.
+- ✓ Gameover endless (run 8 tower god-HP): recap "🏁1 milestone tercapai! +5⭐ bonus sudah diterima" + "+18 Bintang Toko! (dari pahala bertahan)" + banner teal "Bertahan hingga Gelombang 8!" + form submit — VLM 4/4 YES, layout bersih. Run ms=3: recap "+18⭐" + "+52 Bintang" terverifikasi DOM.
+- ✓ Badge: save.achievements berisi 'endless_15' setelah milestone gel. 15 (badgeCount 10).
+- ✓ API ?sort=wave: hanya mode Tak Berujung, urut wave DESC (16 → 8 → 4); default tetap stars DESC semua mode; dev.log query SQL benar.
+- ✓ E2E submit: form gameover (React setter input "QA-P12 Terjauh" + klik tombol Kirim skor) → POST 200 → DB {QA-P12 Terjauh, wave 8, mode Tak Berujung} tampil di papan Terjauh.
+- ✓ UI leaderboard: tab emas "Terbaik" (aktif, baris bintang ⭐ + mode chip) vs tab teal "Terjauh" (aktif, .lb-wave-big angka + "gel.") — VLM 2 screenshot 4-5/4-5 YES no overlap.
+- ✓ Mobile 390×844: menu scrollable, endless card fits 0→390 + chip "🏁 Milestone ⭐ tiap 5 gel." terbaca; modal leaderboard 325w fits; HUD chip milestone/endless/DOA fits tanpa overlap; menu bottom: tombol Lencana/Papan Rekor + footer terlihat (VLM 4/4 YES).
+- ✓ Regresi akhir: lint bersih; tsc --noEmit src/ 0 error; agent-browser errors 0 (session fresh setelah fix banner boss); dev.log hanya ✓ Compiled + GET 200 (+ query sort=wave).
+- Artefak screenshot: p12_gameover_clean.png, p12_gameover_final.png, p12_lb_best_tab.png, p12_lb_far_tab.png, p12_hud_chips.png, p12_mobile_menu.png, p12_mobile_menu_bottom.png, p12_mobile_lb_far.png, p12_mobile_game.png, p12_menu_desktop.png.
+
+CATATAN QA PENTING (utk sesi berikut):
+- Headless: animasi EXIT framer-motion membeku tanpa tick rAF (modal funFact 'Karakter Baru Terbuka!' dapat menutupi screenshot gameover) → solusi: pre-seed unlockedChars dgn 6 id (ali/aisyah/umar/fatimah/kakek/misbah) SEBELUM startGame agar popup unlock tidak muncul, atau sembunyikan overlay utk screenshot.
+- `agent-browser close` me-reset profil (localStorage hilang) — berguna utk uji first-run, tapi state QA panjang hilang.
+- Tombol submit skor gameover: aria-label "Kirim skor" (berisi ikon Send, tanpa teks) — klik via [aria-label].
+- Red badge "1 Issue" pojok kiri bawah screenshot = overlay agent-browser sendiri (bukan game).
+
+Stage Summary:
+- P12 SELESAI: (1) Milestone Tak Berujung tiap 5 gelombang — bonus ⭐ langsung (5-12⭐ naik bertahap) + hujan bintang + flash emas + chip HUD live + rekap gameover + lencana ke-17 "Penjelajah Abadi"; (2) bugfix UX laten totalWaves (tombol MULAI GELOMBANG + preview kembali di endless gel. 10+); (3) Papan Rekor tab "♾️ Terjauh" (API ?sort=wave + UI teal dgn metrik gelombang besar) — run endless kini bersaing adil; (4) VFX starRain + kecepatan musuh wave 31+ (cap +18%); (5) polish styling: shine banner bintang, HP bar boss bergaris, hover lift kartu tantangan, scrollbar Firefox; (6) bugfix framer-motion banner boss (error console per boss wave, kini 0).
+
+Isu Belum Terselesaikan / Risiko & Rekomendasi Fase Berikutnya:
+- Bahasa EN (i18n) masih prioritas sedang — tugas besar menyentuh semua komponen (makin besar tiap fase baru).
+- Menu mobile makin panjang (5 kartu: judul, mvp, daily, weekly, endless) — pertimbangkan tab/kategori atau horizontal scroll utk kartu tantangan (rekomendasi P11 yang belum ditangani).
+- Kecepatan musuh wave 31+ hanya diverifikasi statis (wave 60+ sulit dicapai QA) — logika trivial, risiko rendah.
+- Ide lanjutan: milestone badge tier (5/10/15/20), efek layar "MILESTONE" besar (flash + text banner React, saat ini toast), statistik sejarah milestone di koleksi, save mid-run, cloud save.
+- Kotak Bintang & milestone keduanya emas — bila bentrok visual saat bersamaan, pertimbangkan warna milestone (mis. teal-emas dua-ton).

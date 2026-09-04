@@ -138,12 +138,16 @@ export function LeaderboardModal({ open, onClose }: { open: boolean; onClose: ()
   const [entries, setEntries] = useState<LeaderEntry[] | null>(null)
   const [error, setError] = useState(false)
   const [loading, setLoading] = useState(false)
+  /* P12: tab papan — "best" (urutan bintang, semua mode) vs
+     "far" (khusus Tak Berujung, urut gelombang terdalam). */
+  const [tab, setTab] = useState<'best' | 'far'>('best')
 
-  const fetchBoard = useCallback(async () => {
+  const fetchBoard = useCallback(async (which: 'best' | 'far' = 'best') => {
     setLoading(true)
     setError(false)
     try {
-      const res = await fetch('/api/leaderboard', { cache: 'no-store' })
+      const url = which === 'far' ? '/api/leaderboard?sort=wave' : '/api/leaderboard'
+      const res = await fetch(url, { cache: 'no-store' })
       if (!res.ok) throw new Error('gagal')
       const json = (await res.json()) as { ok: boolean; entries: LeaderEntry[] }
       setEntries(json.entries)
@@ -156,21 +160,31 @@ export function LeaderboardModal({ open, onClose }: { open: boolean; onClose: ()
   }, [])
 
   useEffect(() => {
-    if (open && entries === null && !loading) void fetchBoard()
-  }, [open, entries, loading, fetchBoard])
+    if (open && entries === null && !loading) void fetchBoard(tab)
+  }, [open, entries, loading, fetchBoard, tab])
+
+  const switchTab = (next: 'best' | 'far') => {
+    if (next === tab) return
+    audio.chime()
+    setTab(next)
+    setEntries(null)
+    void fetchBoard(next)
+  }
 
   return (
     <AnimatePresence>
       {open && (
         <CuteModal title="Papan Rekor" emoji="🏆" onClose={onClose}>
           <div className="flex items-center justify-between gap-2 pb-2">
-            <p className="text-xs font-bold text-[#8a6a30]">Penjaga masjid terhebat se-Indonesia! 🇮🇩</p>
+            <p className="text-xs font-bold text-[#8a6a30]">
+              {tab === 'best' ? 'Penjaga masjid terhebat se-Indonesia! 🇮🇩' : 'Bertahan terjauh di Tak Berujung! ♾️'}
+            </p>
             <button
               className="btn-round"
               aria-label="Muat ulang"
               onClick={() => {
                 audio.chime()
-                void fetchBoard()
+                void fetchBoard(tab)
               }}
             >
               {loading ? (
@@ -178,6 +192,26 @@ export function LeaderboardModal({ open, onClose }: { open: boolean; onClose: ()
               ) : (
                 <RefreshCw className="h-4 w-4" />
               )}
+            </button>
+          </div>
+
+          {/* P12: tab papan — Terbaik (emas, semua mode) vs Terjauh (teal, endless) */}
+          <div className="lb-tabs" role="tablist" aria-label="Jenis papan rekor">
+            <button
+              className={`lb-tab ${tab === 'best' ? 'lb-tab-active' : ''}`}
+              role="tab"
+              aria-selected={tab === 'best'}
+              onClick={() => switchTab('best')}
+            >
+              🏆 Terbaik
+            </button>
+            <button
+              className={`lb-tab lb-tab-far ${tab === 'far' ? 'lb-tab-far-active' : ''}`}
+              role="tab"
+              aria-selected={tab === 'far'}
+              onClick={() => switchTab('far')}
+            >
+              ♾️ Terjauh
             </button>
           </div>
 
@@ -192,18 +226,20 @@ export function LeaderboardModal({ open, onClose }: { open: boolean; onClose: ()
               <div className="flex flex-col items-center gap-2 rounded-2xl bg-rose-50 px-4 py-6 text-rose-700">
                 <WifiOff className="h-8 w-8" />
                 <span className="text-sm font-bold">Aduh, gagal memuat. Coba lagi ya!</span>
-                <button className="btn-cute-secondary" onClick={() => void fetchBoard()}>
+                <button className="btn-cute-secondary" onClick={() => void fetchBoard(tab)}>
                   Coba Lagi
                 </button>
               </div>
             )}
             {entries && entries.length === 0 && (
               <div className="py-8 text-center text-sm font-bold text-[#8a6a30]">
-                Belum ada rekor — jadilah yang pertama! 🥇
+                {tab === 'far'
+                  ? 'Belum ada run Tak Berujung — bertahan sejauh mungkin! ♾️'
+                  : 'Belum ada rekor — jadilah yang pertama! 🥇'}
               </div>
             )}
             {entries?.map((e, i) => (
-              <div key={e.id} className={`lb-row ${i === 0 ? 'lb-row-1' : i === 1 ? 'lb-row-2' : i === 2 ? 'lb-row-3' : 'lb-row-n'}`}>
+              <div key={`${tab}-${e.id}`} className={`lb-row ${i === 0 ? 'lb-row-1' : i === 1 ? 'lb-row-2' : i === 2 ? 'lb-row-3' : 'lb-row-n'}`}>
                 <span className="flex items-center justify-center text-base font-black text-[#7a4a10]">
                   {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
                 </span>
@@ -235,12 +271,34 @@ export function LeaderboardModal({ open, onClose }: { open: boolean; onClose: ()
                     )}
                   </span>
                   <span className="text-[10px] font-bold text-[#8a6a30]">
-                    👻 {e.defeated} · 🛡️ gel. {e.wave} · 🌟 {e.pahala}
+                    {tab === 'far' ? (
+                      <>
+                        👻 {e.defeated} · 🌟 {e.pahala}
+                      </>
+                    ) : (
+                      <>
+                        👻 {e.defeated} · 🛡️ gel. {e.wave} · 🌟 {e.pahala}
+                      </>
+                    )}
                   </span>
                 </span>
-                <StarRow stars={e.stars} />
+                {tab === 'far' ? (
+                  /* P12: papan Terjauh — gelombang jadi metrik utama */
+                  <span className="lb-wave-big" aria-label={`gelombang ${e.wave}`}>
+                    <span className="lb-wave-num">{e.wave}</span>
+                    <span className="lb-wave-label">gel.</span>
+                  </span>
+                ) : (
+                  <StarRow stars={e.stars} />
+                )}
               </div>
             ))}
+            {tab === 'far' && entries && entries.length > 0 && (
+              <p className="mt-2 rounded-2xl bg-teal-50 px-4 py-2.5 text-center text-xs font-bold text-[#0f766e]">
+                ♾️ Urut berdasarkan gelombang terjauh — main Mode Tak Berujung dari menu
+                utama untuk masuk papan ini!
+              </p>
+            )}
           </div>
         </CuteModal>
       )}

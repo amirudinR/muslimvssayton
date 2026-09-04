@@ -107,11 +107,22 @@ function errorMessage(err: unknown): string {
 
 const SELECT_COLS = 'id, name, stars, wave, defeated, pahala, mode, createdAt'
 
-/** GET /api/leaderboard — top 10 entries, ranked. */
-export async function GET() {
+/** P12: varian urutan — "Terbaik" (bintang, default) atau "Terjauh"
+ *  (khusus Tak Berujung, urut gelombang terdalam dulu).
+ *  SQL dirakit dari string tetap (tidak pernah dari input) — aman injeksi. */
+const RANK_SQL_BEST =
+  'ORDER BY stars DESC, defeated DESC, pahala DESC, createdAt ASC'
+const RANK_SQL_FARTHEST = `WHERE mode = 'Tak Berujung' ORDER BY wave DESC, stars DESC, defeated DESC, createdAt ASC`
+
+/** GET /api/leaderboard — top 10 entries, ranked.
+ *  Query opsional: `sort=wave` → papan "Terjauh" (endless only). */
+export async function GET(req: Request) {
   try {
+    const url = new URL(req.url)
+    const sort = url.searchParams.get('sort')
+    const farthest = sort === 'wave'
     const entries = (await db.$queryRawUnsafe(
-      `SELECT ${SELECT_COLS} FROM ScoreEntry ${RANK_SQL} LIMIT ${TOP_N}`,
+      `SELECT ${SELECT_COLS} FROM ScoreEntry ${farthest ? RANK_SQL_FARTHEST : RANK_SQL_BEST} LIMIT ${TOP_N}`,
     )) as LeaderRow[]
     return NextResponse.json({ ok: true, entries })
   } catch (err) {

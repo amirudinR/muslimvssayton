@@ -33,6 +33,7 @@ export const BADGES: BadgeDef[] = [
   { id: 'tutorial_done', name: 'Murid Rajin', desc: 'Menyelesaikan tutorial Kakek Imam', emoji: '🎓' },
   { id: 'daily_win', name: 'Juara Harian', desc: 'Menang Tantangan Hari Ini', emoji: '🔥' },
   { id: 'weekly_win', name: 'Penjaga Pekanan', desc: 'Menangkan Tantangan Mingguan', emoji: '📅' },
+  { id: 'endless_15', name: 'Penjelajah Abadi', desc: 'Milestone gel. 15 di Tak Berujung', emoji: '♾️' },
 ]
 
 let saveCache: SaveData | null = null
@@ -82,6 +83,7 @@ export interface BadgeCtx {
     | 'tutorialDone'
     | 'dailyWin'
     | 'weeklyWin'
+    | 'endlessMilestone'
   enemyId?: string
   wave?: number
   stars?: number
@@ -157,6 +159,11 @@ export function checkBadges(ctx: BadgeCtx) {
     }
     case 'weeklyWin': {
       unlock('weekly_win')
+      break
+    }
+    case 'endlessMilestone': {
+      // P12: milestone Tak Berujung — lencana saat melewati gelombang 15
+      if ((ctx.wave ?? 0) >= 15) unlock('endless_15')
       break
     }
   }

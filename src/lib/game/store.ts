@@ -94,6 +94,10 @@ export interface GameStore {
   endlessMode: boolean
   /* --- P11: run endless berakhir dengan rekor gelombang baru --- */
   endlessNewRecord: boolean
+  /* --- P12: jumlah milestone Tak Berujung yang dicapai run ini (tiap 5 wave) --- */
+  endlessMilestones: number
+  /* --- P12: total ⭐ bonus milestone yang SUDAH diterima run ini --- */
+  endlessMilestoneStars: number
   /* --- P3: level aktif (0 = mode klasik 10 wave) --- */
   levelId: number
   /* --- P3: total gelombang level aktif (dinamis utk level select) --- */
@@ -205,6 +209,9 @@ export const useGameStore = create<GameStore & GameActions>()((set) => ({
   /* P11: Mode Tak Berujung */
   endlessMode: false,
   endlessNewRecord: false,
+  /* P12: milestone Tak Berujung */
+  endlessMilestones: 0,
+  endlessMilestoneStars: 0,
   levelId: 0,
   totalWaves: 10,
   collectionOpen: false,
@@ -326,6 +333,8 @@ export const useGameStore = create<GameStore & GameActions>()((set) => ({
       weeklyStreakResult: 0,
       endlessMode: false,
       endlessNewRecord: false,
+      endlessMilestones: 0,
+      endlessMilestoneStars: 0,
       levelId: 0,
       totalWaves: 10,
       activePowerups: [],

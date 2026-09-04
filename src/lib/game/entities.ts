@@ -107,6 +107,9 @@ export class Enemy {
   stunUntil = -1
   dizzyUntil = -1
   knockFlash = 0
+  /** P12: pengali kecepatan gelombang sangat tinggi (endless) — naik pelan
+   *  setelah gel. 30 hingga cap +18% agar wave 50+ tetap menantang. */
+  private waveSpeedMul = 1
   private nextBuff = 0
   private nextSmoke = 0
   private nextShock = 0
@@ -120,6 +123,8 @@ export class Enemy {
     this.lane = lane
     this.maxHp = Math.round(this.def.hp * (1 + 0.12 * (wave - 1)) * RUN_MODS.enemyHpMult)
     this.hp = this.maxHp
+    // P12: wave 31+ musuh sedikit lebih gesit (cap 1.18× pada gel. 60+)
+    this.waveSpeedMul = wave > 30 ? 1 + Math.min(0.18, (wave - 30) * 0.006) : 1
     this.group = getEnemyModel(enemyId)
     this.headY = {
       pocong: 1.55, kunti: 1.85, genderuwo: 1.7, tuyul: 1.35, wewe: 1.95, kuyang: 1.35, banaspati: 2.6,
@@ -206,7 +211,7 @@ export class Enemy {
     })
 
     // kecepatan efektif
-    let speed = this.def.speed * RUN_MODS.enemySpeedMult
+    let speed = this.def.speed * RUN_MODS.enemySpeedMult * this.waveSpeedMul
     if (now < this.slowUntil) speed *= this.slowFactor
     else this.slowFactor = 1
     if (now < this.buffUntil) speed *= 1.35 // semangat karena ketawaan kunti

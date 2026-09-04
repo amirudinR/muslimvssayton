@@ -1755,3 +1755,184 @@
   color: #0369a1;
   border-color: #7dd3fc;
 }
+
+/* ============================================================
+ * P12 — MILESTONE TAK BERUJUNG + PAPAN REKOR "TERJAUH" + POLISH
+ * ============================================================ */
+
+/* chip milestone di HUD (muncul setelah milestone pertama — emas, mirror .endless-chip) */
+.milestone-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.9rem;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, #ffd76a, #ffb84d);
+  border: 2px solid #ffe9a8;
+  color: #7a4210;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+  box-shadow: 0 3px 0 #d9962e, 0 8px 16px rgba(190, 140, 30, 0.35);
+  animation: milestone-glow 2.4s ease-in-out infinite;
+}
+@keyframes milestone-glow {
+  0%, 100% { box-shadow: 0 3px 0 #d9962e, 0 8px 16px rgba(190, 140, 30, 0.35); }
+  50% { box-shadow: 0 3px 0 #d9962e, 0 8px 22px rgba(255, 184, 77, 0.6); }
+}
+
+/* kartu rekap milestone di layar kalah endless (emas, kilau menyapu) */
+.milestone-recap {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem 0.6rem;
+  width: 100%;
+  padding: 0.6rem 0.9rem;
+  border-radius: 1.3rem;
+  background: linear-gradient(90deg, #fffbe8 0%, #ffedb0 100%);
+  border: 3px solid #ffd76a;
+  box-shadow: 0 4px 0 #e8b34d, 0 12px 24px rgba(190, 140, 30, 0.3);
+  overflow: hidden;
+}
+.milestone-recap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.65) 50%, transparent 60%);
+  background-size: 220% 100%;
+  animation: mvp-sheen 2.8s ease-in-out infinite;
+}
+
+/* ---------- P12-b: tab papan rekor (Terbaik / Terjauh) ---------- */
+.lb-tabs {
+  display: flex;
+  gap: 0.5rem;
+  padding-bottom: 0.6rem;
+}
+.lb-tab {
+  flex: 1;
+  padding: 0.42rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  color: #6a4d1a;
+  background: #fffdf5;
+  border: 3px solid #f0dfae;
+  box-shadow: 0 3px 0 #e0d0a0;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.lb-tab:hover { transform: translateY(-2px); border-color: #ffce6b; }
+.lb-tab-active {
+  background: linear-gradient(180deg, #ffd76a, #ffb84d);
+  border-color: #e8a53a;
+  color: #7a4210;
+  box-shadow: 0 4px 0 #d9962e;
+}
+/* varian teal utk tab Terjauh */
+.lb-tab-far:hover { border-color: #5eead4; }
+.lb-tab-far-active {
+  background: linear-gradient(180deg, #2dd4bf, #14b8a6);
+  border-color: #0d9488;
+  color: #fff;
+  text-shadow: 0 1px 0 rgba(13, 148, 136, 0.5);
+  box-shadow: 0 4px 0 #0d9488;
+}
+
+/* metrik utama papan Terjauh — angka gelombang besar */
+.lb-wave-big {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 2.6rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.8rem;
+  background: linear-gradient(180deg, #ccfbf1, #99f6e4);
+  border: 2px solid #2dd4bf;
+}
+.lb-wave-num {
+  font-size: 1rem;
+  font-weight: 900;
+  line-height: 1.1;
+  color: #0f766e;
+  font-variant-numeric: tabular-nums;
+}
+.lb-wave-label {
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #14b8a6;
+}
+
+/* ---------- P12-d: POLISH TAMBAHAN ---------- */
+
+/* banner "+N Bintang Toko!" — kilau menyapu + tepi emas (victory & gameover) */
+.star-gain-banner {
+  position: relative;
+  overflow: hidden;
+  border-width: 2px;
+  border-style: solid;
+  border-color: #f0c030;
+}
+.star-gain-banner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.6) 50%, transparent 60%);
+  background-size: 220% 100%;
+  animation: mvp-sheen 2.4s ease-in-out infinite;
+}
+
+/* HP bar boss — garis diagonal berjalan (kesan "panas & aktif") */
+.boss-hp-fill {
+  position: relative;
+  overflow: hidden;
+}
+.boss-hp-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 255, 255, 0) 10px,
+    rgba(255, 255, 255, 0.28) 10px,
+    rgba(255, 255, 255, 0.28) 20px
+  );
+  animation: boss-stripes 0.9s linear infinite;
+}
+@keyframes boss-stripes {
+  from { transform: translateX(-20px); }
+  to { transform: translateX(0); }
+}
+
+/* hover lift kartu tantangan menu (daili/weekly/endless kini "hidup") */
+.daily-card,
+.weekly-card,
+.endless-card {
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.daily-card:hover,
+.weekly-card:hover,
+.endless-card:hover {
+  transform: translateY(-3px) scale(1.012);
+}
+.daily-card:hover { box-shadow: 0 7px 0 #f59e0b66, 0 16px 30px rgba(217, 119, 6, 0.25); }
+.weekly-card:hover { box-shadow: 0 7px 0 #8b5cf666, 0 16px 30px rgba(124, 58, 237, 0.25); }
+.endless-card:hover { box-shadow: 0 7px 0 #0d948866, 0 16px 30px rgba(13, 148, 136, 0.25); }
+
+/* dukungan scrollbar Firefox (polish lintas browser) */
+.overflow-y-auto,
+[class*='overflow-y-auto'],
+.max-h-96 {
+  scrollbar-width: thin;
+  scrollbar-color: #ffb84d rgba(255, 240, 200, 0.7);
+}
