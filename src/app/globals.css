@@ -1,0 +1,329 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ============================================================
+ * GAME: PENJAGA MASJID — gaya ramah anak (font bulat, warna
+ * krem/hijau pastel/emas, tombol chunky "bisa ditekan").
+ * ============================================================ */
+
+.game-body {
+  font-family: var(--font-round), ui-rounded, "Comic Sans MS", system-ui, sans-serif;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ---------- Panel lucu ---------- */
+.panel-cute {
+  background: linear-gradient(180deg, #fffdf5 0%, #fff6dd 100%);
+  border: 3px solid #ffd98a;
+  border-radius: 1.4rem;
+  box-shadow:
+    0 4px 0 #eec96b,
+    0 10px 24px rgba(120, 90, 30, 0.22);
+  color: #4a3b20;
+}
+
+/* ---------- Tombol chunky ---------- */
+.btn-cute,
+.btn-cute-lg,
+.btn-cute-secondary,
+.btn-cute-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: 9999px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.12s ease, filter 0.15s;
+  white-space: nowrap;
+}
+
+.btn-cute {
+  padding: 0.55rem 1.15rem;
+  font-size: 0.9rem;
+  background: linear-gradient(180deg, #6cc97b 0%, #4dab5c 100%);
+  box-shadow: 0 4px 0 #3c8a49, 0 8px 16px rgba(60, 138, 73, 0.35);
+}
+.btn-cute:hover { transform: translateY(-2px) scale(1.03); filter: brightness(1.05); }
+.btn-cute:active { transform: translateY(3px); box-shadow: 0 1px 0 #3c8a49; }
+
+.btn-cute-lg {
+  padding: 0.85rem 1.9rem;
+  font-size: 1.15rem;
+  background: linear-gradient(180deg, #ffd76a 0%, #ffb84d 100%);
+  color: #7a4210;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+  box-shadow: 0 5px 0 #d9962e, 0 14px 28px rgba(217, 150, 46, 0.45);
+  animation: wiggle-attention 2.8s ease-in-out infinite;
+}
+.btn-cute-lg:hover { transform: translateY(-2px) scale(1.05); filter: brightness(1.06); }
+.btn-cute-lg:active { transform: translateY(4px); box-shadow: 0 1px 0 #d9962e; }
+
+.btn-cute-secondary {
+  padding: 0.55rem 1.15rem;
+  font-size: 0.9rem;
+  background: linear-gradient(180deg, #8fd4f7 0%, #63b8e0 100%);
+  box-shadow: 0 4px 0 #4a92b5, 0 8px 16px rgba(74, 146, 181, 0.3);
+}
+.btn-cute-secondary:hover { transform: translateY(-2px) scale(1.03); }
+.btn-cute-secondary:active { transform: translateY(3px); box-shadow: 0 1px 0 #4a92b5; }
+
+.btn-cute-danger {
+  padding: 0.55rem 1.15rem;
+  font-size: 0.9rem;
+  background: linear-gradient(180deg, #ff9d9d 0%, #f47474 100%);
+  box-shadow: 0 4px 0 #c95656, 0 8px 16px rgba(201, 86, 86, 0.3);
+}
+.btn-cute-danger:hover { transform: translateY(-2px) scale(1.03); }
+.btn-cute-danger:active { transform: translateY(3px); box-shadow: 0 1px 0 #c95656; }
+
+/* ---------- Tombol ikon & kamera ---------- */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, #fffdf5 0%, #ffedb8 100%);
+  border: 2px solid #ffd98a;
+  color: #6a4d1a;
+  box-shadow: 0 3px 0 #e8c065;
+  cursor: pointer;
+  transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.12s;
+}
+.btn-icon:hover { transform: translateY(-2px) scale(1.06); }
+.btn-icon:active { transform: translateY(2px); box-shadow: 0 1px 0 #e8c065; }
+
+.btn-cam {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.9rem;
+  background: #fffdf5;
+  border: 2px solid #f0dfae;
+  color: #6a4d1a;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.btn-cam:hover { transform: translateY(-1px); border-color: #ffce6b; }
+.btn-cam-active {
+  background: linear-gradient(180deg, #ffd76a, #ffb84d);
+  border-color: #e8a53a;
+  color: #7a4210;
+}
+
+.btn-quality {
+  padding: 0.25rem 0.7rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  background: #fffdf5;
+  border: 2px solid #f0dfae;
+  color: #6a4d1a;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-quality:hover { border-color: #ffce6b; }
+.btn-quality-active {
+  background: linear-gradient(180deg, #6cc97b, #4dab5c);
+  border-color: #3c8a49;
+  color: #fff;
+}
+
+.btn-round {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 9999px;
+  background: #fff;
+  border: 2px solid #ffd98a;
+  color: #a05a20;
+  box-shadow: 0 2px 0 #e8c065;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.btn-round:hover { transform: rotate(90deg) scale(1.08); }
+
+/* ---------- Kartu karakter ---------- */
+.card-char {
+  cursor: grab;
+  box-shadow: 0 4px 0 rgba(200, 170, 100, 0.5), 0 8px 18px rgba(120, 90, 30, 0.2);
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.card-char:active { cursor: grabbing; }
+
+/* ---------- Animasi ---------- */
+@keyframes bounce-soft {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-10px) scale(1.04); }
+}
+.animate-bounce-soft { animation: bounce-soft 1.8s ease-in-out infinite; }
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-spin-slow { animation: spin-slow 9s linear infinite; }
+
+@keyframes wiggle-attention {
+  0%, 88%, 100% { transform: rotate(0deg) scale(1); }
+  91% { transform: rotate(-1.6deg) scale(1.02); }
+  94% { transform: rotate(1.6deg) scale(1.02); }
+  97% { transform: rotate(-1deg) scale(1.01); }
+}
+
+/* ---------- Scrollbar lucu ---------- */
+.overflow-x-auto::-webkit-scrollbar,
+.max-h-96::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+.overflow-x-auto::-webkit-scrollbar-track {
+  background: rgba(255, 240, 200, 0.6);
+  border-radius: 9999px;
+}
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background: #ffce6b;
+  border-radius: 9999px;
+}
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
+  background: #ffb84d;
+}
+
+/* ---------- Loading baris ---------- */
+@keyframes shimmer-line {
+  0% { opacity: 0.4; }
+  50% { opacity: 1; }
+  100% { opacity: 0.4; }
+}
