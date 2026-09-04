@@ -527,6 +527,68 @@ export const WAVES: WaveDef[] = [
 
 export const HP_WAVE_SCALE = (wave: number) => 1 + 0.12 * (wave - 1)
 
+/* ---------------------- P11: MODE TAK BERUJUNG (ENDLESS) ---------------------- */
+
+/** kolam musuh utk generator gelombang endless — dikelompokkan kekuatan. */
+const ENDLESS_POOL_COMMON: EnemyId[] = ['pocong', 'tuyul', 'kunti']
+const ENDLESS_POOL_MID: EnemyId[] = ['genderuwo', 'sundel', 'leak', 'jailangkung', 'suster', 'kuyang', 'wewe']
+const ENDLESS_POOL_LATE: EnemyId[] = ['kolongwewe', 'gendruwo', 'nyiblorong', 'palasik', 'kober', 'wewerawa', 'butoijo', 'cindaku', 'bunian']
+
+/** Generator gelombang Tak Berujung (dipanggil engine utk wave ke-11+).
+ *  Deterministik per nomor wave (seed = waveNum) — semua pemain dapat pola sama,
+ *  kesulitan naik natural via HP_WAVE_SCALE + jumlah musuh bertambah pelan.
+ *  Setiap wave ke-5 (15, 20, 25, ...) = gelombang BOSS banaspati. */
+export function generateEndlessWave(waveNum: number): WaveDef {
+  // PRNG deterministik kecil (mulberry32)
+  let a = (waveNum * 2654435761) >>> 0
+  const rand = () => {
+    a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+  const isBoss = waveNum % 5 === 0
+
+  if (isBoss) {
+    // gelombang boss: banaspati + pengikut campuran
+    const min1 = ENDLESS_POOL_MID[Math.floor(rand() * ENDLESS_POOL_MID.length)]
+    const min2 = ENDLESS_POOL_LATE[Math.floor(rand() * ENDLESS_POOL_LATE.length)]
+    return {
+      spawns: [
+        { type: 'banaspati', count: 1, interval: 1 },
+        { type: min1, count: 3 + Math.floor(waveNum / 6), interval: 1.6, delay: 3 },
+        { type: min2, count: 2 + Math.floor(waveNum / 8), interval: 2, delay: 6 },
+        { type: 'pocong', count: 5, interval: 0.8, delay: 4 },
+      ],
+      reward: 90 + waveNum * 4,
+      isBoss: true,
+    }
+  }
+
+  // gelombang reguler: 3-4 kelompok, campuran pool sesuai tingkat wave
+  const groups: WaveSpawn[] = []
+  const nGroups = 3 + (waveNum % 2) // 3 atau 4 bergantian
+  const lateChance = Math.min(0.85, 0.25 + (waveNum - 11) * 0.04)
+  const midChance = Math.min(0.9, 0.5 + (waveNum - 11) * 0.03)
+  for (let g = 0; g < nGroups; g++) {
+    const r = rand()
+    let type: EnemyId
+    if (r < lateChance) type = ENDLESS_POOL_LATE[Math.floor(rand() * ENDLESS_POOL_LATE.length)]
+    else if (r < lateChance + midChance) type = ENDLESS_POOL_MID[Math.floor(rand() * ENDLESS_POOL_MID.length)]
+    else type = ENDLESS_POOL_COMMON[Math.floor(rand() * ENDLESS_POOL_COMMON.length)]
+    // jumlah naik pelan: basis 3-5 + ~0.35 per wave, dibatasi biar tetap ramah anak
+    const base = 3 + Math.floor(rand() * 3)
+    const count = Math.min(14, base + Math.floor(waveNum / 3))
+    groups.push({
+      type,
+      count,
+      interval: Math.max(0.55, 1.4 - waveNum * 0.02),
+      delay: Math.floor(rand() * 8),
+    })
+  }
+  return { spawns: groups, reward: 50 + waveNum * 3 }
+}
+
 /* ------------------------------- JALUR LANE ------------------------------- */
 
 export type Lane = [number, number][]

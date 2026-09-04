@@ -280,6 +280,23 @@ export function recordWeeklyWin(weekKey: string): number {
   return s.weeklyStreak
 }
 
+/* ---------------- P11: Mode Tak Berujung (endless) ---------------- */
+
+/** rekor gelombang terjauh Mode Tak Berujung (0 = belum pernah main). */
+export function getBestEndlessWave(): number {
+  return getSave().bestEndlessWave ?? 0
+}
+
+/** catat hasil akhir run endless — kembalikan true bila REKOR BARU. */
+export function recordEndlessWave(wave: number): boolean {
+  const s = getSave()
+  const w = Math.max(0, wave | 0)
+  if (w <= (s.bestEndlessWave ?? 0)) return false
+  s.bestEndlessWave = w
+  flush()
+  return true
+}
+
 /* ---------------- P3: Level Select ---------------- */
 
 export interface LevelProgressView {

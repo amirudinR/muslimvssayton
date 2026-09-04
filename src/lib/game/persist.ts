@@ -47,6 +47,8 @@ export interface SaveData {
   starCurrency: number
   /** P9-b: statistik pemakaian per karakter (key = id gameplay) */
   charUsage: Record<string, { placed: number; wins: number }>
+  /** P11: gelombang terjauh Mode Tak Berujung (0 = belum pernah) */
+  bestEndlessWave: number
 }
 
 const KEY = 'penjaga-masjid-save-v1'
@@ -73,6 +75,7 @@ const DEFAULT_SAVE: SaveData = {
   ownedChars: [],
   starCurrency: 0,
   charUsage: {},
+  bestEndlessWave: 0,
 }
 
 /** P9-b: sanitasi charUsage dari save lama — entri rusak dilewati. */
@@ -109,6 +112,7 @@ export function loadSave(): SaveData {
       ownedChars: Array.isArray(parsed.ownedChars) ? parsed.ownedChars : [],
       starCurrency: typeof parsed.starCurrency === 'number' ? Math.max(0, Math.round(parsed.starCurrency)) : 0,
       charUsage: sanitizeCharUsage(parsed.charUsage),
+      bestEndlessWave: typeof parsed.bestEndlessWave === 'number' ? Math.max(0, parsed.bestEndlessWave | 0) : 0,
     }
   } catch {
     return { ...DEFAULT_SAVE, achievements: [], charUsage: {} }

@@ -749,3 +749,73 @@ Isu Belum Terselesaikan / Risiko & Rekomendasi Fase Berikutnya:
 - Statistik charUsage belum ada "hall of fame" historis (top 3 all-time) — ide.
 - Ide lain: SFX khusus spawn kotak bintang (saat ini hanya toast), tutorial micro utk kotak sedekah, wave 11+ endless mode, cloud save.
 - catatan QA: window.open popup test membuat konteks browser baru (localStorage terpisah) — gunakan tab yang sama saat QA berikutnya, atau QA ulang dari fresh state (justru berguna utk uji first-run).
+
+---
+Task ID: P11 (15-a/15-b/15-c)
+Agent: main-agent (Z.ai Code)
+Task: FASE P11 — Mode Tak Berujung (endless) + fix stale reads MainMenu + polish Kotak Bintang
+
+Status Proyek Saat Ini:
+- Awal sesi: QA baseline P10 semua PASS (probe, menu lengkap 4 kartu, startGame/place/starbox/backToMenu, lint/tsc/0 error) → game stabil, lanjut fitur sesuai rekomendasi P10: endless mode + fix stale reads + SFX/flash kotak bintang.
+
+Work Log:
+
+QA AWAL (agent-browser):
+- 200 OK, probe lengkap, mvp-banner + weekly-card render, startGame level 1 + tryPlace + starbox collect + backToMenu bersih, 0 error.
+
+P11-a: FIX STALE READS MAINMENU (rekomendasi P10):
+- MainMenu.tsx: records/levelProg/starCur/ownedCount semula dibaca SEKALI via useState (nilai basi dalam sesi — ⭐ currency tidak bertambah setelah menang sampai reload) → kini dihitung INLINE saat render dengan gate `onMenu = screen==='menu' && typeof window !== 'undefined'` (pola sama dengan fix MVP P10).
+- VERIFIKASI: setelah run + backToMenu TANPA reload, chip currency menampilkan nilai segar dari localStorage (188) ✓.
+
+P11-b: MODE TAK BERUJUNG (ENDLESS):
+- data.ts: generateEndlessWave(waveNum) — PRNG mulberry32 deterministik per nomor wave; pool 3 tier musuh (COMMON pocong/tuyul/kunti, MID 7 tipe, LATE 9 tipe) dgn probabilitas naik seiring wave; 3-4 grup, count 3-5 + wave/3 (cap 14), interval min 0.55; boss tiap wave %5 == 0 (banaspati + 2 pengikut pool + pocong); reward 50+wave×3 (boss 90+wave×4).
+- persist.ts: SaveData.bestEndlessWave (default 0, merge defensif clamp ≥0).
+- achievements.ts: getBestEndlessWave() + recordEndlessWave(wave) → boolean newRecord.
+- store.ts: endlessMode + endlessNewRecord (+ interface + default + resetForNewGame).
+- engine.ts:
+  - startGame opts + endless?: boolean → set endlessMode + toast khusus ×2.
+  - [FIX KRITIS tersembunyi] onWaveComplete: `WAVES[waveNum-1]` (global, undefined utk wave>10!) → `this.levelWaves[waveNum-1] ?? WAVES[...]` — dulu aman karena level reward kebetulan selaras; WAJIB utk endless (flag lama worklog "caution" kini terselesaikan).
+  - onWaveComplete: saat waveNum >= levelWaves.length + endlessMode → push generateEndlessWave (bukan onVictory) + toast "♾️ Gelombang tak berujung terus datang!" / boss warning.
+  - continueEndless() PUBLIC: validasi (victory + bukan daily/weekly/level) → screen playing + endlessMode + resume BGM + reset pose tower (menari saat victory) + generate wave 11+ + nextWaveIn + toast.
+  - runRewardBase field: pahala dasar yang SUDAH ditukar ⭐ (set di onVictory setelah grantRunReward); onGameOver endless: delta = starsEarned - runRewardBase → runStarGain = grantRunReward(delta) (hadiah ⭐ dari pahala selama bertahan) + endlessNewRecord = recordEndlessWave(st.wave) + toast REKOR BARU.
+  - backToMenu: reset endlessMode/endlessNewRecord.
+- EndScreens.tsx:
+  - Victory klasik (bukan daily/weekly/level): tombol teal "♾️ LANJUT TAK BERUJUNG! (semua penjaga dipertahankan)" → continueEndless.
+  - Gameover endless: banner teal "Bertahan hingga Gelombang N!" + kondisional "🏆 REKOR BARU!" + banner "+N Bintang Toko! (dari pahala bertahan)" (starGain kini dibaca juga di gameover endless) + ScoreSubmit dgn TIER bintang dari kedalaman wave (≥15→3⭐, ≥12→2⭐, ≥10→1⭐, else 0) agar run hebat terlihat di papan + restart endless.
+  - ScoreSubmit mode label: 'Tak Berujung'.
+- Hud.tsx: panel wave "♾️ Gelombang N ∞" (bukan N/total) + dot "+∞" + chip teal .endless-chip "TAK BERUJUNG · Bertahan selama mungkin!" (spin 360° linear 3.2s).
+- MenuModals.tsx: chip .lb-mode-endless + emoji ♾️.
+- API leaderboard: whitelist + 'Tak Berujung'; [FIX VALIDASI] stars 0-3 (dulu 1-3 → endless gameover ditolak 400!) + wave 0-999 (dulu 0-10 → wave 11+ ditolak!).
+- EndlessChallenge.tsx BARU: kartu teal (emoji ♾️ wobble, header + chip Rekor: Gel. N, 3 chip efek, tombol MULAI BERTAHAN!, footnote) — mounted di MainMenu setelah WeeklyChallengeCard.
+- CSS ~110 baris: .endless-card/-effect-chip/-best-chip, .btn-endless, .endless-chip, .endless-won-banner, .lb-mode-endless (semua teal #2dd4bf/#14b8a6/#0d9488 family, mirror konvensi weekly).
+
+P11-c: POLISH KOTAK BINTANG:
+- Spawn kotak bintang kini dirayakan: audio.tada() + showStarFlash() — overlay radial-gradient emas (rgba(255,224,102)) z-39 fade 0.7s auto-remove 800ms (pattern flash screenshot engine).
+- VERIFIKASI: div flash muncul di body dengan cssText benar lalu auto-remove.
+
+VERIFIKASI (probe + DOM + VLM + DB + mobile):
+- ✓ Endless dari menu: startGame({endless:true}) → mode aktif + chip HUD; tanpa tower → gameover wave 4 → endlessNewRecord TRUE + bestEndlessWave 4 tersimpan + banner "♾️ Bertahan hingga Gelombang 4! 🏆 REKOR BARU!" + form submit tampil; POST awal 400 (bug validasi stars/wave) → setelah fix 200.
+- ✓ Entry DB: {name: QA-P11 Endless, stars: 0, wave: 4, mode: Tak Berujung} (sqlite verify).
+- ✓ Victory klasik → LANJUT TAK BERUJUNG button tampil → klik → screen playing + endlessMode + 8 tower DIPERTAHANKAN + wave 10 + levelWaves 10→11 + pahala/HP dipertahankan + chip HUD.
+- ✓ Simulasi endless: wave 11 → 58 berturut (levelWaves tumbuh 11→32→59), boss wave 15/30/35/... semua terselesaikan (HP bertahan berkat tower upgrade + powerup farm).
+- ✓ Gameover endless lanjutan (tower dihapus utk paksa): wave 16, endlessNewRecord TRUE (16 > best 4), runStarGain 95 = grantRunReward(delta 1895) — total starCurrency 93+95=188 PERSIS ✓; banner "+95 Bintang Toko! (dari pahala bertahan)" di DOM ✓.
+- ✓ Submit tier: wave 16 → stars 3 → POST 200 → DB {QA-P11 Wave16, stars 3, wave 16, defeated 288, pahala 3778, mode Tak Berujung} → LEADERBOARD RANK #1 dgn chip teal "♾️ Tak Berujung" (VLM verify).
+- ✓ Gameover wave 4 (bukan rekor): banner TANPA "REKOR BARU" (kondisional benar) + VLM: form + coach tips + tombol lengkap, layout bersih.
+- ✓ Mobile 390×844: kartu endless fits (x16 w359), chip HUD fits, wave panel "♾️ Gelombang 0 ∞+∞" — VLM: no overlap.
+- ✓ Regresi akhir: reload fresh → probe + 5 kartu menu (daily/weekly/endless/mvp) render; lint bersih; tsc --noEmit src/ 0 error; dev.log bersih; agent-browser errors KOSONG.
+- Artefak: p11_endless_menu.png, p11_endless_card.png, p11_victory_continue.png, p11_endless_gameover2/3.png, p11_leaderboard_endless.png, p11_mobile_menu/endless/game.png, p11_star_flash.png.
+
+CATATAN QA PENTING (utk sesi berikut):
+- Eval loop advance() besar (advance(10)×40 dalam 1 eval) saat state wave 58 + banyak entitas → timeout CDP (main thread blocked) → browser close + open pulihkan. BATASI chunk eval (advance ≤ 240s sim per eval, atau pecah per 12s seperti bot sukses).
+- Bun + better-sqlite3 native module crash (NAPI fatal) — QA DB via curl API GET (top 10) saja.
+
+Stage Summary:
+- P11 SELESAI: (1) MODE TAK BERUJUNG lengkap end-to-end — 2 pintu masuk (kartu menu teal dgn rekor + tombol LANJUT di victory klasik), generator gelombang deterministik per nomor (pool 19 musuh 3 tier + boss tiap 5), rekor bestEndlessWave persist, hadiah ⭐ delta pahala selama bertahan, skor masuk leaderboard dgn tier bintang + chip teal; (2) fix stale reads MainMenu (currency/records live tanpa reload); (3) polish Kotak Bintang (SFX tada + flash emas radial); + 2 bug validasi API ditemukan & difix (stars 0, wave >10 ditolak).
+- Bot bertahan hingga wave 58 (boss ×8+ survived) — endless balance: menantang tapi bisa sangat jauh dengan strategy bagus.
+
+Isu Belum Terselesaikan / Risiko & Rekomendasi Fase Berikutnya:
+- Bahasa EN (i18n) masih prioritas sedang — tugas besar menyentuh semua komponen.
+- Endless leaderboard: ranking pakai stars DESC — run endless 3⭐ wave 15-16 sejajar dgn victory 3⭐; pertimbangkan kolom/mode-filter khusus papan rekor (tab "♾️ Terjauh" sort wave DESC).
+- Kartu endless menambah tinggi scroll menu (4 kartu sekarang) — pertimbangkan tab/kategori di mobile bila feedback pengain sempit.
+- Tutorial bubble sempat tertangkap kamera QA di gameplay (screen playing) — by design; pastikan markTutorialDone jalan di run nyata.
+- Ide: wave milestone reward (⭐ bonus tiap 5 wave), enemy speed scale pelan di wave sangat tinggi (HP saja sekarang — wave 50+ hanya HP naik), hujan bintang VFX boss endless, save mid-run.

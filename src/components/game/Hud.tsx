@@ -43,6 +43,7 @@ export function Hud() {
   const wavePreview = useGameStore((s) => s.wavePreview)
   const totalWaves = useGameStore((s) => s.totalWaves)
   const levelId = useGameStore((s) => s.levelId)
+  const endlessMode = useGameStore((s) => s.endlessMode)
   const waves = levelId > 0 ? levelWaves(levelId) : WAVES
 
   const [banner, setBanner] = useState<{ text: string; kind: 'normal' | 'boss' | 'newEnemy'; enemyEmoji?: string } | null>(null)
@@ -121,9 +122,9 @@ export function Hud() {
         {/* Wave badge + titik progres */}
         <div className="panel-cute flex flex-col items-center gap-0.5 px-3 py-1.5">
           <div className="flex items-center gap-1.5">
-            <span className="text-lg sm:text-xl">🛡️</span>
+            <span className="text-lg sm:text-xl">{endlessMode ? '♾️' : '🛡️'}</span>
             <span className="text-sm font-extrabold text-[#4a3b20] sm:text-base">
-              Gelombang {wave}/{totalWaves}
+              {endlessMode ? `Gelombang ${wave} ∞` : `Gelombang ${wave}/${totalWaves}`}
             </span>
           </div>
           <div className="flex items-center gap-1" aria-label="Progres gelombang">
@@ -135,6 +136,7 @@ export function Hud() {
                 }`}
               />
             ))}
+            {endlessMode && <span className="ml-0.5 text-[9px] font-black text-teal-600">+∞</span>}
           </div>
         </div>
 
@@ -294,6 +296,28 @@ export function Hud() {
               {weeklyMod.emoji}
             </motion.span>
             PEKANAN · {weeklyMod.name}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ---------- P11: Chip Mode Tak Berujung ---------- */}
+      <AnimatePresence>
+        {endlessMode && (
+          <motion.div
+            initial={{ opacity: 0, y: -12, scale: 0.8 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            className="endless-chip pointer-events-none mt-1"
+            role="status"
+          >
+            <motion.span
+              className="inline-block"
+              animate={{ rotate: [0, 360] }}
+              transition={{ repeat: Infinity, duration: 3.2, ease: 'linear' }}
+            >
+              ♾️
+            </motion.span>
+            TAK BERUJUNG · Bertahan selama mungkin!
           </motion.div>
         )}
       </AnimatePresence>

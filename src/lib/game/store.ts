@@ -90,6 +90,10 @@ export interface GameStore {
   dailyStreakResult: number
   /* --- P9: streak Tantangan Mingguan hasil kemenangan (untuk layar menang) --- */
   weeklyStreakResult: number
+  /* --- P11: Mode Tak Berujung aktif (gelombang berikut terus digenerasi) --- */
+  endlessMode: boolean
+  /* --- P11: run endless berakhir dengan rekor gelombang baru --- */
+  endlessNewRecord: boolean
   /* --- P3: level aktif (0 = mode klasik 10 wave) --- */
   levelId: number
   /* --- P3: total gelombang level aktif (dinamis utk level select) --- */
@@ -198,6 +202,9 @@ export const useGameStore = create<GameStore & GameActions>()((set) => ({
   coachTips: null,
   dailyStreakResult: 0,
   weeklyStreakResult: 0,
+  /* P11: Mode Tak Berujung */
+  endlessMode: false,
+  endlessNewRecord: false,
   levelId: 0,
   totalWaves: 10,
   collectionOpen: false,
@@ -317,6 +324,8 @@ export const useGameStore = create<GameStore & GameActions>()((set) => ({
       coachTips: null,
       dailyStreakResult: 0,
       weeklyStreakResult: 0,
+      endlessMode: false,
+      endlessNewRecord: false,
       levelId: 0,
       totalWaves: 10,
       activePowerups: [],

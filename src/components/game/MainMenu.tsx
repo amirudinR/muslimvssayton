@@ -29,6 +29,7 @@ import {
 } from './MenuModals'
 import { DailyChallengeCard } from './DailyChallenge'
 import { WeeklyChallengeCard } from './WeeklyChallenge'
+import { EndlessChallengeCard } from './EndlessChallenge'
 
 const AVATARS = ['🤲', '📖', '💝', '💧', '💡', '📢']
 
@@ -36,17 +37,20 @@ export function MainMenu() {
   const screen = useGameStore((s) => s.screen)
   const [showBadges, setShowBadges] = useState(false)
   const [showBoard, setShowBoard] = useState(false)
-  // data dibaca saat menu aktif (localStorage — hanya client)
-  const [records] = useState(() => (typeof window !== 'undefined' ? getRecords() : null))
-  const [levelProg] = useState(() => (typeof window !== 'undefined' ? getLevelProgress() : null))
-  const [starCur] = useState(() => (typeof window !== 'undefined' ? getStarCurrency() : 0))
-  const [ownedCount] = useState(
-    () => (typeof window !== 'undefined' ? 2 + getOwnedChars().filter((id) => id !== 'hero-ali' && id !== 'hero-aisyah').length : 0),
-  )
+  /* [FIX P11-a] semua data localStorage dibaca ulang SETIAP kali menu tampil
+     (dulu useState sekali di mount → nilai basi dalam satu sesi, mis. ⭐ tidak
+     bertambah setelah menang sampai reload). Pola sama dengan fix banner MVP P10. */
+  const onMenu = screen === 'menu' && typeof window !== 'undefined'
+  const records = onMenu ? getRecords() : null
+  const levelProg = onMenu ? getLevelProgress() : null
+  const starCur = onMenu ? getStarCurrency() : 0
+  const ownedCount = onMenu
+    ? 2 + getOwnedChars().filter((id) => id !== 'hero-ali' && id !== 'hero-aisyah').length
+    : 0
   /* P10: karakter andalan — dibaca ulang SETIAP kali menu tampil (render saat
    * screen==='menu') agar statistik pemakaian dari run terbaru langsung terlihat
    * (pengalaman bug serupa: banner bintang toko yang basi di P9). */
-  const mvp = screen === 'menu' && typeof window !== 'undefined' ? getFavoriteChar() : null
+  const mvp = onMenu ? getFavoriteChar() : null
   const mvpDef = mvp ? getCharDef(mvp.id) : null
 
   if (screen !== 'menu') return null
@@ -266,6 +270,9 @@ export function MainMenu() {
 
           {/* P9: Kartu Tantangan Mingguan */}
           <WeeklyChallengeCard />
+
+          {/* P11: Kartu Mode Tak Berujung */}
+          <EndlessChallengeCard />
         </div>
       </div>
 

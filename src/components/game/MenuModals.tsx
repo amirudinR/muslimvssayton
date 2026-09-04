@@ -217,11 +217,20 @@ export function LeaderboardModal({ open, onClose }: { open: boolean; onClose: ()
                             ? 'lb-mode-daily'
                             : e.mode === 'Tantangan Mingguan'
                               ? 'lb-mode-weekly'
-                              : 'lb-mode-level'
+                              : e.mode === 'Tak Berujung'
+                                ? 'lb-mode-endless'
+                                : 'lb-mode-level'
                         }`}
                         title={`Mode: ${e.mode}`}
                       >
-                        {e.mode === 'Daring Harian' ? '🔥' : e.mode === 'Tantangan Mingguan' ? '📅' : '🗺️'} {e.mode}
+                        {e.mode === 'Daring Harian'
+                          ? '🔥'
+                          : e.mode === 'Tantangan Mingguan'
+                            ? '📅'
+                            : e.mode === 'Tak Berujung'
+                              ? '♾️'
+                              : '🗺️'}{' '}
+                        {e.mode}
                       </span>
                     )}
                   </span>

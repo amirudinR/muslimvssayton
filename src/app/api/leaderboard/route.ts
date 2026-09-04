@@ -34,7 +34,7 @@ const NAME_MAX = 16
 const MODE_MAX = 24
 
 /** Mode label yang diizinkan di papan rekor (P8 + P9 mingguan). */
-const MODE_WHITELIST = ['Klasik', 'Daring Harian', 'Tantangan Mingguan']
+const MODE_WHITELIST = ['Klasik', 'Daring Harian', 'Tantangan Mingguan', 'Tak Berujung']
 
 /** Sanitasi label mode: whitelist / pola "Level N" / fallback "Klasik". */
 function sanitizeMode(value: unknown): string {
@@ -79,13 +79,15 @@ function validatePayload(body: unknown): ValidationResult {
     return { ok: false, error: `Name must be ${NAME_MIN}-${NAME_MAX} characters (after trimming)` }
   }
 
-  const stars = intInRange(raw.stars, 1, 3)
+  /* P11: stars 0 diperbolehkan (kekalahan Tak Berujung — gelombang jadi sorotan),
+     wave hingga 999 utk gelombang endless yang terus bertambah. */
+  const stars = intInRange(raw.stars, 0, 3)
   if (stars === null) {
-    return { ok: false, error: 'Field "stars" must be an integer between 1 and 3' }
+    return { ok: false, error: 'Field "stars" must be an integer between 0 and 3' }
   }
-  const wave = intInRange(raw.wave, 0, 10)
+  const wave = intInRange(raw.wave, 0, 999)
   if (wave === null) {
-    return { ok: false, error: 'Field "wave" must be an integer between 0 and 10' }
+    return { ok: false, error: 'Field "wave" must be an integer between 0 and 999' }
   }
   const defeated = intInRange(raw.defeated, 0, 9999)
   if (defeated === null) {

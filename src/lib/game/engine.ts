@@ -36,6 +36,7 @@ import {
   STAR_POWERUP,
   STAR_BOX_CHANCE,
   starBoxPahala,
+  generateEndlessWave,
   type CharId,
   type EnemyId,
   type WaveDef,
@@ -70,6 +71,7 @@ import {
   grantRunReward,
   recordCharPlaced,
   recordCharsWon,
+  recordEndlessWave,
 } from './achievements'
 
 interface SlotObj {
@@ -183,6 +185,8 @@ export class GameEngine {
   private levelWaves: WaveDef[] = WAVES
   /** P4: bintang toko yang didapat dari run terakhir (untuk layar menang) */
   runStarGain = 0
+  /** P11: pahala dasar yang SUDAH ditukar jadi ⭐ (delta Tak Berujung dihitung dari sini) */
+  private runRewardBase = 0
 
   private lastFrameTime = performance.now()
 
@@ -824,7 +828,7 @@ export class GameEngine {
 
   /* =============================== GAME FLOW =============================== */
 
-  startGame(opts?: { daily?: boolean; weekly?: boolean; forceTutorial?: boolean; levelId?: number }) {
+  startGame(opts?: { daily?: boolean; weekly?: boolean; forceTutorial?: boolean; levelId?: number; endless?: boolean }) {
     audio.ensure()
     audio.setSound(gameStore.get().soundOn)
     audio.setMusic(gameStore.get().musicOn)
@@ -863,6 +867,9 @@ export class GameEngine {
       startPahala += weeklyMod.startPahalaBonus ?? 0
     }
 
+    /* ---- P11: Mode Tak Berujung — klasik 10 wave lalu gelombang digenerasi terus ---- */
+    this.runRewardBase = 0
+
     gameStore.set((s) => ({
       ...s,
       pahala: startPahala,
@@ -872,6 +879,7 @@ export class GameEngine {
       dailyMod,
       weeklyMode: !!opts?.weekly,
       weeklyMod,
+      endlessMode: !!opts?.endless,
       tutorialStep: 0,
       levelId: level?.id ?? 0,
       totalWaves: this.levelWaves.length,
@@ -926,6 +934,14 @@ export class GameEngine {
       gsap.delayedCall(1.4, () =>
         gameStore.get().showToast(weeklyMod ? weeklyMod.desc : '', weeklyMod ? weeklyMod.emoji : '📅', 'info'),
       )
+    } else if (opts?.endless) {
+      /* ---- P11: Mode Tak Berujung dari kartu menu ---- */
+      gameStore.get().showToast('♾️ MODE TAK BERUJUNG! Bertahan selama mungkin!', '♾️', 'info')
+      gsap.delayedCall(1.4, () =>
+        gameStore
+          .get()
+          .showToast('Rekor gelombang terjauh akan dicatat — semangat! 🔥', '🔥', 'info'),
+      )
     } else {
       /* ---- Tutorial interaktif saat pertama kali main ---- */
       if (opts?.forceTutorial || !isTutorialSeen()) {
@@ -956,6 +972,8 @@ export class GameEngine {
       dailyMod: null,
       weeklyMode: false,
       weeklyMod: null,
+      endlessMode: false,
+      endlessNewRecord: false,
       levelId: 0,
       totalWaves: 10,
       // bersihkan sisa power-up mid-run (P9 QA fix: nilai basi tertinggal di store)
@@ -1047,7 +1065,10 @@ export class GameEngine {
   private onWaveComplete() {
     const st = gameStore.get()
     const waveNum = st.wave
-    const waveDef = WAVES[waveNum - 1]
+    /* [FIX P11] gunakan levelWaves aktif (bukan WAVES global) — wajib untuk
+       gelombang endless yang digenerasi & aman utk level (reward selaras). */
+    const waveDef = this.levelWaves[waveNum - 1] ?? WAVES[waveNum - 1]
+    if (!waveDef) return
     gameStore.set((s) => ({
       ...s,
       waveActive: false,
@@ -1069,11 +1090,50 @@ export class GameEngine {
     }
 
     if (waveNum >= this.levelWaves.length) {
-      this.onVictory()
-      return
+      if (st.endlessMode) {
+        /* ---- P11: TAK BERUJUNG — generasi gelombang berikutnya, terus bertahan ---- */
+        this.levelWaves.push(generateEndlessWave(waveNum + 1))
+        const isNextBoss = this.levelWaves[waveNum].isBoss
+        gsap.delayedCall(1.2, () =>
+          gameStore
+            .get()
+            .showToast(
+              isNextBoss ? '♾️ Boss datang lagi di gelombang berikutnya! 🔥' : '♾️ Gelombang tak berujung terus datang!',
+              '♾️',
+              'info',
+            ),
+        )
+      } else {
+        this.onVictory()
+        return
+      }
     }
     gameStore.set((s) => ({ ...s, nextWaveIn: GAME_CONST.betweenWaveDelay }))
     this.updateWavePreview(waveNum + 1)
+  }
+
+  /** P11: lanjutkan run klasik yang baru MENANG menjadi Mode Tak Berujung —
+   *  tower, pahala, dan kesehatan masjid dipertahankan; gelombang 11+ digenerasi. */
+  continueEndless() {
+    const st = gameStore.get()
+    if (st.screen !== 'victory' || st.dailyMode || st.weeklyMode || st.levelId > 0) return
+    audio.ensure()
+    audio.startBgm()
+    audio.cheer()
+    gameStore.set((s) => ({ ...s, screen: 'playing', endlessMode: true, resultStars: 0 }))
+    this.setCameraMode('iso')
+    // pulihkan pose tower (saat menang mereka menari — posisi y/rotasi diutak-atik)
+    this.manager.towers.forEach((t) => {
+      t.group.position.y = 0
+      t.group.rotation.y = 0
+    })
+    // pastikan def gelombang berikutnya tersedia
+    while (this.levelWaves.length < st.wave + 1) {
+      this.levelWaves.push(generateEndlessWave(this.levelWaves.length + 1))
+    }
+    gameStore.set((s) => ({ ...s, nextWaveIn: GAME_CONST.betweenWaveDelay }))
+    this.updateWavePreview(st.wave + 1)
+    gameStore.get().showToast('♾️ TAK BERUJUNG DIMULAI! Semua penjaga dipertahankan!', '♾️', 'good')
   }
 
   private onVictory() {
@@ -1083,6 +1143,7 @@ export class GameEngine {
        dihitung SEBELUM screen berganti agar layar kemenangan selalu membaca
        nilai final (termasuk bonus mingguan di bawah). ---- */
     this.runStarGain = grantRunReward(st.stats.starsEarned)
+    this.runRewardBase = st.stats.starsEarned // P11: dasar delta bila lanjut Tak Berujung
     /* ---- P9: bonus ⭐ toko Tantangan Mingguan (ditambahkan ke banner) ---- */
     const weeklyWmod = st.weeklyMode && this.weeklyKeyRun ? pickWeeklyModifier(this.weeklyKeyRun) : null
     if (weeklyWmod) this.runStarGain += weeklyWmod.rewardStars
@@ -1122,7 +1183,14 @@ export class GameEngine {
 
   private onGameOver() {
     const st = gameStore.get()
-    gameStore.set((s) => ({ ...s, screen: 'gameover', funFact: null }))
+    /* ---- P11: Mode Tak Berujung — catat rekor gelombang + hadiah ⭐ delta ---- */
+    let endlessRecord = false
+    if (st.endlessMode) {
+      endlessRecord = recordEndlessWave(st.wave)
+      const delta = Math.max(0, st.stats.starsEarned - this.runRewardBase)
+      this.runStarGain = delta > 0 ? grantRunReward(delta) : 0
+    }
+    gameStore.set((s) => ({ ...s, screen: 'gameover', funFact: null, endlessNewRecord: endlessRecord }))
     audio.stopBgm()
     audio.mosqueHit()
     this.clearDuaOverlay()
@@ -1135,7 +1203,13 @@ export class GameEngine {
     this.manager.enemies.forEach((e) => {
       e.fleeing = true
     })
-    gameStore.get().showToast('Setan-setan lari senang-senang~ 😄', '👻', 'info')
+    gameStore
+      .get()
+      .showToast(
+        endlessRecord ? `🏆 REKOR BARU: Gelombang ${st.wave}! Hebat!` : 'Setan-setan lari senang-senang~ 😄',
+        endlessRecord ? '🏆' : '👻',
+        endlessRecord ? 'good' : 'info',
+      )
   }
 
   /** Analisis gaya main untuk saran personal di layar kalah (semua positif). */
@@ -1230,6 +1304,16 @@ export class GameEngine {
       this.duaOverlay.remove()
       this.duaOverlay = null
     }
+  }
+
+  /** P11-c: kilatan emas lembut di layar saat Kotak Bintang langka muncul. */
+  private showStarFlash() {
+    const flash = document.createElement('div')
+    flash.style.cssText =
+      'position:fixed;inset:0;background:radial-gradient(circle at 50% 40%, rgba(255,224,102,0.42) 0%, rgba(255,224,102,0.12) 45%, transparent 70%);z-index:39;pointer-events:none;transition:opacity .7s;opacity:1'
+    document.body.appendChild(flash)
+    requestAnimationFrame(() => (flash.style.opacity = '0'))
+    setTimeout(() => flash.remove(), 800)
   }
 
   /* ====================== P9-c: KOTAK SEDEKAH (POWER-UP) ====================== */
@@ -1490,6 +1574,9 @@ export class GameEngine {
       const spot = this.randomPowerupSpot()
       this.spawnPowerupAt(def, spot.x, spot.z)
       if (def.kind === 'star') {
+        // P11-c: kemunculan kotak bintang dirayakan — SFX + kilatan emas layar
+        audio.tada()
+        this.showStarFlash()
         gameStore.get().showToast('🌟 KOTAK BINTANG LANGKA muncul! Buruan ketuk!', '🌟', 'good')
       } else {
         gameStore.get().showToast('🎁 Kotak Sedekah muncul! Ketuk cepat!', '🎁', 'info')

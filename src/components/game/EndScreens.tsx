@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Play, RotateCcw, Home, Pause, Volume2, VolumeX, Music, Music2,
-  Trophy, Send, Loader2, CheckCircle2,
+  Trophy, Send, Loader2, CheckCircle2, Infinity as InfinityIcon,
 } from 'lucide-react'
 import { useGameStore } from '@/lib/game/store'
 import { getEngine } from '@/lib/game/engine'
@@ -82,6 +82,7 @@ function ScoreSubmit({ stars, wave, defeated, pahala }: { stars: number; wave: n
   const scoreSubmitted = useGameStore((s) => s.scoreSubmitted)
   const dailyMode = useGameStore((s) => s.dailyMode)
   const weeklyMode = useGameStore((s) => s.weeklyMode)
+  const endlessMode = useGameStore((s) => s.endlessMode)
   const levelId = useGameStore((s) => s.levelId)
   const [name, setName] = useState('')
   const [sending, setSending] = useState(false)
@@ -128,14 +129,16 @@ function ScoreSubmit({ stars, wave, defeated, pahala }: { stars: number; wave: n
     setError(null)
     try {
       setPlayerName(clean)
-      // P8/P9: label mode asal skor untuk papan rekor
-      const mode = weeklyMode
-        ? 'Tantangan Mingguan'
-        : dailyMode
-          ? 'Daring Harian'
-          : levelId > 0
-            ? `Level ${levelId}`
-            : 'Klasik'
+      // P8/P9/P11: label mode asal skor untuk papan rekor
+      const mode = endlessMode
+        ? 'Tak Berujung'
+        : weeklyMode
+          ? 'Tantangan Mingguan'
+          : dailyMode
+            ? 'Daring Harian'
+            : levelId > 0
+              ? `Level ${levelId}`
+              : 'Klasik'
       const res = await fetch('/api/leaderboard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -205,18 +208,30 @@ export function EndScreens() {
   const weeklyMode = useGameStore((s) => s.weeklyMode)
   const weeklyMod = useGameStore((s) => s.weeklyMod)
   const weeklyStreakResult = useGameStore((s) => s.weeklyStreakResult)
+  const endlessMode = useGameStore((s) => s.endlessMode)
+  const endlessNewRecord = useGameStore((s) => s.endlessNewRecord)
+  const wave = useGameStore((s) => s.wave)
   const levelId = useGameStore((s) => s.levelId)
-  /* P4/P9: bintang toko run terakhir — dibaca saat layar kemenangan dirender.
+  /* P4/P9/P11: bintang toko run terakhir — dibaca saat layar hasil dirender
+     (kemenangan, atau kekalahan Tak Berujung yang memberi hadiah delta).
      EndScreens ter-mount sejak awal aplikasi, jadi pembacaan sekali di mount
-     selalu 0 (bug lama); kini dibaca ulang tiap render layar kemenangan. */
+     selalu 0 (bug lama); kini dibaca ulang tiap render layar hasil. */
   const starGain =
-    screen === 'victory' && typeof window !== 'undefined'
+    (screen === 'victory' || (screen === 'gameover' && endlessMode)) && typeof window !== 'undefined'
       ? (window as unknown as { __pmEngine?: { runStarGain: number } }).__pmEngine?.runStarGain ?? 0
       : 0
 
   const restart = () =>
     getEngine()?.startGame(
-      weeklyMode ? { weekly: true } : dailyMode ? { daily: true } : levelId > 0 ? { levelId } : undefined,
+      endlessMode
+        ? { endless: true }
+        : weeklyMode
+          ? { weekly: true }
+          : dailyMode
+            ? { daily: true }
+            : levelId > 0
+              ? { levelId }
+              : undefined,
     )
   const toMenu = () => getEngine()?.backToMenu()
 
@@ -368,6 +383,24 @@ export function EndScreens() {
               <p className="text-xs font-semibold text-emerald-700">
                 Kembang api masih menyala di atas masjid — lihat dulu boleh! 🎆
               </p>
+
+              {/* P11: lanjutkan run klasik jadi Tak Berujung (hanya mode klasik) */}
+              {!dailyMode && !weeklyMode && levelId === 0 && !endlessMode && (
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.9, y: 8 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  transition={{ delay: 1.1, type: 'spring', stiffness: 280, damping: 18 }}
+                  whileHover={{ scale: 1.03, y: -2 }}
+                  whileTap={{ scale: 0.96 }}
+                  className="btn-endless w-full !py-3"
+                  onClick={() => getEngine()?.continueEndless()}
+                >
+                  <InfinityIcon className="h-5 w-5" />
+                  LANJUT TAK BERUJUNG!
+                  <span className="ml-1.5 text-[10px] font-bold opacity-80">semua penjaga dipertahankan</span>
+                </motion.button>
+              )}
+
               <div className="mt-1 flex flex-wrap justify-center gap-2">
                 <button className="btn-cute" onClick={restart}>
                   <RotateCcw className="h-5 w-5" />
@@ -405,6 +438,55 @@ export function EndScreens() {
                 Setan kebanyakan main-main kali ini. Masjid butuh penjaga
                 hebat sepertimu! 💪
               </p>
+
+              {/* P11: Mode Tak Berujung — rekap bertahan + rekor */}
+              {endlessMode && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.85, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  transition={{ delay: 0.35, type: 'spring', stiffness: 280, damping: 18 }}
+                  className="endless-won-banner"
+                >
+                  <motion.span
+                    animate={{ rotate: [0, 360] }}
+                    transition={{ repeat: Infinity, duration: 3.2, ease: 'linear' }}
+                    className="inline-block text-2xl"
+                  >
+                    ♾️
+                  </motion.span>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-black text-white drop-shadow">
+                      Bertahan hingga Gelombang {wave}!
+                    </span>
+                    <span className="text-[11px] font-bold text-teal-100">
+                      {endlessNewRecord
+                        ? '🏆 REKOR BARU! Gelombang terjauhmu sejauh ini! 🔥'
+                        : 'Pertahankan penjaga lebih rapat lagi utk lebih jauh! 💪'}
+                    </span>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* P11: hadiah ⭐ delta pahala Tak Berujung */}
+              {endlessMode && starGain > 0 && (
+                <div className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-amber-300 bg-gradient-to-r from-[#fffbe8] to-[#fff3d0] px-4 py-2 shadow-inner">
+                  <span className="text-lg">⭐</span>
+                  <span className="text-sm font-black text-amber-700">+{starGain} Bintang Toko!</span>
+                  <span className="text-[10px] font-bold text-amber-500">(dari pahala bertahan)</span>
+                </div>
+              )}
+
+              {/* P11: skor Tak Berujung masuk papan rekor — tier bintang diturunkan
+                  dari kedalaman gelombang (10+ = 1⭐ klasik-setara, 12+ = 2⭐, 15+ = 3⭐)
+                  agar run endless yang hebat terlihat di papan rekor. */}
+              {endlessMode && (
+                <ScoreSubmit
+                  stars={wave >= 15 ? 3 : wave >= 12 ? 2 : wave >= 10 ? 1 : 0}
+                  wave={wave}
+                  defeated={stats.defeated}
+                  pahala={stats.starsEarned}
+                />
+              )}
 
               {/* Saran personal dari analisis gaya main */}
               <CoachTipsCard />
