@@ -28,11 +28,18 @@ import {
   applyDailyMods,
   pickDailyModifier,
   dailyKey,
+  weeklyKey,
+  pickWeeklyModifier,
+  POWERUPS,
+  POWERUP_CONST,
+  POWERUP_MULT,
   type CharId,
   type EnemyId,
   type WaveDef,
   type Quality,
   type DailyModifier,
+  type WeeklyModifier,
+  type PowerupDef,
 } from './data'
 import { createGround, createMosque, createSlotPad, createTree, createFlowerField, createCloud, createBird, createButterfly, createRangeRing, getCharacterModel } from './models'
 import { buildWorldExpansion, createMegaGround, createHighClouds, type WorldExpansion } from './world'
@@ -40,7 +47,7 @@ import { ParticleSystem } from './particles'
 import { EntityManager, type Enemy, type Tower } from './entities'
 import { CameraController } from './camera'
 import { audio } from './audio'
-import { gameStore, type CameraMode } from './store'
+import { gameStore, type CameraMode, type ActivePowerup } from './store'
 import { computeStars } from './persist'
 import { getLevel, levelWaves } from './levels'
 import { getCharDef, isHeroChar } from './chardb'
@@ -54,8 +61,12 @@ import {
   bumpLossStreak,
   clearLossStreak,
   recordDailyWin,
+  recordWeeklyWin,
+  addStarCurrency,
   recordLevelResult,
   grantRunReward,
+  recordCharPlaced,
+  recordCharsWon,
 } from './achievements'
 
 interface SlotObj {
@@ -142,6 +153,26 @@ export class GameEngine {
   private tutTimer = 0
   /** kunci tanggal tantangan harian yang sedang berjalan */
   private dailyKeyRun: string | null = null
+  /** P9: kunci pekan tantangan mingguan yang sedang berjalan */
+  private weeklyKeyRun: string | null = null
+
+  /* P9-c: Kotak Sedekah (power-up) — NOTE: pakai `private` TS (bukan #)
+     agar probe QA runtime tetap bisa membaca field ini. */
+  /** kotak sedekah yang sedang melayang di lapangan (null = tidak ada) */
+  private powerupGroup: THREE.Group | null = null
+  private powerupDef: PowerupDef | null = null
+  private powerupSpawnedAt = 0
+  private powerupExpiresAt = 0
+  /** waktu game untuk kemunculan kotak berikutnya (0 = belum dijadwalkan) */
+  private nextPowerupAt = 0
+  private powerupSpin = 0
+  /** muatan Perisai Masjid (sinkron ke store utk HUD) */
+  private shieldCharges = 0
+  /** cache JSON daftar power-up utk hindari re-render spam */
+  private lastPowerupHudJson = ''
+  /** bidang horizontal setinggi kotak utk hit-test ketukan */
+  private powerupPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -POWERUP_CONST.baseY)
+  private powerupPlaneHit = new THREE.Vector3()
 
   /* P3: wave aktif per level (level select) */
   private levelWaves: WaveDef[] = WAVES
@@ -466,6 +497,16 @@ export class GameEngine {
     if (this.pinchMode) return
     if (st.cameraMode !== 'iso') return
 
+    // P9-c: ketuk Kotak Sedekah → ambil power-up (SEBELUM logika slot/tower,
+    // dipakai bersama mouse & sentuh lewat handler pointer terpadu ini)
+    if (wasClick && this.powerupGroup) {
+      this.updatePointerNdc(e)
+      if (this.powerupHitTest()) {
+        this.collectPowerup()
+        return
+      }
+    }
+
     // drag-drop: lepas di atas slot
     if (st.selectedCharId) {
       this.updatePointerNdc(e)
@@ -619,6 +660,7 @@ export class GameEngine {
     this.cancelPlacing()
     this.refreshSlotHighlights()
     checkBadges({ event: 'towerPlaced', towersCount: this.manager.towers.length })
+    recordCharPlaced(def.id) // P9-b: statistik pemakaian karakter
 
     /* P8: funFact edukatif "Tahukah Kamu?" saat pertama memasang karakter
        (hanya bila sedang tidak bertempur supaya tidak mengganggu). */
@@ -777,7 +819,7 @@ export class GameEngine {
 
   /* =============================== GAME FLOW =============================== */
 
-  startGame(opts?: { daily?: boolean; forceTutorial?: boolean; levelId?: number }) {
+  startGame(opts?: { daily?: boolean; weekly?: boolean; forceTutorial?: boolean; levelId?: number }) {
     audio.ensure()
     audio.setSound(gameStore.get().soundOn)
     audio.setMusic(gameStore.get().musicOn)
@@ -792,6 +834,7 @@ export class GameEngine {
     /* ---- Tantangan Harian: terapkan modifier tanggal hari ini ---- */
     resetRunMods()
     this.dailyKeyRun = null
+    this.weeklyKeyRun = null
     let maxHp = level ? level.mosqueHp : GAME_CONST.mosqueMaxHp
     let startPahala = level ? level.startPahala : GAME_CONST.startPahala
     let dailyMod: DailyModifier | null = null
@@ -804,6 +847,17 @@ export class GameEngine {
       this.dailyKeyRun = key
     }
 
+    /* ---- P9: Tantangan Mingguan — modifier pekan ini (konfigurasi klasik 10 wave) ---- */
+    let weeklyMod: WeeklyModifier | null = null
+    if (opts?.weekly) {
+      const wkey = weeklyKey()
+      this.weeklyKeyRun = wkey
+      weeklyMod = pickWeeklyModifier(wkey)
+      applyDailyMods(weeklyMod) // menerima ModeMods
+      maxHp += weeklyMod.mosqueHpBonus ?? 0
+      startPahala += weeklyMod.startPahalaBonus ?? 0
+    }
+
     gameStore.set((s) => ({
       ...s,
       pahala: startPahala,
@@ -811,6 +865,8 @@ export class GameEngine {
       mosqueMaxHp: maxHp,
       dailyMode: !!opts?.daily,
       dailyMod,
+      weeklyMode: !!opts?.weekly,
+      weeklyMod,
       tutorialStep: 0,
       levelId: level?.id ?? 0,
       totalWaves: this.levelWaves.length,
@@ -824,6 +880,12 @@ export class GameEngine {
     this.misbahGenTotal = 0
     this.placedThisRun.clear()
     this.tutTimer = 0
+
+    /* ---- P9-c: reset Kotak Sedekah (store sudah di-reset resetForNewGame) ---- */
+    this.despawnPowerupBox()
+    this.nextPowerupAt = 0
+    this.shieldCharges = 0
+    this.lastPowerupHudJson = ''
 
     /* ---- P7: karakter milik pemain (toko + custom) otomatis terbuka ---- */
     const customs = loadCustomChars()
@@ -851,6 +913,13 @@ export class GameEngine {
         .showToast(`TANTANGAN HARI INI: ${dailyMod.emoji} ${dailyMod.name}!`, '🔥', 'info')
       gsap.delayedCall(1.4, () =>
         gameStore.get().showToast(dailyMod ? dailyMod.desc : '', dailyMod ? dailyMod.emoji : '🔥', 'info'),
+      )
+    } else if (opts?.weekly && weeklyMod) {
+      gameStore
+        .get()
+        .showToast(`TANTANGAN PEKAN INI: ${weeklyMod.emoji} ${weeklyMod.name}!`, '📅', 'info')
+      gsap.delayedCall(1.4, () =>
+        gameStore.get().showToast(weeklyMod ? weeklyMod.desc : '', weeklyMod ? weeklyMod.emoji : '📅', 'info'),
       )
     } else {
       /* ---- Tutorial interaktif saat pertama kali main ---- */
@@ -880,12 +949,20 @@ export class GameEngine {
       coachTips: null,
       dailyMode: false,
       dailyMod: null,
+      weeklyMode: false,
+      weeklyMod: null,
       levelId: 0,
       totalWaves: 10,
+      // bersihkan sisa power-up mid-run (P9 QA fix: nilai basi tertinggal di store)
+      activePowerups: [],
+      shieldCharges: 0,
     }))
     this.levelWaves = WAVES
     this.manager.reset()
     this.slots.forEach((s) => (s.occupied = false))
+    this.despawnPowerupBox() // P9-c: jangan tinggalkan kotak melayang di menu
+    this.shieldCharges = 0
+    this.lastPowerupHudJson = ''
     this.setCameraMode('menu')
     audio.stopBgm()
   }
@@ -917,6 +994,11 @@ export class GameEngine {
     })
     this.spawnEvents.sort((a, b) => a.time - b.time)
     this.laneCursor = laneRot
+
+    // P9-c: jadwalkan kemunculan kotak sedekah pertama (22 dtk setelah wave 1 aktif)
+    if (this.nextPowerupAt === 0) {
+      this.nextPowerupAt = this.manager.now + POWERUP_CONST.firstDelay
+    }
 
     // unlock karakter baru
     Object.values(CHAR_DEFS).forEach((def) => {
@@ -992,6 +1074,13 @@ export class GameEngine {
   private onVictory() {
     const st = gameStore.get()
     const stars = computeStars(st.mosqueHp, st.mosqueMaxHp)
+    /* ---- P4: hadiah bintang toko dari pahala run (20 pahala = 1 ⭐) —
+       dihitung SEBELUM screen berganti agar layar kemenangan selalu membaca
+       nilai final (termasuk bonus mingguan di bawah). ---- */
+    this.runStarGain = grantRunReward(st.stats.starsEarned)
+    /* ---- P9: bonus ⭐ toko Tantangan Mingguan (ditambahkan ke banner) ---- */
+    const weeklyWmod = st.weeklyMode && this.weeklyKeyRun ? pickWeeklyModifier(this.weeklyKeyRun) : null
+    if (weeklyWmod) this.runStarGain += weeklyWmod.rewardStars
     gameStore.set((s) => ({ ...s, screen: 'victory', resultStars: stars, funFact: null }))
     audio.stopBgm()
     audio.cheer()
@@ -1003,18 +1092,26 @@ export class GameEngine {
     checkBadges({ event: 'victory', stars, pahala: st.stats.starsEarned })
     recordSessionEnd(st.stats.starsEarned)
     clearLossStreak()
+    /* ---- P9-b: statistik pemakaian — semua penjaga yang bertugas menang ---- */
+    recordCharsWon([...new Set(this.manager.towers.map((t) => t.def.id))])
     /* ---- P3: Level Select — catat rating & buka level berikutnya ---- */
     if (st.levelId > 0) {
       recordLevelResult(st.levelId, stars)
     }
-    /* ---- P4: hadiah bintang toko dari pahala run (20 pahala = 1 ⭐) ---- */
-    this.runStarGain = grantRunReward(st.stats.starsEarned)
     /* ---- Tantangan Harian menang → catat streak ---- */
     if (st.dailyMode && this.dailyKeyRun) {
       const streak = recordDailyWin(this.dailyKeyRun)
       checkBadges({ event: 'dailyWin' })
       gameStore.set((s) => ({ ...s, dailyStreakResult: streak }))
       this.particles.rings.spawn(0, 0.12, 0, 0xff8a5c, 22, 1.6)
+    }
+    /* ---- P9: Tantangan Mingguan menang → streak + bonus ⭐ toko ---- */
+    if (st.weeklyMode && this.weeklyKeyRun) {
+      const streak = recordWeeklyWin(this.weeklyKeyRun)
+      if (weeklyWmod) addStarCurrency(weeklyWmod.rewardStars)
+      checkBadges({ event: 'weeklyWin' })
+      gameStore.set((s) => ({ ...s, weeklyStreakResult: streak }))
+      this.particles.rings.spawn(0, 0.12, 0, 0x8b5cf6, 22, 1.6)
     }
   }
 
@@ -1130,11 +1227,244 @@ export class GameEngine {
     }
   }
 
+  /* ====================== P9-c: KOTAK SEDEKAH (POWER-UP) ====================== */
+
+  /** Titik aman acak utk kemunculan kotak: sepanjang lane acak (t 0.3..0.7),
+   *  offset tegak lurus 2.2–2.8, minimal 1.8 dari semua slot tower, di luar
+   *  platform masjid, dan di dalam area rumput inti. Fallback: halaman depan. */
+  private randomPowerupSpot(): { x: number; z: number } {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const lane = LANES[Math.floor(Math.random() * LANES.length)]
+      // panjang kumulatif lane
+      const cum = [0]
+      for (let k = 1; k < lane.length; k++) {
+        cum.push(cum[k - 1] + Math.hypot(lane[k][0] - lane[k - 1][0], lane[k][1] - lane[k - 1][1]))
+      }
+      const total = cum[cum.length - 1]
+      const target = total * (0.3 + Math.random() * 0.4)
+      let si = 0
+      while (si < cum.length - 2 && cum[si + 1] < target) si++
+      const segLen = cum[si + 1] - cum[si] || 1
+      const f = (target - cum[si]) / segLen
+      const x0 = lane[si][0] + (lane[si + 1][0] - lane[si][0]) * f
+      const z0 = lane[si][1] + (lane[si + 1][1] - lane[si][1]) * f
+      // arah segmen → offset tegak lurus (sisi acak)
+      const dx = (lane[si + 1][0] - lane[si][0]) / segLen
+      const dz = (lane[si + 1][1] - lane[si][1]) / segLen
+      const side = Math.random() < 0.5 ? 1 : -1
+      const off = 2.2 + Math.random() * 0.6
+      const x = x0 - dz * off * side
+      const z = z0 + dx * off * side
+      // validasi
+      if (SLOTS.some((s) => Math.hypot(s.x - x, s.z - z) < 1.8)) continue
+      if (Math.abs(x) < 9.5 && Math.abs(z) < 8.5) continue // platform + tangga masjid
+      if (Math.abs(x) > 34 || Math.abs(z) > 21) continue // luar area rumput inti
+      return { x, z }
+    }
+    // fallback aman: halaman depan masjid (jauh dari semua slot & air mancur)
+    return { x: -6, z: 10.8 }
+  }
+
+  /** Bangun visual kotak sedekah emas + tutup warna power-up + cincin bercahaya. */
+  private buildPowerupBox(def: PowerupDef): THREE.Group {
+    const g = new THREE.Group()
+    const box = new THREE.Mesh(
+      new THREE.BoxGeometry(0.62, 0.5, 0.62),
+      new THREE.MeshStandardMaterial({ color: 0xffd76a, metalness: 0.4, roughness: 0.35 }),
+    )
+    box.castShadow = true
+    box.position.y = 0.25
+    g.add(box)
+    const lid = new THREE.Mesh(
+      new THREE.BoxGeometry(0.68, 0.16, 0.68),
+      new THREE.MeshStandardMaterial({ color: def.color, metalness: 0.3, roughness: 0.4 }),
+    )
+    lid.position.y = 0.58
+    g.add(lid)
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.5, 0.75, 32),
+      new THREE.MeshBasicMaterial({
+        color: def.color,
+        transparent: true,
+        opacity: 0.7,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    )
+    ring.rotation.x = -Math.PI / 2
+    ring.position.y = -0.75
+    g.add(ring)
+    g.userData.lidMat = lid.material
+    return g
+  }
+
+  /** Munculkan kotak sedekah di lapangan (juga dipakai QA debugSpawnPowerup). */
+  private spawnPowerupAt(def: PowerupDef, x: number, z: number) {
+    this.despawnPowerupBox()
+    const g = this.buildPowerupBox(def)
+    g.position.set(x, POWERUP_CONST.baseY, z)
+    this.scene.add(g)
+    this.powerupGroup = g
+    this.powerupDef = def
+    this.powerupSpawnedAt = this.manager.now
+    this.powerupExpiresAt = this.manager.now + POWERUP_CONST.lifetime
+    this.powerupSpin = 0
+    // jadwalkan kemunculan BERIKUTNYA saat kotak ini muncul
+    const [lo, hi] = POWERUP_CONST.interval
+    this.nextPowerupAt = this.manager.now + lo + Math.random() * (hi - lo)
+  }
+
+  /** Hapus kotak dari scene + bersihkan geometri/material. */
+  private despawnPowerupBox() {
+    if (!this.powerupGroup) return
+    const g = this.powerupGroup
+    this.scene.remove(g)
+    g.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) {
+        obj.geometry.dispose()
+        const m = obj.material
+        if (Array.isArray(m)) m.forEach((mm) => mm.dispose())
+        else m.dispose()
+      }
+    })
+    this.powerupGroup = null
+    this.powerupDef = null
+  }
+
+  /** Hit-test ketukan vs posisi kotak (proyeksi pointer ke bidang horizontal). */
+  private powerupHitTest(): boolean {
+    if (!this.powerupGroup) return false
+    this.raycaster.setFromCamera(this.pointerNdc, this.cameraCtrl.camera)
+    const hit = this.raycaster.ray.intersectPlane(this.powerupPlane, this.powerupPlaneHit)
+    if (!hit) return false
+    return (
+      Math.hypot(hit.x - this.powerupGroup.position.x, hit.z - this.powerupGroup.position.z) < 1.3
+    )
+  }
+
+  /** Ambil power-up dari kotak (dipanggil handler pointer DAN debugCollectPowerup). */
+  private collectPowerup(): boolean {
+    if (!this.powerupGroup || !this.powerupDef) return false
+    const def = this.powerupDef
+    const { x, y, z } = this.powerupGroup.position
+
+    // VFX & SFX meriah
+    audio.buyRarity('epik')
+    this.particles.firework(x, y + 0.6, z, def.color)
+    this.particles.sparkleRise(x, y + 0.3, z, def.color)
+    this.particles.sparkleRise(x, y + 0.9, z, def.color)
+    this.particles.rings.spawn(x, 0.12, z, def.color, 1.2)
+
+    // terapkan efek
+    if (def.kind === 'shield') {
+      this.shieldCharges += 3
+      gameStore.set((s) => ({ ...s, shieldCharges: this.shieldCharges }))
+    } else {
+      this.manager.activatePowerup(def.kind, def.duration)
+    }
+    gameStore.get().showToast(`${def.emoji} ${def.name} aktif!`, def.emoji, 'good')
+    this.despawnPowerupBox()
+    this.syncPowerupHud(true)
+    return true
+  }
+
+  /** Sinkronkan daftar power-up aktif + muatan perisai ke store (HUD).
+   *  Hanya set state bila benar-benar berubah agar tidak re-render spam. */
+  private syncPowerupHud(force = false) {
+    const now = this.manager.now
+    const list: ActivePowerup[] = []
+    for (const def of POWERUPS) {
+      const until =
+        def.kind === 'damage'
+          ? this.manager.powerDamageUntil
+          : def.kind === 'rate'
+            ? this.manager.powerRateUntil
+            : def.kind === 'pahala'
+              ? this.manager.powerRewardUntil
+              : -1
+      if (until > now) {
+        list.push({ id: def.id, name: def.name, emoji: def.emoji, remaining: Math.ceil(until - now), kind: def.kind })
+      }
+    }
+    const json = JSON.stringify(list)
+    if (force || json !== this.lastPowerupHudJson) {
+      this.lastPowerupHudJson = json
+      gameStore.set((s) => ({ ...s, activePowerups: list }))
+    }
+    const stShield = gameStore.get().shieldCharges
+    if (stShield !== this.shieldCharges) {
+      gameStore.set((s) => ({ ...s, shieldCharges: this.shieldCharges }))
+    }
+  }
+
+  /** Logika inti Kotak Sedekah per langkah simulasi (hanya saat gameDt > 0). */
+  private updatePowerups(waveActive: boolean) {
+    const now = this.manager.now
+    // spawn kotak baru — hanya saat wave AKTIF, tanpa kotak lain di lapangan,
+    // dan jadwal sudah tiba (semua mode: klasik / level / harian / mingguan)
+    if (this.powerupGroup === null && waveActive && this.nextPowerupAt > 0 && now >= this.nextPowerupAt) {
+      const def = POWERUPS[Math.floor(Math.random() * POWERUPS.length)]
+      const spot = this.randomPowerupSpot()
+      this.spawnPowerupAt(def, spot.x, spot.z)
+      gameStore.get().showToast('🎁 Kotak Sedekah muncul! Ketuk cepat!', '🎁', 'info')
+    }
+    // kedaluwarsa → menghilang dengan asap lucu
+    if (this.powerupGroup && now >= this.powerupExpiresAt) {
+      this.particles.smokePuff(this.powerupGroup.position.x, 1.1, this.powerupGroup.position.z)
+      gameStore.get().showToast('Kotak sedekah menghilang... 😢', '🎁', 'info')
+      this.despawnPowerupBox()
+    }
+    // sinkron HUD pill power-up
+    this.syncPowerupHud()
+  }
+
+  /** Animasi visual kotak (murah, jalan terus walau jeda): melayang, berputar,
+   *  dan 3 detik terakhir → denyut + kedip terang. */
+  private updatePowerupVisual(dt: number, screen: string) {
+    // bukan di layar main → bersihkan (mis. menang/kalah/kembali ke menu)
+    if (this.powerupGroup && screen !== 'playing') {
+      this.despawnPowerupBox()
+      return
+    }
+    const g = this.powerupGroup
+    if (!g) return
+    const now = this.manager.now
+    this.powerupSpin += dt * 1.4
+    g.rotation.y = this.powerupSpin
+    g.position.y =
+      POWERUP_CONST.baseY + Math.sin(now * 2.2) * POWERUP_CONST.bobHeight * 0.5 + POWERUP_CONST.bobHeight
+    const left = this.powerupExpiresAt - now
+    if (left < 3 && this.powerupDef) {
+      // urgensi: denyut skala + kedip emisif
+      g.scale.setScalar(1 + 0.18 * Math.sin(now * 10))
+      const lidMat = g.userData.lidMat as THREE.MeshStandardMaterial
+      lidMat.emissive.setHex(this.powerupDef.color)
+      lidMat.emissiveIntensity = 0.7 + 0.7 * Math.abs(Math.sin(now * 10))
+    }
+  }
+
+  /** QA: paksa kotak sedekah muncul SEKARANG (melewati syarat spawn/wave). */
+  debugSpawnPowerup(defId?: string): boolean {
+    const def =
+      (defId ? POWERUPS.find((p) => p.id === defId) : undefined) ??
+      POWERUPS[Math.floor(Math.random() * POWERUPS.length)]
+    if (!def) return false
+    const spot = this.randomPowerupSpot()
+    this.spawnPowerupAt(def, spot.x, spot.z)
+    return true
+  }
+
+  /** QA: ambil kotak lewat kode — jalur persis sama dengan ketukan pemain. */
+  debugCollectPowerup(): boolean {
+    return this.collectPowerup()
+  }
+
   /* =============================== CALLBACKS =============================== */
 
   private onEnemyKilled(reward: number, pos: THREE.Vector3, enemyId: EnemyId) {
     const st = gameStore.get()
-    const rewardAdj = Math.round(reward * RUN_MODS.rewardMult)
+    // P9-c: Hujan Pahala melipatgandakan pahala dari musuh yang dihalau
+    const rewardAdj = Math.round(reward * RUN_MODS.rewardMult * (this.manager.powerRewardActive ? POWERUP_MULT.pahala : 1))
     gameStore.set((s) => ({
       ...s,
       pahala: s.pahala + rewardAdj,
@@ -1150,6 +1480,20 @@ export class GameEngine {
   private onEnemyLeaked(enemy: Enemy) {
     const st = gameStore.get()
     const def = enemy.def
+
+    /* ---- P9-c: Perisai Masjid menahan musuh yang lolos sepenuhnya ----
+       (tidak kurangi HP, tidak mencuri pahala; musuh tetap dihitung lolos
+       sehingga tetap dibersihkan dari daftar enemy). */
+    if (this.shieldCharges > 0) {
+      this.shieldCharges -= 1
+      gameStore.set((s) => (s.shieldCharges === this.shieldCharges ? s : { ...s, shieldCharges: this.shieldCharges }))
+      this.particles.rings.spawn(0, 0.15, 0, 0x9ecbff, 7, 0.8)
+      this.particles.sparkleRise(0, 2.6, 0, 0x9ecbff)
+      this.particles.sparkleRise(-1.2, 1.8, 0.8, 0x9ecbff)
+      st.showToast('🛡️ Perisai masjid menahan 1 musuh!', '🛡️', 'good')
+      return
+    }
+
     let dmg = def.damage
     if (def.steals) {
       const steals = Math.round(def.steals * RUN_MODS.stealMult)
@@ -1250,6 +1594,9 @@ export class GameEngine {
 
       this.manager.update(gameDt)
 
+      // P9-c: Kotak Sedekah — spawn, kedaluwarsa, sinkron HUD
+      this.updatePowerups(st.waveActive)
+
       // HP boss ke UI
       const boss = this.manager.enemies.find((e) => e.def.isBoss && !e.dead && !e.leaked)
       if (boss) {
@@ -1287,6 +1634,9 @@ export class GameEngine {
       // saat pause/menu tetap animasikan manager minimal (idle tower)
       this.manager.update(0)
     }
+
+    // P9-c: animasi visual kotak sedekah (murah — selalu jalan)
+    this.updatePowerupVisual(dt, st.screen)
 
     this.mosqueToastCd -= dt
     this.sedekahSoundCd -= dt
@@ -1468,6 +1818,7 @@ export class GameEngine {
     this.disposed = true
     cancelAnimationFrame(this.rafId)
     this.clearDuaOverlay()
+    this.despawnPowerupBox() // P9-c
     const c = this.canvas
     c.removeEventListener('pointerdown', this.onPointerDown)
     c.removeEventListener('pointermove', this.onPointerMove)

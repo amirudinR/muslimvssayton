@@ -640,16 +640,47 @@ export const DUA_CONST = {
   heal: 8,
 } as const
 
-/* --------------------------- TANTANGAN HARIAN --------------------------- */
+/* ------------------------ P9-c: KOTAK SEDEKAH (POWER-UP) ------------------------ */
 
-/** Modifier harian — ditentukan dari tanggal (semua pemain dapat sama). */
-export interface DailyModifier {
+/** Power-up sementara dari Kotak Sedekah yang muncul di lapangan saat wave aktif. */
+export interface PowerupDef {
   id: string
   name: string
   emoji: string
   desc: string
-  /** chip efek singkat untuk UI */
-  effects: string[]
+  color: number // warna Three.js utk kotak + partikel
+  duration: number // detik (0 = instan seperti perisai)
+  kind: 'damage' | 'rate' | 'pahala' | 'shield'
+}
+
+export const POWERUPS: PowerupDef[] = [
+  { id: 'panah-berkah', name: 'Panah Berkah', emoji: '🏹', desc: 'Serangan semua penjaga +30% selama 20 detik!', color: 0xffd76a, duration: 20, kind: 'damage' },
+  { id: 'kipas-ajaib', name: 'Kipas Ajaib', emoji: '🪭', desc: 'Kecepatan serangan +25% selama 18 detik!', color: 0x7ee0c3, duration: 18, kind: 'rate' },
+  { id: 'hujan-pahala', name: 'Hujan Pahala', emoji: '💰', desc: 'Pahala dari musuh +40% selama 25 detik!', color: 0xa8e05f, duration: 25, kind: 'pahala' },
+  { id: 'perisai-masjid', name: 'Perisai Masjid', emoji: '🛡️', desc: 'Masjid kebal dari 3 musuh yang lolos!', color: 0x9ecbff, duration: 0, kind: 'shield' },
+]
+
+/** Konstanta siklus kotak sedekah di lapangan. */
+export const POWERUP_CONST = {
+  /** detik setelah wave 1 aktif sampai kotak pertama bisa muncul */
+  firstDelay: 22,
+  /** rentang acak antar kemunculan (detik) */
+  interval: [26, 40] as [number, number],
+  /** kotak bertahan selama ini di lapangan */
+  lifetime: 14,
+  /** amplitudo melayang naik-turun */
+  bobHeight: 0.55,
+  /** tinggi dasar kotak dari tanah */
+  baseY: 0.9,
+} as const
+
+/** pengali efek power-up (rate = pengali interval serang, lebih kecil = lebih cepat) */
+export const POWERUP_MULT = { damage: 1.3, rate: 0.75, pahala: 1.4 } as const
+
+/* --------------------------- TANTANGAN HARIAN --------------------------- */
+
+/** pengali efek mode — dibagikan Tantangan Harian & Mingguan. */
+export interface ModeMods {
   enemyHpMult?: number
   enemySpeedMult?: number
   rewardMult?: number
@@ -657,6 +688,16 @@ export interface DailyModifier {
   mosqueHpBonus?: number
   duaChargeMult?: number
   stealMult?: number
+}
+
+/** Modifier harian — ditentukan dari tanggal (semua pemain dapat sama). */
+export interface DailyModifier extends ModeMods {
+  id: string
+  name: string
+  emoji: string
+  desc: string
+  /** chip efek singkat untuk UI */
+  effects: string[]
 }
 
 export const DAILY_MODIFIERS: DailyModifier[] = [
@@ -745,6 +786,133 @@ export function pickDailyModifier(key = dailyKey()): DailyModifier {
   return DAILY_MODIFIERS[h % DAILY_MODIFIERS.length]
 }
 
+/* --------------------------- TANTANGAN MINGGUAN --------------------------- */
+
+/** Modifier mingguan — LEBIH SULIT dari harian, imbalan bintang toko besar. */
+export interface WeeklyModifier extends ModeMods {
+  id: string
+  name: string
+  emoji: string
+  desc: string
+  /** chip efek singkat untuk UI */
+  effects: string[]
+  /** bonus ⭐ currency toko saat menang */
+  rewardStars: number
+}
+
+export const WEEKLY_MODIFIERS: WeeklyModifier[] = [
+  {
+    id: 'badai-setan',
+    name: 'Badai Setan',
+    emoji: '🌪️',
+    desc: 'Angin kencang! Setan lari 25% lebih cepat dan HP +15%. Imbalan besar menantimu!',
+    effects: ['⚡ Musuh +25% cepat', '❤️ Musuh +15% kuat', '💰 Imbalan +50%'],
+    enemySpeedMult: 1.25,
+    enemyHpMult: 1.15,
+    rewardMult: 1.5,
+    rewardStars: 35,
+  },
+  {
+    id: 'kabut-pekat',
+    name: 'Kabut Pekat',
+    emoji: '🌫️',
+    desc: 'Kabut tebal menutup jalan... setan melambat tapi doa lebih sulit terkumpul.',
+    effects: ['🐢 Musuh -10% lambat', '✨ Doa +60% cepat terisi', '💰 Imbalan +30%'],
+    enemySpeedMult: 0.9,
+    duaChargeMult: 1.6,
+    rewardMult: 1.3,
+    rewardStars: 25,
+  },
+  {
+    id: 'gerimis-berkah',
+    name: 'Gerimis Berkah',
+    emoji: '🌧️',
+    desc: 'Hujan ringan membawa berkah: pahala awal extra dan imbalan lebih!',
+    effects: ['🪙 Pahala awal +80', '💰 Imbalan +35%'],
+    startPahalaBonus: 80,
+    rewardMult: 1.35,
+    rewardStars: 25,
+  },
+  {
+    id: 'malam-bermega',
+    name: 'Malam Bermega',
+    emoji: '✨',
+    desc: 'Langit penuh bintang! Doa terkumpul jauh lebih cepat malam ini.',
+    effects: ['✨ Doa +80% cepat terisi', '❤️ Masjid +30 HP'],
+    duaChargeMult: 1.8,
+    mosqueHpBonus: 30,
+    rewardStars: 25,
+  },
+  {
+    id: 'pasukan-gergasi',
+    name: 'Pasukan Gergasi',
+    emoji: '👹',
+    desc: 'Setan gergasi lambat tapi sangat kuat! Siapkan penjaga terbaikmu.',
+    effects: ['❤️ Musuh +35% kuat', '🐢 Musuh -15% lambat', '💰 Imbalan +40%'],
+    enemyHpMult: 1.35,
+    enemySpeedMult: 0.85,
+    rewardMult: 1.4,
+    rewardStars: 35,
+  },
+  {
+    id: 'zakat-mengalir',
+    name: 'Zakat Mengalir',
+    emoji: '💰',
+    desc: 'Rezeki melimpah! Tapi setan juga lebih rakus mencuri...',
+    effects: ['🪙 Pahala awal +150', '⚠️ Pencuri +30% rakus', '💰 Imbalan +25%'],
+    startPahalaBonus: 150,
+    stealMult: 1.3,
+    rewardMult: 1.25,
+    rewardStars: 25,
+  },
+  {
+    id: 'uji-iman',
+    name: 'Uji Iman',
+    emoji: '🕋',
+    desc: 'Ujian terberat pekan ini! Semua setan lebih kuat dan cepat. Bintang besar menunggu!',
+    effects: ['❤️ Musuh +20% kuat', '⚡ Musuh +15% cepat', '💰 Imbalan +60%', '❤️ Masjid +20 HP'],
+    enemyHpMult: 1.2,
+    enemySpeedMult: 1.15,
+    mosqueHpBonus: 20,
+    rewardMult: 1.6,
+    rewardStars: 40,
+  },
+  {
+    id: 'jumat-berkah',
+    name: 'Jumat Berkah',
+    emoji: '🕌',
+    desc: 'Berkah hari Jumat mengalir! Doa cepat terisi dan masjid kokoh.',
+    effects: ['✨ Doa +70% cepat terisi', '❤️ Masjid +25 HP', '💰 Imbalan +25%'],
+    duaChargeMult: 1.7,
+    mosqueHpBonus: 25,
+    rewardMult: 1.25,
+    rewardStars: 30,
+  },
+]
+
+/** kunci pekan ISO "YYYY-Www" (Senin sebagai awal pekan). */
+export function weeklyKey(d = new Date()): string {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+  const dayNum = date.getUTCDay() || 7
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum)
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1))
+  const weekNo = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
+  return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`
+}
+
+/** modifier pekan ini — deterministik dari kunci pekan (semua orang sama). */
+export function pickWeeklyModifier(key = weeklyKey()): WeeklyModifier {
+  let h = 0
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0
+  return WEEKLY_MODIFIERS[h % WEEKLY_MODIFIERS.length]
+}
+
+/** berapa hari lagi sampai Senin pekan depan (1..7). */
+export function daysUntilNextWeek(): number {
+  const now = new Date()
+  return ((8 - (now.getDay() || 7)) % 7) || 7
+}
+
 /* --------------------- Modifier runtime per pertandingan --------------------- */
 
 export interface RunMods {
@@ -772,7 +940,7 @@ export function resetRunMods() {
   RUN_MODS.duaChargeMult = 1
 }
 
-export function applyDailyMods(mod: DailyModifier) {
+export function applyDailyMods(mod: ModeMods) {
   resetRunMods()
   if (mod.enemyHpMult) RUN_MODS.enemyHpMult = mod.enemyHpMult
   if (mod.enemySpeedMult) RUN_MODS.enemySpeedMult = mod.enemySpeedMult

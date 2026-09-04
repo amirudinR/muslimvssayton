@@ -81,6 +81,7 @@ function StarRating({ stars }: { stars: number }) {
 function ScoreSubmit({ stars, wave, defeated, pahala }: { stars: number; wave: number; defeated: number; pahala: number }) {
   const scoreSubmitted = useGameStore((s) => s.scoreSubmitted)
   const dailyMode = useGameStore((s) => s.dailyMode)
+  const weeklyMode = useGameStore((s) => s.weeklyMode)
   const levelId = useGameStore((s) => s.levelId)
   const [name, setName] = useState('')
   const [sending, setSending] = useState(false)
@@ -127,8 +128,14 @@ function ScoreSubmit({ stars, wave, defeated, pahala }: { stars: number; wave: n
     setError(null)
     try {
       setPlayerName(clean)
-      // P8: label mode asal skor untuk papan rekor
-      const mode = dailyMode ? 'Daring Harian' : levelId > 0 ? `Level ${levelId}` : 'Klasik'
+      // P8/P9: label mode asal skor untuk papan rekor
+      const mode = weeklyMode
+        ? 'Tantangan Mingguan'
+        : dailyMode
+          ? 'Daring Harian'
+          : levelId > 0
+            ? `Level ${levelId}`
+            : 'Klasik'
       const res = await fetch('/api/leaderboard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -195,10 +202,22 @@ export function EndScreens() {
   const dailyMode = useGameStore((s) => s.dailyMode)
   const dailyMod = useGameStore((s) => s.dailyMod)
   const dailyStreakResult = useGameStore((s) => s.dailyStreakResult)
+  const weeklyMode = useGameStore((s) => s.weeklyMode)
+  const weeklyMod = useGameStore((s) => s.weeklyMod)
+  const weeklyStreakResult = useGameStore((s) => s.weeklyStreakResult)
   const levelId = useGameStore((s) => s.levelId)
-  const [starGain] = useState(() => (typeof window !== 'undefined' ? (window as unknown as { __pmEngine?: { runStarGain: number } }).__pmEngine?.runStarGain ?? 0 : 0))
+  /* P4/P9: bintang toko run terakhir — dibaca saat layar kemenangan dirender.
+     EndScreens ter-mount sejak awal aplikasi, jadi pembacaan sekali di mount
+     selalu 0 (bug lama); kini dibaca ulang tiap render layar kemenangan. */
+  const starGain =
+    screen === 'victory' && typeof window !== 'undefined'
+      ? (window as unknown as { __pmEngine?: { runStarGain: number } }).__pmEngine?.runStarGain ?? 0
+      : 0
 
-  const restart = () => getEngine()?.startGame(dailyMode ? { daily: true } : levelId > 0 ? { levelId } : undefined)
+  const restart = () =>
+    getEngine()?.startGame(
+      weeklyMode ? { weekly: true } : dailyMode ? { daily: true } : levelId > 0 ? { levelId } : undefined,
+    )
   const toMenu = () => getEngine()?.backToMenu()
 
   return (
@@ -259,6 +278,35 @@ export function EndScreens() {
                       {dailyStreakResult > 1
                         ? `${dailyStreakResult} hari beruntun! 🔥`
                         : 'Rentetan dimulai — menang lagi besok! 🔥'}
+                    </span>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* P9: Tantangan Mingguan selesai */}
+              {weeklyMode && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.95, type: 'spring', stiffness: 300, damping: 16 }}
+                  className="weekly-won-banner"
+                >
+                  <motion.span
+                    animate={{ rotate: [0, -12, 12, 0], scale: [1, 1.15, 1] }}
+                    transition={{ repeat: Infinity, duration: 1.4 }}
+                    className="inline-block text-2xl"
+                  >
+                    📅
+                  </motion.span>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-black text-white drop-shadow">
+                      Tantangan Mingguan Selesai!
+                    </span>
+                    <span className="text-[11px] font-bold text-violet-100">
+                      {weeklyMod ? `${weeklyMod.emoji} ${weeklyMod.name} · ` : ''}
+                      {weeklyStreakResult > 1
+                        ? `${weeklyStreakResult} pekan beruntun! 🔥`
+                        : 'Rentetan dimulai — menang lagi pekan depan! 🔥'}
                     </span>
                   </div>
                 </motion.div>

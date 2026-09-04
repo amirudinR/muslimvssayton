@@ -9,9 +9,11 @@ import {
   DUA_CONST,
   LANES,
   RUN_MODS,
+  POWERUP_MULT,
   type CharDef,
   type EnemyDef,
   type EnemyId,
+  type PowerupDef,
 } from './data'
 import {
   getTowerModel,
@@ -70,6 +72,10 @@ export interface ManagerCtx {
   particles: ParticleSystem
   /** Doa Bersama aktif hingga waktu ini (membuff semua tower) */
   duaActiveUntil: number
+  /** P9-c: power-up Kotak Sedekah aktif hingga waktu ini (-1 = nonaktif) */
+  powerDamageUntil: number
+  powerRateUntil: number
+  powerRewardUntil: number
   onEnemyKilled: (reward: number, pos: THREE.Vector3, enemyId: EnemyId) => void
   onEnemyLeaked: (enemy: Enemy) => void
   onBossShockwave: (duration: number) => void
@@ -656,11 +662,14 @@ export class Tower {
     if (this.cooldown > 0) return
     const stats = this.stats
     const blessed = now < ctx.duaActiveUntil
-    const dmg = blessed ? stats.damage * DUA_CONST.damageMult * this.buffMult : stats.damage * this.buffMult
+    /* P9-c: pengali power-up Kotak Sedekah (berlaku utk SEMUA jenis serangan) */
+    const pwDmg = ctx.powerDamageUntil > now ? POWERUP_MULT.damage : 1
+    const pwRate = ctx.powerRateUntil > now ? POWERUP_MULT.rate : 1
+    const dmg = (blessed ? stats.damage * DUA_CONST.damageMult : stats.damage) * this.buffMult * pwDmg
 
     if (this.def.attack === 'aura') {
       // Fatimah: denyut aroma wangi — AoE slow di sekitar
-      this.cooldown = stats.fireRate * (blessed ? DUA_CONST.rateMult : 1)
+      this.cooldown = stats.fireRate * (blessed ? DUA_CONST.rateMult : 1) * pwRate
       const inRange = enemies.filter((e) => !e.dead && !e.leaked && !e.escaped && e.pos.distanceTo(this.pos) < stats.range)
       if (inRange.length > 0) {
         ctx.particles.slowPulse(this.pos.x, 0.8, this.pos.z, stats.range)
@@ -679,7 +688,7 @@ export class Tower {
       // Misbah & nasihat: kotak sedekah — hasilkan pahala pasif (tidak menyerang).
       // Berkah Doa Bersama melipatgandakan sedekahnya (interval lebih cepat).
       // P8: berkah nasihat tetangga menambah hasil sedekah (buffMult).
-      this.cooldown = stats.fireRate * (blessed ? DUA_CONST.rateMult : 1)
+      this.cooldown = stats.fireRate * (blessed ? DUA_CONST.rateMult : 1) * pwRate
       const [amount] = this.def.pahalaGen![this.level - 1]
       ctx.onPahalaTick(Math.round(amount * this.buffMult), this.pos.clone(), this.level)
       return
@@ -687,7 +696,7 @@ export class Tower {
 
     if (this.def.attack === 'adzan') {
       // Kakek Imam: cahaya adzan menyapu seluruh layar
-      this.cooldown = stats.fireRate * (blessed ? DUA_CONST.rateMult : 1)
+      this.cooldown = stats.fireRate * (blessed ? DUA_CONST.rateMult : 1) * pwRate
       const alive = enemies.filter((e) => !e.dead && !e.leaked && !e.escaped)
       if (alive.length > 0) {
         audio.adzanChime()
@@ -714,7 +723,7 @@ export class Tower {
       }
     }
     if (!target) return
-    this.cooldown = stats.fireRate * (blessed ? DUA_CONST.rateMult : 1)
+    this.cooldown = stats.fireRate * (blessed ? DUA_CONST.rateMult : 1) * pwRate
     this.punchTimer = 1
     const muzzleY = 1.3
     const muzzle = tmpVec3.set(this.pos.x, muzzleY, this.pos.z)
@@ -777,8 +786,16 @@ export class EntityManager {
   private projPool: Record<ProjKind, Projectile[]> = { orb: [], bubble: [], coin: [] }
   private ctx: ManagerCtx
 
-  constructor(particles: ParticleSystem, ctxCallbacks: Omit<ManagerCtx, 'particles' | 'now' | 'duaActiveUntil'>) {
-    this.ctx = { now: 0, duaActiveUntil: -1, particles, ...ctxCallbacks }
+  constructor(particles: ParticleSystem, ctxCallbacks: Omit<ManagerCtx, 'particles' | 'now' | 'duaActiveUntil' | 'powerDamageUntil' | 'powerRateUntil' | 'powerRewardUntil'>) {
+    this.ctx = {
+      now: 0,
+      duaActiveUntil: -1,
+      powerDamageUntil: -1,
+      powerRateUntil: -1,
+      powerRewardUntil: -1,
+      particles,
+      ...ctxCallbacks,
+    }
     projectileSpawner = (kind, tower, target, damage) => this.spawnProjectile(kind, tower, target, damage)
   }
 
@@ -793,6 +810,28 @@ export class EntityManager {
 
   get duaBlessed() {
     return this.ctx.now < this.ctx.duaActiveUntil
+  }
+
+  /** P9-c: aktifkan power-up Kotak Sedekah (perisai ditangani di level engine). */
+  activatePowerup(kind: PowerupDef['kind'], duration: number) {
+    if (kind === 'damage') this.ctx.powerDamageUntil = this.ctx.now + duration
+    else if (kind === 'rate') this.ctx.powerRateUntil = this.ctx.now + duration
+    else if (kind === 'pahala') this.ctx.powerRewardUntil = this.ctx.now + duration
+    // shield ditangani engine (charge berbasis musuh yang lolos)
+  }
+
+  /* P9-c: waktu kedaluwarsa power-up (untuk sinkronisasi HUD engine). */
+  get powerDamageUntil() {
+    return this.ctx.powerDamageUntil
+  }
+  get powerRateUntil() {
+    return this.ctx.powerRateUntil
+  }
+  get powerRewardUntil() {
+    return this.ctx.powerRewardUntil
+  }
+  get powerRewardActive() {
+    return this.ctx.now < this.ctx.powerRewardUntil
   }
 
   reset() {
@@ -813,6 +852,9 @@ export class EntityManager {
     this.projectiles = []
     this.ctx.now = 0
     this.ctx.duaActiveUntil = -1
+    this.ctx.powerDamageUntil = -1
+    this.ctx.powerRateUntil = -1
+    this.ctx.powerRewardUntil = -1
   }
 
   spawnEnemy(enemyId: EnemyId, lane: number, wave: number): Enemy {

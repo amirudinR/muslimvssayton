@@ -1,0 +1,1002 @@
+     1→/* ============================================================
+     2→ * PENJAGA MASJID — Entities: Enemy, Tower, Projectile, Manager.
+     3→ * Semua interaksi gameplay (serang, kliyengan, kabur, boss).
+     4→ * ============================================================ */
+     5→
+     6→import * as THREE from 'three'
+     7→import {
+     8→  ENEMY_DEFS,
+     9→  DUA_CONST,
+    10→  LANES,
+    11→  RUN_MODS,
+    12→  type CharDef,
+    13→  type EnemyDef,
+    14→  type EnemyId,
+    15→} from './data'
+    16→import {
+    17→  getTowerModel,
+    18→  getEnemyModel,
+    19→  createOrb,
+    20→  createBubble,
+    21→  createCoin,
+    22→  createRangeRing,
+    23→  type ChibiParts,
+    24→} from './models'
+    25→import { getCharDef } from './chardb'
+    26→import { getRosterChar } from './roster'
+    27→import { ParticleSystem } from './particles'
+    28→import { audio } from './audio'
+    29→
+    30→/* ------------------------- util jalur (lane) ------------------------- */
+    31→
+    32→interface LaneData {
+    33→  pts: THREE.Vector2[]
+    34→  cum: number[]
+    35→  total: number
+    36→}
+    37→
+    38→const laneData: LaneData[] = LANES.map((lane) => {
+    39→  const pts = lane.map(([x, z]) => new THREE.Vector2(x, z))
+    40→  const cum = [0]
+    41→  for (let i = 1; i < pts.length; i++) {
+    42→    cum.push(cum[i - 1] + pts[i].distanceTo(pts[i - 1]))
+    43→  }
+    44→  return { pts, cum, total: cum[cum.length - 1] }
+    45→})
+    46→
+    47→function lanePoint(lane: number, dist: number, out: THREE.Vector2): THREE.Vector2 {
+    48→  const d = laneData[lane]
+    49→  const clamped = Math.max(0, Math.min(d.total, dist))
+    50→  let i = 0
+    51→  while (i < d.cum.length - 2 && d.cum[i + 1] < clamped) i++
+    52→  const segLen = d.cum[i + 1] - d.cum[i] || 1
+    53→  const t = (clamped - d.cum[i]) / segLen
+    54→  out.copy(d.pts[i]).lerp(d.pts[i + 1], t)
+    55→  return out
+    56→}
+    57→
+    58→function laneDir(lane: number, dist: number): THREE.Vector2 {
+    59→  const d = laneData[lane]
+    60→  const clamped = Math.max(0, Math.min(d.total - 0.01, dist))
+    61→  let i = 0
+    62→  while (i < d.cum.length - 2 && d.cum[i + 1] < clamped) i++
+    63→  return d.pts[i + 1].clone().sub(d.pts[i]).normalize()
+    64→}
+    65→
+    66→/* --------------------------- konteks update --------------------------- */
+    67→
+    68→export interface ManagerCtx {
+    69→  now: number // waktu game terakumulasi (terpengaruh speed & pause)
+    70→  particles: ParticleSystem
+    71→  /** Doa Bersama aktif hingga waktu ini (membuff semua tower) */
+    72→  duaActiveUntil: number
+    73→  onEnemyKilled: (reward: number, pos: THREE.Vector3, enemyId: EnemyId) => void
+    74→  onEnemyLeaked: (enemy: Enemy) => void
+    75→  onBossShockwave: (duration: number) => void
+    76→  /** Misbah: pahala hasil kotak sedekah */
+    77→  onPahalaTick: (amount: number, pos: THREE.Vector3, level: number) => void
+    78→}
+    79→
+    80→const tmpVec = new THREE.Vector2()
+    81→const tmpVec3 = new THREE.Vector3()
+    82→
+    83→/* ================================ ENEMY ================================ */
+    84→
+    85→export class Enemy {
+    86→  readonly def: EnemyDef
+    87→  readonly id: number
+    88→  hp: number
+    89→  maxHp: number
+    90→  lane: number
+    91→  dist = 0
+    92→  dead = false
+    93→  leaked = false
+    94→  escaped = false
+    95→  fleeing = false
+    96→  fleeRewardGiven = false
+    97→  group: THREE.Group
+    98→  slowUntil = -1
+    99→  slowFactor = 1
+   100→  buffUntil = -1
+   101→  stunUntil = -1
+   102→  dizzyUntil = -1
+   103→  knockFlash = 0
+   104→  private nextBuff = 0
+   105→  private nextSmoke = 0
+   106→  private nextShock = 0
+   107→  private animT = Math.random() * 10
+   108→  private dizzyStars: THREE.Mesh[] = []
+   109→  private headY: number
+   110→
+   111→  constructor(enemyId: EnemyId, id: number, lane: number, wave: number) {
+   112→    this.def = ENEMY_DEFS[enemyId]
+   113→    this.id = id
+   114→    this.lane = lane
+   115→    this.maxHp = Math.round(this.def.hp * (1 + 0.12 * (wave - 1)) * RUN_MODS.enemyHpMult)
+   116→    this.hp = this.maxHp
+   117→    this.group = getEnemyModel(enemyId)
+   118→    this.headY = {
+   119→      pocong: 1.55, kunti: 1.85, genderuwo: 1.7, tuyul: 1.35, wewe: 1.95, kuyang: 1.35, banaspati: 2.6,
+   120→      // P5:
+   121→      sundel: 2.0, leak: 1.65, kolongwewe: 1.45, jailangkung: 1.7, bunian: 1.6, butoijo: 2.35,
+   122→      nyiblorong: 1.75, palasik: 1.55, suster: 1.65, cindaku: 1.75, gendruwo: 2.25, wewerawa: 2.0, kober: 1.55,
+   123→    }[enemyId]
+   124→    // bintang kliyengan (orbit di atas kepala)
+   125→    const starMat = new THREE.MeshStandardMaterial({ color: 0xffd93d, emissive: 0xffb520, emissiveIntensity: 0.9 })
+   126→    for (let i = 0; i < 3; i++) {
+   127→      const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.13), starMat)
+   128→      star.visible = false
+   129→      this.group.add(star)
+   130→      this.dizzyStars.push(star)
+   131→    }
+   132→    lanePoint(lane, 0, tmpVec)
+   133→    this.group.position.set(tmpVec.x, 0, tmpVec.y)
+   134→    // boss masuk sambil terpeleset (spin lucu)
+   135→    if (this.def.isBoss) {
+   136→      this.group.userData.spinIntro = 1.6
+   137→      this.nextShock = 4
+   138→    }
+   139→  }
+   140→
+   141→  get pos(): THREE.Vector3 {
+   142→    return this.group.position
+   143→  }
+   144→
+   145→  takeDamage(amount: number, ctx: ManagerCtx, opts: { knockback?: number; stun?: number; slow?: { factor: number; duration: number } } = {}) {
+   146→    if (this.dead || this.escaped) return
+   147→    this.hp -= amount
+   148→    this.dizzyUntil = ctx.now + 0.55
+   149→    this.knockFlash = 0.25
+   150→    ctx.particles.showDamage(this.pos.x, this.headY + 0.4, this.pos.z, amount, undefined, this.def.isBoss)
+   151→    if (opts.knockback) {
+   152→      const resist = this.def.knockResist ?? 0
+   153→      this.dist = Math.max(0, this.dist - opts.knockback * (1 - resist))
+   154→    }
+   155→    if (opts.stun) this.stunUntil = ctx.now + opts.stun
+   156→    if (opts.slow && !this.def.slowImmune) {
+   157→      this.slowUntil = ctx.now + opts.slow.duration
+   158→      this.slowFactor = Math.min(this.slowFactor, opts.slow.factor)
+   159→    }
+   160→    if (this.hp <= 0) {
+   161→      this.die(ctx)
+   162→      return
+   163→    }
+   164→    // Wewe kabur malu-malu saat kena serangan pertama
+   165→    if (this.def.fleesOnHit && !this.fleeing) {
+   166→      this.fleeing = true
+   167→      audio.giggle()
+   168→      ctx.particles.showDamage(this.pos.x, this.headY + 0.9, this.pos.z, 6, '#e86a92')
+   169→      if (!this.fleeRewardGiven) {
+   170→        this.fleeRewardGiven = true
+   171→        ctx.onEnemyKilled(6, this.pos.clone(), this.def.id)
+   172→      }
+   173→    }
+   174→    if (!this.def.isBoss) audio.hit()
+   175→  }
+   176→
+   177→  private die(ctx: ManagerCtx) {
+   178→    this.dead = true
+   179→    audio.pop()
+   180→    if (Math.random() < 0.35) audio.giggle()
+   181→    ctx.particles.deathPoof(this.pos.x, 0.6, this.pos.z)
+   182→    ctx.onEnemyKilled(this.def.reward, this.pos.clone(), this.def.id)
+   183→  }
+   184→
+   185→  update(dt: number, ctx: ManagerCtx, enemies: Enemy[]) {
+   186→    if (this.dead || this.leaked || this.escaped) return
+   187→    const now = ctx.now
+   188→    this.animT += dt
+   189→
+   190→    // efek kliyengan / stun: bintang berputar di atas kepala
+   191→    const dizzy = now < this.dizzyUntil
+   192→    this.dizzyStars.forEach((s, i) => {
+   193→      s.visible = dizzy
+   194→      if (dizzy) {
+   195→        const a = now * 6 + (i / 3) * Math.PI * 2
+   196→        s.position.set(Math.cos(a) * 0.45, this.headY + 0.35, Math.sin(a) * 0.45)
+   197→        s.rotation.y += dt * 8
+   198→        s.rotation.x = Math.PI / 2
+   199→      }
+   200→    })
+   201→
+   202→    // kecepatan efektif
+   203→    let speed = this.def.speed * RUN_MODS.enemySpeedMult
+   204→    if (now < this.slowUntil) speed *= this.slowFactor
+   205→    else this.slowFactor = 1
+   206→    if (now < this.buffUntil) speed *= 1.35 // semangat karena ketawaan kunti
+   207→    const stunned = now < this.stunUntil
+   208→
+   209→    // boss: ngambek — asap ungu + shockwave
+   210→    if (this.def.isBoss) {
+   211→      if (now > this.nextSmoke) {
+   212→        this.nextSmoke = now + 0.45
+   213→        ctx.particles.smokePuff(this.pos.x, this.headY + 0.5, this.pos.z)
+   214→      }
+   215→      if (now > this.nextShock) {
+   216→        this.nextShock = now + 6
+   217→        audio.bossNgambek()
+   218→        ctx.particles.rings.spawn(this.pos.x, 0.1, this.pos.z, 0xc39bff, 10, 0.9)
+   219→        ctx.onBossShockwave(2)
+   220→      }
+   221→      const flames = this.group.userData.parts?.flames as THREE.Mesh[] | undefined
+   222→      if (flames) {
+   223→        flames.forEach((f, i) => {
+   224→          f.scale.setScalar(1 + Math.sin(this.animT * 6 + i * 1.7) * 0.22)
+   225→        })
+   226→      }
+   227→      // intro terpeleset lucu
+   228→      const spin = this.group.userData.spinIntro as number | undefined
+   229→      if (spin && spin > 0) {
+   230→        this.group.userData.spinIntro = spin - dt
+   231→        this.group.rotation.y += dt * 10
+   232→        this.group.position.y = Math.max(0, Math.sin(spin * 6) * 0.8)
+   233→      }
+   234→    }
+   235→
+   236→    if (!stunned) {
+   237→      if (this.fleeing) {
+   238→        // kabur terbirit-birit ke arah spawn
+   239→        this.dist -= this.def.speed * 3.2 * dt
+   240→        if (this.dist <= 0) {
+   241→          this.escaped = true
+   242→          ctx.particles.deathPoof(this.pos.x, 0.5, this.pos.z)
+   243→          return
+   244→        }
+   245→      } else {
+   246→        this.dist += speed * dt
+   247→        if (this.dist >= laneData[this.lane].total) {
+   248→          this.leaked = true
+   249→          ctx.onEnemyLeaked(this)
+   250→          return
+   251→        }
+   252→      }
+   253→    }
+   254→
+   255→    // posisi sepanjang jalur + wobble lucu
+   256→    lanePoint(this.lane, this.dist, tmpVec)
+   257→    let y = 0
+   258→    const parts = this.group.userData.parts as Record<string, unknown> | undefined
+   259→    if (this.def.id === 'pocong') {
+   260→      y = Math.abs(Math.sin(this.animT * 7)) * 0.45
+   261→      this.group.scale.y = this.def.scale * (1 - Math.abs(Math.sin(this.animT * 7)) * 0.1)
+   262→    } else if (this.def.id === 'kunti') {
+   263→      y = 0.25 + Math.sin(this.animT * 3) * 0.12
+   264→      if (parts?.head) (parts.head as THREE.Object3D).rotation.z = Math.sin(this.animT * 5) * 0.12
+   265→    } else if (this.def.id === 'genderuwo') {
+   266→      this.group.rotation.z = Math.sin(this.animT * 4) * 0.08
+   267→      if (parts?.armL) {
+   268→        ;(parts.armL as THREE.Object3D).rotation.x = Math.sin(this.animT * 4) * 0.5
+   269→        ;(parts.armR as THREE.Object3D).rotation.x = -Math.sin(this.animT * 4) * 0.5
+   270→      }
+   271→    } else if (this.def.id === 'tuyul') {
+   272→      const lateral = Math.sin(this.animT * 9) * 0.5
+   273→      const dir = laneDir(this.lane, this.dist)
+   274→      tmpVec.x += -dir.y * lateral
+   275→      tmpVec.y += dir.x * lateral
+   276→      this.group.rotation.z = Math.sin(this.animT * 9) * 0.15
+   277→      if (parts?.coin) (parts.coin as THREE.Object3D).rotation.z += dt * 6
+   278→    } else if (this.def.id === 'wewe') {
+   279→      y = Math.abs(Math.sin(this.animT * 5)) * 0.18
+   280→      if (this.fleeing) {
+   281→        this.group.rotation.x = -0.25 // condong kabur
+   282→      }
+   283→    } else if (this.def.id === 'kuyang') {
+   284→      // melayang: naik-turun lembut + goyang sayap & rambut
+   285→      y = 1.15 + Math.sin(this.animT * 3.2) * 0.25
+   286→      const lateral = Math.sin(this.animT * 2.1) * 0.3
+   287→      const dir = laneDir(this.lane, this.dist)
+   288→      tmpVec.x += -dir.y * lateral
+   289→      tmpVec.y += dir.x * lateral
+   290→      if (parts?.wingL) {
+   291→        const flap = Math.sin(this.animT * 13) * 0.55
+   292→        ;(parts.wingL as THREE.Object3D).rotation.z = 0.45 + flap
+   293→        ;(parts.wingR as THREE.Object3D).rotation.z = -0.45 - flap
+   294→        ;(parts.wingL as THREE.Object3D).position.y = 1.0 + flap * 0.12
+   295→        ;(parts.wingR as THREE.Object3D).position.y = 1.0 + flap * 0.12
+   296→      }
+   297→      const strands = parts?.strands as THREE.Object3D[] | undefined
+   298→      if (strands) {
+   299→        strands.forEach((s, i) => {
+   300→          s.rotation.x = Math.sin(this.animT * 5 + i) * 0.35
+   301→          s.rotation.z = Math.cos(this.animT * 4 + i) * 0.2
+   302→        })
+   303→      }
+   304→      if (parts?.ribbon) (parts.ribbon as THREE.Object3D).rotation.z = Math.sin(this.animT * 6) * 0.2
+   305→    } else if (this.def.id === 'banaspati') {
+   306→      y = 0.3 + Math.sin(this.animT * 2.2) * 0.2
+   307→    } else if (this.def.id === 'sundel') {
+   308→      // melayang pelan + pita berkibar
+   309→      y = 0.55 + Math.sin(this.animT * 2.6) * 0.22
+   310→      const strands = parts?.strands as THREE.Object3D[] | undefined
+   311→      if (strands) {
+   312→        strands.forEach((s, i) => {
+   313→          s.rotation.x = 0.5 + Math.sin(this.animT * 3.4 + i) * 0.4
+   314→          s.rotation.z = Math.cos(this.animT * 2.8 + i) * 0.3
+   315→        })
+   316→      }
+   317→      this.group.rotation.z = Math.sin(this.animT * 2.0) * 0.06
+   318→    } else if (this.def.id === 'leak') {
+   319→      // zig-zag cepat + ekor pita warna-warni memuntir
+   320→      y = 1.0 + Math.sin(this.animT * 4.2) * 0.28
+   321→      const lateral = Math.sin(this.animT * 5.5) * 0.8
+   322→      const dir = laneDir(this.lane, this.dist)
+   323→      tmpVec.x += -dir.y * lateral
+   324→      tmpVec.y += dir.x * lateral
+   325→      const strands = parts?.strands as THREE.Object3D[] | undefined
+   326→      if (strands) {
+   327→        strands.forEach((s, i) => {
+   328→          s.rotation.z = Math.sin(this.animT * 8 + i * 1.3) * 0.5
+   329→        })
+   330→      }
+   331→    } else if (this.def.id === 'kolongwewe') {
+   332→      // jongkok goyang — mata ngintip kiri-kanan
+   333→      this.group.rotation.z = Math.sin(this.animT * 6) * 0.08
+   334→      if (parts?.head) (parts.head as THREE.Object3D).rotation.z = Math.sin(this.animT * 2.4) * 0.35
+   335→      y = Math.abs(Math.sin(this.animT * 5)) * 0.08
+   336→    } else if (this.def.id === 'jailangkung') {
+   337→      // gerakan patah-patah (stop-motion) — kaku tiap 0.2 detik
+   338→      const stepT = Math.floor(this.animT * 5) / 5
+   339→      this.group.rotation.y += Math.sin(stepT * 8) * 0.02
+   340→      y = Math.abs(Math.sin(stepT * 7)) * 0.3
+   341→      if (parts?.armL) {
+   342→        ;(parts.armL as THREE.Object3D).rotation.z = -0.5 + Math.sin(stepT * 10) * 0.7
+   343→        ;(parts.armR as THREE.Object3D).rotation.z = 0.5 - Math.sin(stepT * 10) * 0.7
+   344→      }
+   345→    } else if (this.def.id === 'bunian') {
+   346→      // jalan cepat malu-malu + topi daun goyang
+   347→      y = Math.abs(Math.sin(this.animT * 8)) * 0.16
+   348→      if (parts?.hat) (parts.hat as THREE.Object3D).rotation.z = Math.sin(this.animT * 6) * 0.18
+   349→      this.group.rotation.z = Math.sin(this.animT * 9) * 0.1
+   350→    } else if (this.def.id === 'butoijo') {
+   351→      // badan besar goyangan lambat + lengan ayun
+   352→      this.group.rotation.z = Math.sin(this.animT * 3) * 0.05
+   353→      if (parts?.armL) {
+   354→        ;(parts.armL as THREE.Object3D).rotation.x = Math.sin(this.animT * 3) * 0.4
+   355→        ;(parts.armR as THREE.Object3D).rotation.x = -Math.sin(this.animT * 3) * 0.4
+   356→      }
+   357→      y = Math.abs(Math.sin(this.animT * 4)) * 0.12
+   358→    } else if (this.def.id === 'nyiblorong') {
+   359→      // meliuk-meliuk ular + ekor bergelombang
+   360→      const lateral = Math.sin(this.animT * 3.5) * 0.6
+   361→      const dir = laneDir(this.lane, this.dist)
+   362→      tmpVec.x += -dir.y * lateral
+   363→      tmpVec.y += dir.x * lateral
+   364→      const strands = parts?.strands as THREE.Object3D[] | undefined
+   365→      if (strands) {
+   366→        strands.forEach((s, i) => {
+   367→          s.position.x = Math.sin(this.animT * 4 + i * 1.1) * 0.25
+   368→        })
+   369→      }
+   370→      y = Math.abs(Math.sin(this.animT * 6)) * 0.14
+   371→    } else if (this.def.id === 'palasik') {
+   372→      // melayang ringan + selimut berkibar
+   373→      y = 0.5 + Math.sin(this.animT * 3.0) * 0.2
+   374→      this.group.rotation.z = Math.sin(this.animT * 2.5) * 0.08
+   375→      if (parts?.body) (parts.body as THREE.Object3D).rotation.z = Math.sin(this.animT * 4) * 0.12
+   376→      const strands = parts?.strands as THREE.Object3D[] | undefined
+   377→      if (strands) strands.forEach((s, i) => { s.rotation.x = 0.4 + Math.sin(this.animT * 5 + i) * 0.3 })
+   378→    } else if (this.def.id === 'suster') {
+   379→      // ngesot breakdance — condong belakang + kaki geser
+   380→      this.group.rotation.x = -0.22 + Math.sin(this.animT * 8) * 0.06
+   381→      y = Math.abs(Math.sin(this.animT * 6)) * 0.05
+   382→      const lateral = Math.sin(this.animT * 7) * 0.3
+   383→      const dir = laneDir(this.lane, this.dist)
+   384→      tmpVec.x += -dir.y * lateral
+   385→      tmpVec.y += dir.x * lateral
+   386→    } else if (this.def.id === 'cindaku') {
+   387→      // jalan tegak gesit + ekor goyang
+   388→      y = Math.abs(Math.sin(this.animT * 6.5)) * 0.18
+   389→      const strands = parts?.strands as THREE.Object3D[] | undefined
+   390→      if (strands) strands.forEach((s) => { s.rotation.z = Math.sin(this.animT * 7) * 0.5 })
+   391→      this.group.rotation.z = Math.sin(this.animT * 6) * 0.06
+   392→    } else if (this.def.id === 'gendruwo') {
+   393→      // gempal goyang + lengan ayun lebar
+   394→      this.group.rotation.z = Math.sin(this.animT * 2.8) * 0.06
+   395→      if (parts?.armL) {
+   396→        ;(parts.armL as THREE.Object3D).rotation.x = Math.sin(this.animT * 2.6) * 0.5
+   397→        ;(parts.armR as THREE.Object3D).rotation.x = -Math.sin(this.animT * 2.6) * 0.5
+   398→      }
+   399→      y = Math.abs(Math.sin(this.animT * 3.5)) * 0.14
+   400→    } else if (this.def.id === 'wewerawa') {
+   401→      // santai gemoy + payung teratai bergoyang
+   402→      this.group.rotation.z = Math.sin(this.animT * 2.2) * 0.05
+   403→      if (parts?.umbrella) {
+   404→        (parts.umbrella as THREE.Object3D).rotation.z = Math.sin(this.animT * 2.4) * 0.16
+   405→      }
+   406→      y = Math.abs(Math.sin(this.animT * 3.2)) * 0.1
+   407→    } else if (this.def.id === 'kober') {
+   408→      // lari usil cepat + cape berkibar + zigzag kecil
+   409→      const lateral = Math.sin(this.animT * 8) * 0.4
+   410→      const dir = laneDir(this.lane, this.dist)
+   411→      tmpVec.x += -dir.y * lateral
+   412→      tmpVec.y += dir.x * lateral
+   413→      y = Math.abs(Math.sin(this.animT * 9)) * 0.2
+   414→      if (parts?.cape) (parts.cape as THREE.Object3D).rotation.x = 0.4 + Math.sin(this.animT * 6) * 0.25
+   415→      this.group.rotation.z = Math.sin(this.animT * 9) * 0.12
+   416→    }
+   417→
+   418→    // wobble kena pukul
+   419→    if (this.knockFlash > 0) {
+   420→      this.knockFlash -= dt
+   421→      this.group.rotation.z += Math.sin(now * 30) * 0.04
+   422→    }
+   423→
+   424→    this.group.position.set(tmpVec.x, y, tmpVec.y)
+   425→
+   426→    // menghadap arah gerak
+   427→    const faceDir = this.fleeing ? laneDir(this.lane, Math.max(0.01, this.dist)).negate() : laneDir(this.lane, this.dist)
+   428→    const targetRot = Math.atan2(faceDir.x, faceDir.y)
+   429→    let dRot = targetRot - this.group.rotation.y
+   430→    while (dRot > Math.PI) dRot -= Math.PI * 2
+   431→    while (dRot < -Math.PI) dRot += Math.PI * 2
+   432→    this.group.rotation.y += dRot * Math.min(1, dt * 10)
+   433→
+   434→    // kunti: ketawa cekikikan → buff teman sekitar
+   435→    if (this.def.buff && !this.fleeing && !stunned) {
+   436→      if (now > this.nextBuff) {
+   437→        this.nextBuff = now + this.def.buff.interval
+   438→        audio.giggle()
+   439→        ctx.particles.rings.spawn(this.pos.x, 0.1, this.pos.z, 0xff9ecb, this.def.buff.radius, 0.7)
+   440→        enemies.forEach((e) => {
+   441→          if (e !== this && !e.dead && !e.leaked && e.pos.distanceTo(this.pos) < this.def.buff!.radius) {
+   442→            e.buffUntil = now + this.def.buff!.duration
+   443→          }
+   444→        })
+   445→      }
+   446→    }
+   447→  }
+   448→
+   449→  dispose(scene: THREE.Object3D) {
+   450→    scene.remove(this.group)
+   451→  }
+   452→}
+   453→
+   454→/* ================================ TOWER ================================ */
+   455→
+   456→export class Tower {
+   457→  readonly def: CharDef
+   458→  readonly slotIndex: number
+   459→  level = 1
+   460→  group: THREE.Group
+   461→  private parts: ChibiParts
+   462→  cooldown = 0.5
+   463→  stunUntil = -1
+   464→  stunnedAnim = 0
+   465→  private animT = Math.random() * 10
+   466→  private waveTimer = Math.random() * 4
+   467→  private punchTimer = 0
+   468→  /** P7: timer spawn partikel aura (rarity epik/legendaris) */
+   469→  private auraTimer = Math.random() * 1
+   470→  /** P8: multiplier berkah nasihat dari tower sedekah tetangga (1 = tanpa buff). */
+   471→  buffMult = 1
+   472→  rangeRing: THREE.Mesh
+   473→  /** cincin keemasan berkah Doa Bersama di bawah kaki */
+   474→  duaGlow: THREE.Mesh
+   475→  /** P8: cincin hijau berkah nasihat di bawah kaki (aktif saat di-buff) */
+   476→  nasihatGlow: THREE.Mesh
+   477→  /** P8: cincin radius aura buff (hanya tower sedekah/nasihat) */
+   478→  buffRing: THREE.Mesh | null = null
+   479→  totalSpent: number
+   480→
+   481→  constructor(charId: string, slotIndex: number, x: number, z: number, baseCost: number) {
+   482→    this.def = getCharDef(charId)
+   483→    this.slotIndex = slotIndex
+   484→    this.totalSpent = baseCost
+   485→    this.group = getTowerModel(charId, 1)
+   486→    this.group.position.set(x, 0, z)
+   487→    this.parts = this.group.userData.parts as ChibiParts
+   488→    const stats = this.def.levels[0]
+   489→    this.rangeRing = createRangeRing(stats.range, 0x9ff2c8)
+   490→    this.rangeRing.position.set(x, 0, z)
+   491→    this.rangeRing.visible = false
+   492→    this.duaGlow = new THREE.Mesh(
+   493→      new THREE.RingGeometry(0.55, 0.95, 26),
+   494→      new THREE.MeshBasicMaterial({
+   495→        color: 0xffd76a,
+   496→        transparent: true,
+   497→        opacity: 0.6,
+   498→        side: THREE.DoubleSide,
+   499→      }),
+   500→    )
+   501→    this.duaGlow.rotation.x = -Math.PI / 2
+   502→    this.duaGlow.position.set(x, 0.06, z)
+   503→    this.duaGlow.visible = false
+   504→
+   505→    /* P8: cincin berkah nasihat (buff dari tower sedekah tetangga) */
+   506→    this.nasihatGlow = new THREE.Mesh(
+   507→      new THREE.RingGeometry(0.42, 0.72, 24),
+   508→      new THREE.MeshBasicMaterial({
+   509→        color: 0x34d399,
+   510→        transparent: true,
+   511→        opacity: 0.75,
+   512→        side: THREE.DoubleSide,
+   513→      }),
+   514→    )
+   515→    this.nasihatGlow.rotation.x = -Math.PI / 2
+   516→    this.nasihatGlow.position.set(x, 0.05, z)
+   517→    this.nasihatGlow.visible = false
+   518→
+   519→    /* P8: cincin radius aura buff untuk tower nasihat/sedekah — varian 'berkah'
+   520→       (rangeMult 1.4) kini terasa nyata: radius buff ikut melebar. */
+   521→    if (this.def.attack === 'sedekah') {
+   522→      const buffRadius = this.buffRadius
+   523→      this.buffRing = createRangeRing(buffRadius, 0x34d399)
+   524→      this.buffRing.position.set(x, 0, z)
+   525→      ;(this.buffRing.material as THREE.MeshBasicMaterial).opacity = 0.35
+   526→      this.buffRing.visible = true
+   527→    }
+   528→  }
+   529→
+   530→  /**
+   531→   * P8: radius aura buff nasihat — basis mandiri (bukan range serangan
+   532→   * yang memang kecil utk tower sedekah): 4.5/5.5/6.5 per level.
+   533→   * Varian 'berkah' (rangeMult 1.4) memperluas ×1.4 → 6.3/7.7/9.1.
+   534→   */
+   535→  get buffRadius(): number {
+   536→    const base = 4.5 + (this.level - 1) * 1.0
+   537→    const isBerkah = getRosterChar(this.def.id)?.variant === 'berkah'
+   538→    return +(base * (isBerkah ? 1.4 : 1)).toFixed(1)
+   539→  }
+   540→
+   541→  get stats() {
+   542→    return this.def.levels[this.level - 1]
+   543→  }
+   544→
+   545→  get pos(): THREE.Vector3 {
+   546→    return this.group.position
+   547→  }
+   548→
+   549→  setLevel(level: number) {
+   550→    const x = this.group.position.x
+   551→    const z = this.group.position.z
+   552→    this.level = level
+   553→    this.group = getTowerModel(this.def.id, level)
+   554→    this.group.position.set(x, 0, z)
+   555→    this.parts = this.group.userData.parts as ChibiParts
+   556→    const stats = this.def.levels[level - 1]
+   557→    this.rangeRing.scale.setScalar(stats.range / this.def.levels[0].range)
+   558→    if (this.buffRing) {
+   559→      this.buffRing.scale.setScalar(this.buffRadius / 4.5)
+   560→    }
+   561→  }
+   562→
+   563→  stun(now: number, duration: number) {
+   564→    this.stunUntil = Math.max(this.stunUntil, now + duration)
+   565→  }
+   566→
+   567→  update(dt: number, ctx: ManagerCtx, enemies: Enemy[]) {
+   568→    const now = ctx.now
+   569→    this.animT += dt
+   570→    const stunned = now < this.stunUntil
+   571→
+   572→    /* --- animasi idle lucu --- */
+   573→    const bob = Math.sin(this.animT * 2.4) * 0.04
+   574→    this.parts.body.position.y = 0.78 + bob
+   575→    this.parts.head.rotation.z = Math.sin(this.animT * 1.8) * 0.08
+   576→    // melambai sesekali
+   577→    this.waveTimer -= dt
+   578→    if (this.waveTimer <= 0) this.waveTimer = 3 + Math.random() * 4
+   579→    const waving = this.waveTimer < 1.2 && !stunned
+   580→    const armWave = waving ? Math.sin(this.animT * 10) * 0.7 : 0
+   581→    this.parts.armR.rotation.z = -0.5 + (this.punchTimer > 0 ? -1.2 * this.punchTimer : -armWave)
+   582→    this.parts.armL.rotation.z = 0.5 + armWave * 0.4
+   583→    // bintang level melayang
+   584→    this.parts.stars.forEach((s, i) => {
+   585→      s.position.y = s.userData.baseY + Math.sin(this.animT * 3 + i) * 0.07
+   586→      s.rotation.y += dt * 2
+   587→    })
+   588→    if (this.parts.glow) {
+   589→      this.parts.glow.scale.setScalar(1 + Math.sin(this.animT * 4) * 0.08)
+   590→    }
+   591→    if (this.punchTimer > 0) this.punchTimer -= dt * 3
+   592→
+   593→    /* --- P7: aura partikel legendaris/epik (menguat tiap level) --- */
+   594→    if (this.def.rarity === 'legendaris' || this.def.rarity === 'epik') {
+   595→      this.auraTimer -= dt
+   596→      if (this.auraTimer <= 0) {
+   597→        this.auraTimer = this.def.rarity === 'legendaris' ? 0.5 : 0.9
+   598→        const a = Math.random() * Math.PI * 2
+   599→        const r = 0.6 + Math.random() * 0.5
+   600→        const color = this.def.rarity === 'legendaris' ? 0xffd76a : 0xc79ae8
+   601→        ctx.particles.sparkleRise(
+   602→          this.pos.x + Math.cos(a) * r,
+   603→          0.3 + Math.random() * 1.4,
+   604→          this.pos.z + Math.sin(a) * r,
+   605→          color,
+   606→        )
+   607→      }
+   608→    }
+   609→
+   610→    /* --- animasi khusus Misbah: koin sedekah melayang + lampion berdenyut --- */
+   611→    if (this.parts.koinSedekah) {
+   612→      this.parts.koinSedekah.position.y = 1.3 + Math.sin(this.animT * 2.6) * 0.1
+   613→      this.parts.koinSedekah.rotation.z = Math.sin(this.animT * 2.2) * 0.3
+   614→    }
+   615→    if (this.parts.lampion) {
+   616→      const lm = this.parts.lampion as THREE.Mesh
+   617→      const mat = lm.material as THREE.MeshStandardMaterial
+   618→      mat.emissiveIntensity = 0.9 + Math.sin(this.animT * 3.4) * 0.5
+   619→      lm.position.x = -0.72 + Math.sin(this.animT * 1.8) * 0.03
+   620→    }
+   621→
+   622→    if (stunned) {
+   623→      this.stunnedAnim += dt
+   624→      this.group.rotation.z = Math.sin(this.stunnedAnim * 18) * 0.08
+   625→      return
+   626→    }
+   627→    this.group.rotation.z *= 0.9
+   628→
+   629→    /* --- berkah Doa Bersama: aura keemasan di kaki --- */
+   630→    if (this.duaGlow) {
+   631→      const blessed = now < ctx.duaActiveUntil
+   632→      this.duaGlow.visible = blessed
+   633→      if (blessed) {
+   634→        this.duaGlow.rotation.z += dt * 2.5
+   635→        this.duaGlow.scale.setScalar(1 + Math.sin(this.animT * 5) * 0.12)
+   636→      }
+   637→    }
+   638→
+   639→    /* --- P8: cincin berkah nasihat (visual buff aktif) --- */
+   640→    if (this.nasihatGlow) {
+   641→      const buffed = this.buffMult > 1
+   642→      this.nasihatGlow.visible = buffed
+   643→      if (buffed) {
+   644→        this.nasihatGlow.rotation.z -= dt * 1.8
+   645→        this.nasihatGlow.scale.setScalar(1 + Math.sin(this.animT * 4) * 0.1)
+   646→      }
+   647→    }
+   648→    /* P8: denyut cincin radius buff pada tower nasihat */
+   649→    if (this.buffRing) {
+   650→      const mat = this.buffRing.material as THREE.MeshBasicMaterial
+   651→      mat.opacity = 0.25 + Math.abs(Math.sin(this.animT * 1.6)) * 0.25
+   652→    }
+   653→
+   654→    /* --- serangan --- */
+   655→    this.cooldown -= dt
+   656→    if (this.cooldown > 0) return
+   657→    const stats = this.stats
+   658→    const blessed = now < ctx.duaActiveUntil
+   659→    const dmg = blessed ? stats.damage * DUA_CONST.damageMult * this.buffMult : stats.damage * this.buffMult
+   660→
+   661→    if (this.def.attack === 'aura') {
+   662→      // Fatimah: denyut aroma wangi — AoE slow di sekitar
+   663→      this.cooldown = stats.fireRate * (blessed ? DUA_CONST.rateMult : 1)
+   664→      const inRange = enemies.filter((e) => !e.dead && !e.leaked && !e.escaped && e.pos.distanceTo(this.pos) < stats.range)
+   665→      if (inRange.length > 0) {
+   666→        ctx.particles.slowPulse(this.pos.x, 0.8, this.pos.z, stats.range)
+   667→        audio.swoosh()
+   668→        const slow = {
+   669→          factor: this.def.slowFactor![this.level - 1],
+   670→          duration: this.def.slowDuration![this.level - 1],
+   671→        }
+   672→        inRange.forEach((e) => e.takeDamage(dmg, ctx, { slow }))
+   673→        this.punchTimer = 1
+   674→      }
+   675→      return
+   676→    }
+   677→
+   678→    if (this.def.attack === 'sedekah') {
+   679→      // Misbah & nasihat: kotak sedekah — hasilkan pahala pasif (tidak menyerang).
+   680→      // Berkah Doa Bersama melipatgandakan sedekahnya (interval lebih cepat).
+   681→      // P8: berkah nasihat tetangga menambah hasil sedekah (buffMult).
+   682→      this.cooldown = stats.fireRate * (blessed ? DUA_CONST.rateMult : 1)
+   683→      const [amount] = this.def.pahalaGen![this.level - 1]
+   684→      ctx.onPahalaTick(Math.round(amount * this.buffMult), this.pos.clone(), this.level)
+   685→      return
+   686→    }
+   687→
+   688→    if (this.def.attack === 'adzan') {
+   689→      // Kakek Imam: cahaya adzan menyapu seluruh layar
+   690→      this.cooldown = stats.fireRate * (blessed ? DUA_CONST.rateMult : 1)
+   691→      const alive = enemies.filter((e) => !e.dead && !e.leaked && !e.escaped)
+   692→      if (alive.length > 0) {
+   693→        audio.adzanChime()
+   694→        ctx.particles.adzanWave(this.pos.x, 1, this.pos.z)
+   695→        alive.forEach((e) =>
+   696→          e.takeDamage(dmg, ctx, { knockback: this.def.knockback, stun: this.def.stunDuration }),
+   697→        )
+   698→        this.punchTimer = 1.4
+   699→        return
+   700→      }
+   701→      this.cooldown = 0.5 // coba lagi sebentar lagi
+   702→      return
+   703→    }
+   704→
+   705→    // cari target "terdepan" (paling dekat masjid) dalam jangkauan
+   706→    let target: Enemy | null = null
+   707→    let bestDist = -1
+   708→    for (const e of enemies) {
+   709→      if (e.dead || e.leaked || e.escaped || e.fleeing) continue
+   710→      if (e.pos.distanceTo(this.pos) > stats.range) continue
+   711→      if (e.dist > bestDist) {
+   712→        bestDist = e.dist
+   713→        target = e
+   714→      }
+   715→    }
+   716→    if (!target) return
+   717→    this.cooldown = stats.fireRate * (blessed ? DUA_CONST.rateMult : 1)
+   718→    this.punchTimer = 1
+   719→    const muzzleY = 1.3
+   720→    const muzzle = tmpVec3.set(this.pos.x, muzzleY, this.pos.z)
+   721→
+   722→    if (this.def.attack === 'orb') {
+   723→      ctx.particles.muzzle(muzzle.x, muzzle.y, muzzle.z)
+   724→      audio.swoosh()
+   725→      ctxManagerSpawnProjectile('orb', this, target, dmg)
+   726→    } else if (this.def.attack === 'bubble') {
+   727→      ctx.particles.muzzle(muzzle.x, muzzle.y, muzzle.z, 0xffc7e5)
+   728→      audio.bubble()
+   729→      ctxManagerSpawnProjectile('bubble', this, target, dmg)
+   730→    } else if (this.def.attack === 'coin') {
+   731→      audio.coin()
+   732→      ctxManagerSpawnProjectile('coin', this, target, dmg)
+   733→    }
+   734→  }
+   735→}
+   736→
+   737→/* ============================== PROJECTILE ============================== */
+   738→
+   739→type ProjKind = 'orb' | 'bubble' | 'coin'
+   740→
+   741→export class Projectile {
+   742→  kind: ProjKind
+   743→  mesh: THREE.Mesh
+   744→  from = new THREE.Vector3()
+   745→  targetPos = new THREE.Vector3()
+   746→  target: Enemy | null = null
+   747→  owner: Tower
+   748→  damage = 0
+   749→  t = 0
+   750→  dur = 0.5
+   751→  aoeRadius = 0
+   752→  slowDur = 0
+   753→  knockback = 0
+   754→  alive = false
+   755→
+   756→  constructor(kind: ProjKind, owner: Tower) {
+   757→    this.kind = kind
+   758→    this.owner = owner
+   759→    this.mesh =
+   760→      kind === 'orb' ? createOrb() : kind === 'bubble' ? createBubble() : createCoin()
+   761→  }
+   762→}
+   763→
+   764→/* ============================== MANAGER ============================== */
+   765→
+   766→let projectileSpawner: ((kind: ProjKind, tower: Tower, target: Enemy, damage: number) => void) | null = null
+   767→function ctxManagerSpawnProjectile(kind: ProjKind, tower: Tower, target: Enemy, damage: number) {
+   768→  projectileSpawner?.(kind, tower, target, damage)
+   769→}
+   770→
+   771→export class EntityManager {
+   772→  enemies: Enemy[] = []
+   773→  towers: Tower[] = []
+   774→  projectiles: Projectile[] = []
+   775→  group = new THREE.Group()
+   776→  private enemyIdCounter = 1
+   777→  private projPool: Record<ProjKind, Projectile[]> = { orb: [], bubble: [], coin: [] }
+   778→  private ctx: ManagerCtx
+   779→
+   780→  constructor(particles: ParticleSystem, ctxCallbacks: Omit<ManagerCtx, 'particles' | 'now' | 'duaActiveUntil'>) {
+   781→    this.ctx = { now: 0, duaActiveUntil: -1, particles, ...ctxCallbacks }
+   782→    projectileSpawner = (kind, tower, target, damage) => this.spawnProjectile(kind, tower, target, damage)
+   783→  }
+   784→
+   785→  get now() {
+   786→    return this.ctx.now
+   787→  }
+   788→
+   789→  /** Doa Bersama: aktifkan berkah untuk semua tower selama `duration` detik. */
+   790→  activateDuaBlessing(duration: number) {
+   791→    this.ctx.duaActiveUntil = this.ctx.now + duration
+   792→  }
+   793→
+   794→  get duaBlessed() {
+   795→    return this.ctx.now < this.ctx.duaActiveUntil
+   796→  }
+   797→
+   798→  reset() {
+   799→    this.enemies.forEach((e) => e.dispose(this.group))
+   800→    this.enemies = []
+   801→    this.towers.forEach((t) => {
+   802→      this.group.remove(t.group)
+   803→      this.group.remove(t.rangeRing)
+   804→      this.group.remove(t.duaGlow)
+   805→      this.group.remove(t.nasihatGlow)
+   806→      if (t.buffRing) this.group.remove(t.buffRing)
+   807→    })
+   808→    this.towers = []
+   809→    this.projectiles.forEach((p) => {
+   810→      if (p.alive) this.group.remove(p.mesh)
+   811→      p.alive = false
+   812→    })
+   813→    this.projectiles = []
+   814→    this.ctx.now = 0
+   815→    this.ctx.duaActiveUntil = -1
+   816→  }
+   817→
+   818→  spawnEnemy(enemyId: EnemyId, lane: number, wave: number): Enemy {
+   819→    const e = new Enemy(enemyId, this.enemyIdCounter++, lane, wave)
+   820→    this.enemies.push(e)
+   821→    this.group.add(e.group)
+   822→    return e
+   823→  }
+   824→
+   825→  get aliveEnemyCount() {
+   826→    return this.enemies.filter((e) => !e.dead && !e.leaked && !e.escaped).length
+   827→  }
+   828→
+   829→  towerAtSlot(slotIndex: number): Tower | null {
+   830→    return this.towers.find((t) => t.slotIndex === slotIndex) ?? null
+   831→  }
+   832→
+   833→  placeTower(charId: string, slotIndex: number, x: number, z: number, cost: number): Tower {
+   834→    const tower = new Tower(charId, slotIndex, x, z, cost)
+   835→    this.towers.push(tower)
+   836→    this.group.add(tower.group)
+   837→    this.group.add(tower.rangeRing)
+   838→    this.group.add(tower.duaGlow)
+   839→    this.group.add(tower.nasihatGlow)
+   840→    if (tower.buffRing) this.group.add(tower.buffRing)
+   841→    return tower
+   842→  }
+   843→
+   844→  removeTower(tower: Tower) {
+   845→    this.towers = this.towers.filter((t) => t !== tower)
+   846→    this.group.remove(tower.group)
+   847→    this.group.remove(tower.rangeRing)
+   848→    this.group.remove(tower.duaGlow)
+   849→    this.group.remove(tower.nasihatGlow)
+   850→    if (tower.buffRing) this.group.remove(tower.buffRing)
+   851→  }
+   852→
+   853→  /** P8: multiplier berkah nasihat per level tower sumber. */
+   854→  static readonly NASIHAT_BUFF = [1.1, 1.16, 1.22]
+   855→
+   856→  /**
+   857→   * P8: BERKAH NASIHAT — tower ber-attack 'sedekah' (Misbah & power nasihat)
+   858→   * memancarkan aura hijau yang memperkuat tower tetangga:
+   859→   * - tower penyerang: damage × buffMult
+   860→   * - tower sedekah lain: hasil pahala × buffMult
+   861→   * Radius = 70% range tower sumber (varian 'berkah' 1.4× → aura terluas).
+   862→   * Buff tidak menumpuk (diambil nilai tertinggi).
+   863→   */
+   864→  private applyNasihatAuras() {
+   865→    for (const t of this.towers) t.buffMult = 1
+   866→    for (const src of this.towers) {
+   867→      if (src.def.attack !== 'sedekah') continue
+   868→      const radius = src.buffRadius
+   869→      const mult = EntityManager.NASIHAT_BUFF[src.level - 1]
+   870→      for (const t of this.towers) {
+   871→        if (t === src) continue
+   872→        if (t.buffMult < mult && t.pos.distanceTo(src.pos) <= radius) {
+   873→          t.buffMult = mult
+   874→        }
+   875→      }
+   876→    }
+   877→  }
+   878→
+   879→  private spawnProjectile(kind: ProjKind, tower: Tower, target: Enemy, damage: number) {
+   880→    const pool = this.projPool[kind]
+   881→    let p = pool.find((x) => !x.alive)
+   882→    if (!p) {
+   883→      p = new Projectile(kind, tower)
+   884→      this.projectiles.push(p)
+   885→    }
+   886→    p.owner = tower
+   887→    p.damage = damage
+   888→    p.target = target
+   889→    p.alive = true
+   890→    p.t = 0
+   891→    p.from.set(tower.pos.x, 1.4, tower.pos.z)
+   892→    p.targetPos.copy(target.pos).setY(0.9)
+   893→    p.mesh.position.copy(p.from)
+   894→    p.dur = kind === 'orb' ? Math.max(0.12, tower.pos.distanceTo(target.pos) / 22) : kind === 'bubble' ? Math.max(0.2, tower.pos.distanceTo(target.pos) / 13) : 0.6
+   895→    if (kind === 'bubble') {
+   896→      p.aoeRadius = tower.def.aoeRadius![tower.level - 1]
+   897→      p.slowDur = tower.def.slowDuration![tower.level - 1]
+   898→    }
+   899→    if (kind === 'coin') {
+   900→      p.aoeRadius = tower.def.aoeRadius![tower.level - 1]
+   901→      p.knockback = tower.def.knockback ?? 0
+   902→    }
+   903→    this.group.add(p.mesh)
+   904→  }
+   905→
+   906→  update(dt: number) {
+   907→    this.ctx.now += dt
+   908→
+   909→    // P8: hitung ulang aura berkah nasihat (sebelum tower bertindak)
+   910→    this.applyNasihatAuras()
+   911→
+   912→    // update enemies
+   913→    for (const e of this.enemies) {
+   914→      if (e.dead || e.leaked || e.escaped) continue
+   915→      e.update(dt, this.ctx, this.enemies)
+   916→    }
+   917→
+   918→    // update towers
+   919→    for (const t of this.towers) {
+   920→      t.update(dt, this.ctx, this.enemies)
+   921→    }
+   922→
+   923→    // update projectiles
+   924→    for (const p of this.projectiles) {
+   925→      if (!p.alive) continue
+   926→      p.t += dt / p.dur
+   927→      if (p.target && !p.target.dead && !p.target.leaked && !p.target.escaped) {
+   928→        p.targetPos.copy(p.target.pos).setY(0.9)
+   929→      }
+   930→      const t = Math.min(1, p.t)
+   931→      if (p.kind === 'coin') {
+   932→        // lemparan melengkung lucu
+   933→        const y = p.from.y + (p.targetPos.y - p.from.y) * t + Math.sin(t * Math.PI) * 3.2
+   934→        p.mesh.position.lerpVectors(p.from, p.targetPos, t)
+   935→        p.mesh.position.y = y
+   936→        p.mesh.rotation.x += dt * 12
+   937→        p.mesh.rotation.z += dt * 7
+   938→        this.ctx.particles.trail(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0xffd76a)
+   939→      } else {
+   940→        // homing dengan lengkung lembut
+   941→        const y = p.from.y + (p.targetPos.y - p.from.y) * t + Math.sin(t * Math.PI) * (p.kind === 'bubble' ? 1.4 : 0.5)
+   942→        p.mesh.position.lerpVectors(p.from, p.targetPos, t)
+   943→        p.mesh.position.y = y
+   944→        if (p.kind === 'bubble') {
+   945→          p.mesh.scale.setScalar(1 + Math.sin(t * Math.PI * 3) * 0.12)
+   946→        }
+   947→        if (Math.random() < 0.5) {
+   948→          this.ctx.particles.trail(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, p.kind === 'orb' ? 0xfff1b8 : 0xcde8ff)
+   949→        }
+   950→      }
+   951→      if (t >= 1) {
+   952→        this.projectileHit(p)
+   953→      }
+   954→    }
+   955→
+   956→    // bersihkan enemy mati
+   957→    if (this.enemies.some((e) => e.dead || e.leaked || e.escaped)) {
+   958→      this.enemies = this.enemies.filter((e) => {
+   959→        if (e.dead || e.leaked || e.escaped) {
+   960→          e.dispose(this.group)
+   961→          return false
+   962→        }
+   963→        return true
+   964→      })
+   965→    }
+   966→  }
+   967→
+   968→  private projectileHit(p: Projectile) {
+   969→    p.alive = false
+   970→    this.group.remove(p.mesh)
+   971→    const pos = p.targetPos
+   972→
+   973→    if (p.kind === 'orb') {
+   974→      this.ctx.particles.hitBurst(pos.x, pos.y, pos.z)
+   975→      if (p.target && !p.target.dead && !p.target.leaked && !p.target.escaped) {
+   976→        p.target.takeDamage(p.damage, this.ctx)
+   977→      }
+   978→    } else if (p.kind === 'bubble') {
+   979→      // gelembung dzikir meletus → AoE kliyengan
+   980→      audio.bubble()
+   981→      this.ctx.particles.bubblePop(pos.x, pos.y, pos.z)
+   982→      this.enemies.forEach((e) => {
+   983→        if (e.dead || e.leaked || e.escaped) return
+   984→        if (e.pos.distanceTo(pos) <= p.aoeRadius + 0.6) {
+   985→          e.takeDamage(p.damage, this.ctx, { slow: { factor: 0.55, duration: p.slowDur } })
+   986→        }
+   987→      })
+   988→    } else if (p.kind === 'coin') {
+   989→      // koin sedekah → splash + knockback
+   990→      this.ctx.particles.hitBurst(pos.x, 0.4, pos.z, 0xffd76a)
+   991→      this.ctx.particles.rings.spawn(pos.x, 0.08, pos.z, 0xffd76a, p.aoeRadius, 0.5)
+   992→      audio.hit()
+   993→      this.enemies.forEach((e) => {
+   994→        if (e.dead || e.leaked || e.escaped) return
+   995→        if (e.pos.distanceTo(pos) <= p.aoeRadius + 0.6) {
+   996→          e.takeDamage(p.damage, this.ctx, { knockback: p.knockback })
+   997→        }
+   998→      })
+   999→    }
+  1000→  }
+  1001→}
+  1002→

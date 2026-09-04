@@ -29,6 +29,8 @@ export function Hud() {
   const mosqueMaxHp = useGameStore((s) => s.mosqueMaxHp)
   const dailyMode = useGameStore((s) => s.dailyMode)
   const dailyMod = useGameStore((s) => s.dailyMod)
+  const weeklyMode = useGameStore((s) => s.weeklyMode)
+  const weeklyMod = useGameStore((s) => s.weeklyMod)
   const pahala = useGameStore((s) => s.pahala)
   const wave = useGameStore((s) => s.wave)
   const waveActive = useGameStore((s) => s.waveActive)
@@ -270,6 +272,28 @@ export function Hud() {
               {dailyMod.emoji}
             </motion.span>
             TANTANGAN · {dailyMod.name}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ---------- P9: Chip Tantangan Mingguan ---------- */}
+      <AnimatePresence>
+        {weeklyMode && weeklyMod && (
+          <motion.div
+            initial={{ opacity: 0, y: -12, scale: 0.8 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            className="weekly-chip pointer-events-none mt-1"
+            role="status"
+          >
+            <motion.span
+              className="inline-block"
+              animate={{ rotate: [0, -10, 10, 0] }}
+              transition={{ repeat: Infinity, duration: 1.8 }}
+            >
+              {weeklyMod.emoji}
+            </motion.span>
+            PEKANAN · {weeklyMod.name}
           </motion.div>
         )}
       </AnimatePresence>

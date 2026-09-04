@@ -1,0 +1,752 @@
+     1→/* ============================================================
+     2→ * PENJAGA MASJID — GameEngine
+     3→ * Scene, lighting, bloom, ambient hidup, wave manager,
+     4→ * placement drag & drop, screenshot mode foto, kemenangan.
+     5→ * ============================================================ */
+     6→
+     7→import * as THREE from 'three'
+     8→import gsap from 'gsap'
+     9→import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+    10→import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+    11→import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
+    12→import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
+    13→import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
+    14→import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader.js'
+    15→import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+    16→
+    17→import {
+    18→  CHAR_DEFS,
+    19→  ENEMY_DEFS,
+    20→  WAVES,
+    21→  TIPS,
+    22→  LANES,
+    23→  SLOTS,
+    24→  GAME_CONST,
+    25→  DUA_CONST,
+    26→  RUN_MODS,
+    27→  resetRunMods,
+    28→  applyDailyMods,
+    29→  pickDailyModifier,
+    30→  dailyKey,
+    31→  type CharId,
+    32→  type EnemyId,
+    33→  type WaveDef,
+    34→  type Quality,
+    35→  type DailyModifier,
+    36→} from './data'
+    37→import { createGround, createMosque, createSlotPad, createTree, createFlowerField, createCloud, createBird, createButterfly, createRangeRing, getCharacterModel } from './models'
+    38→import { buildWorldExpansion, createMegaGround, createHighClouds, type WorldExpansion } from './world'
+    39→import { ParticleSystem } from './particles'
+    40→import { EntityManager, type Enemy, type Tower } from './entities'
+    41→import { CameraController } from './camera'
+    42→import { audio } from './audio'
+    43→import { gameStore, type CameraMode } from './store'
+    44→import { computeStars } from './persist'
+    45→import { getLevel, levelWaves } from './levels'
+    46→import { getCharDef, isHeroChar } from './chardb'
+    47→import { getOwnedChars } from './achievements'
+    48→import { loadCustomChars, ROSTER } from './roster'
+    49→import {
+    50→  checkBadges,
+    51→  recordSessionEnd,
+    52→  isTutorialSeen,
+    53→  markTutorialDone,
+    54→  bumpLossStreak,
+    55→  clearLossStreak,
+    56→  recordDailyWin,
+    57→  recordLevelResult,
+    58→  grantRunReward,
+    59→} from './achievements'
+    60→
+    61→interface SlotObj {
+    62→  group: THREE.Group
+    63→  pad: THREE.Mesh
+    64→  ring: THREE.Mesh
+    65→  x: number
+    66→  z: number
+    67→  occupied: boolean
+    68→}
+    69→
+    70→interface SpawnEvent {
+    71→  time: number
+    72→  enemyId: EnemyId
+    73→  lane: number
+    74→}
+    75→
+    76→interface Wanderer {
+    77→  group: THREE.Group
+    78→  target: THREE.Vector3
+    79→  speed: number
+    80→  phase: number
+    81→}
+    82→
+    83→interface AmbientCritter {
+    84→  group: THREE.Group
+    85→  type: 'bird' | 'butterfly' | 'cloud'
+    86→  t: number
+    87→  speed: number
+    88→  radius: number
+    89→  height: number
+    90→  phase: number
+    91→}
+    92→
+    93→export class GameEngine {
+    94→  private canvas!: HTMLCanvasElement
+    95→  private renderer!: THREE.WebGLRenderer
+    96→  private scene!: THREE.Scene
+    97→  private composer: EffectComposer | null = null
+    98→  private bloomPass: UnrealBloomPass | null = null
+    99→  cameraCtrl!: CameraController
+   100→  private particles!: ParticleSystem
+   101→  private manager!: EntityManager
+   102→
+   103→  private mosque!: { group: THREE.Group; parts: { domeLight: THREE.PointLight; lanterns: THREE.Mesh[] } }
+   104→  private slots: SlotObj[] = []
+   105→  private wanderers: Wanderer[] = []
+   106→  private critters: AmbientCritter[] = []
+   107→  private trees: THREE.Group[] = []
+   108→  /** P1: dunia luas (bukit, hutan, sungai, gunung parallax) */
+   109→  private worldExp: WorldExpansion | null = null
+   110→
+   111→  private raycaster = new THREE.Raycaster()
+   112→  private pointerNdc = new THREE.Vector2()
+   113→  private hoverSlot = -1
+   114→  private ghostRange: THREE.Mesh | null = null
+   115→  private ghostChar: string | null = null
+   116→
+   117→  private elapsed = 0
+   118→  private rafId = 0
+   119→  private disposed = false
+   120→  private quality: Quality = 'high'
+   121→  private usePost = true
+   122→
+   123→  // wave state
+   124→  private spawnEvents: SpawnEvent[] = []
+   125→  private waveElapsed = 0
+   126→  private spawnCursor = 0
+   127→  private laneCursor = 0
+   128→  private victoryTimer = 0
+   129→  private victoryFxTimer = 0
+   130→  private auraTimer = 0
+   131→  private mosqueToastCd = 0
+   132→  private frameCount = 0
+   133→  /** overlay DOM cahaya keemasan saat Doa Bersama aktif */
+   134→  private duaOverlay: HTMLElement | null = null
+   135→  /** total pahala hasil kotak sedekah Misbah pertandingan ini */
+   136→  private misbahGenTotal = 0
+   137→  /** P8: karakter yang sudah pernah dipasang run ini (utk funFact 'Tahukah Kamu?'). */
+   138→  private placedThisRun = new Set<string>()
+   139→  /** cooldown suara koin sedekah agar tidak berisik */
+   140→  private sedekahSoundCd = 0
+   141→  /** timer langkah tutorial aktif */
+   142→  private tutTimer = 0
+   143→  /** kunci tanggal tantangan harian yang sedang berjalan */
+   144→  private dailyKeyRun: string | null = null
+   145→
+   146→  /* P3: wave aktif per level (level select) */
+   147→  private levelWaves: WaveDef[] = WAVES
+   148→  /** P4: bintang toko yang didapat dari run terakhir (untuk layar menang) */
+   149→  runStarGain = 0
+   150→
+   151→  private lastFrameTime = performance.now()
+   152→
+   153→  /* =============================== INIT =============================== */
+   154→
+   155→  init(canvas: HTMLCanvasElement) {
+   156→    this.canvas = canvas
+   157→    // P7: muat karakter custom tersimpan (registry roster) sebelum dunia dibangun
+   158→    loadCustomChars()
+   159→    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' })
+   160→    this.renderer.outputColorSpace = THREE.SRGBColorSpace
+   161→    this.renderer.toneMapping = THREE.ACESFilmicToneMapping
+   162→    this.renderer.toneMappingExposure = 1.0
+   163→    this.renderer.shadowMap.enabled = true
+   164→    this.renderer.shadowMap.type = THREE.PCFShadowMap
+   165→
+   166→    // debug probe (dev)
+   167→    ;(window as unknown as Record<string, unknown>).__pmEngine = this
+   168→    ;(window as unknown as Record<string, unknown>).__pmRoster = { ROSTER, getCharDef }
+   169→    ;(window as unknown as Record<string, unknown>).__THREE = THREE
+   170→    ;(window as unknown as Record<string, unknown>).__pmStore = gameStore
+   171→    ;(window as unknown as Record<string, unknown>).__pmMods = RUN_MODS
+   172→
+   173→    this.scene = new THREE.Scene()
+   174→    this.scene.background = new THREE.Color(0x8fd4ff)
+   175→    this.scene.fog = new THREE.Fog(0xbfe8ff, 110, 230)
+   176→
+   177→    // environment reflections untuk kubah emas berkilau
+   178→    const pmrem = new THREE.PMREMGenerator(this.renderer)
+   179→    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
+   180→    this.scene.environmentIntensity = 0.3
+   181→
+   182→    this.cameraCtrl = new CameraController(canvas.clientWidth / Math.max(1, canvas.clientHeight))
+   183→
+   184→    this.setupLights()
+   185→    this.setupWorld()
+   186→    this.setupPost()
+   187→
+   188→    this.particles = new ParticleSystem()
+   189→    this.scene.add(this.particles.group)
+   190→
+   191→    this.manager = new EntityManager(this.particles, {
+   192→      onEnemyKilled: (reward, pos, enemyId) => this.onEnemyKilled(reward, pos, enemyId),
+   193→      onEnemyLeaked: (enemy) => this.onEnemyLeaked(enemy),
+   194→      onBossShockwave: (duration) => this.onBossShockwave(duration),
+   195→      onPahalaTick: (amount, pos, level) => this.onPahalaTick(amount, pos, level),
+   196→    })
+   197→    this.scene.add(this.manager.group)
+   198→
+   199→    this.applyQuality('high')
+   200→
+   201→    this.bindEvents()
+   202→    this.loop()
+   203→  }
+   204→
+   205→  private setupLights() {
+   206→    const hemi = new THREE.HemisphereLight(0xbfe6ff, 0x7bc96f, 0.45)
+   207→    this.scene.add(hemi)
+   208→
+   209→    const sun = new THREE.DirectionalLight(0xfff2d8, 1.5)
+   210→    sun.position.set(24, 38, 18)
+   211→    sun.castShadow = true
+   212→    sun.shadow.mapSize.set(2048, 2048)
+   213→    sun.shadow.camera.left = -46
+   214→    sun.shadow.camera.right = 46
+   215→    sun.shadow.camera.top = 34
+   216→    sun.shadow.camera.bottom = -34
+   217→    sun.shadow.camera.far = 110
+   218→    sun.shadow.bias = -0.0004
+   219→    this.scene.add(sun)
+   220→
+   221→    // cahaya lembut tambahan dari depan biar wajah chibi cerah
+   222→    const fill = new THREE.DirectionalLight(0xffffff, 0.25)
+   223→    fill.position.set(-14, 20, 26)
+   224→    this.scene.add(fill)
+   225→  }
+   226→
+   227→  private setupWorld() {
+   228→    /* ---- P1: rumput mega-luas (230×150) — tidak ada void abu-abu lagi ---- */
+   229→    const mega = createMegaGround()
+   230→    this.scene.add(mega)
+   231→
+   232→    // arena inti (tekstur lama dengan halaman masjid + jalur)
+   233→    const ground = createGround()
+   234→    this.scene.add(ground)
+   235→
+   236→    // P1: ekspansi — perbukitan, hutan, taman, sungai, kolam, desa, jembatan, gunung parallax
+   237→    this.worldExp = buildWorldExpansion()
+   238→    this.scene.add(this.worldExp.group)
+   239→
+   240→    // P1: awan tinggi jauh (kesan dunia luas)
+   241→    this.scene.add(createHighClouds())
+   242→
+   243→    // masjid
+   244→    this.mosque = createMosque()
+   245→    this.scene.add(this.mosque.group)
+   246→
+   247→    // slot penempatan
+   248→    SLOTS.forEach((s, i) => {
+   249→      const { group, pad, ring } = createSlotPad()
+   250→      group.position.set(s.x, 0, s.z)
+   251→      pad.userData.slotIndex = i
+   252→      this.scene.add(group)
+   253→      this.slots.push({ group, pad, ring, x: s.x, z: s.z, occupied: false })
+   254→    })
+   255→
+   256→    // pohon di tepi peta (jauh dari jalur)
+   257→    const treeSpots: [number, number, number][] = [
+   258→      [-33, -18, 1.3], [-28, 14, 1.1], [-36, 2, 1.2], [33, -16, 1.25], [31, 16, 1.1],
+   259→      [36, 0, 1.2], [-20, -18, 1.0], [22, -19, 1.05], [-6, -20, 0.95], [10, 19, 1.0],
+   260→      [-24, 19, 0.9], [24, 15, 1.0], [-16, 12, 0.85], [18, -15, 0.9], [4, -20, 0.9],
+   261→      [-10, 17, 0.95], [34, -9, 1.0], [-34, -15, 1.1],
+   262→    ]
+   263→    treeSpots.forEach(([x, z, s]) => {
+   264→      const t = createTree(s)
+   265→      t.position.set(x, 0, z)
+   266→      t.rotation.y = Math.random() * Math.PI * 2
+   267→      this.scene.add(t)
+   268→      this.trees.push(t)
+   269→    })
+   270→
+   271→    // ladang bunga (merged)
+   272→    this.scene.add(createFlowerField(52))
+   273→
+   274→    // awan kartun
+   275→    for (let i = 0; i < 9; i++) {
+   276→      const c = createCloud()
+   277→      c.position.set((Math.random() - 0.5) * 90, 24 + Math.random() * 10, (Math.random() - 0.5) * 50)
+   278→      const scale = 1.4 + Math.random() * 1.2
+   279→      c.scale.setScalar(scale)
+   280→      this.scene.add(c)
+   281→      this.critters.push({ group: c, type: 'cloud', t: Math.random() * 100, speed: 0.4 + Math.random() * 0.5, radius: 0, height: 0, phase: 0 })
+   282→    }
+   283→    // burung
+   284→    for (let i = 0; i < 5; i++) {
+   285→      const b = createBird()
+   286→      this.scene.add(b)
+   287→      this.critters.push({
+   288→        group: b, type: 'bird', t: Math.random() * 100,
+   289→        speed: 0.15 + Math.random() * 0.2, radius: 24 + Math.random() * 14,
+   290→        height: 16 + Math.random() * 7, phase: Math.random() * Math.PI * 2,
+   291→      })
+   292→    }
+   293→    // kupu-kupu
+   294→    for (let i = 0; i < 7; i++) {
+   295→      const bf = createButterfly()
+   296→      this.scene.add(bf)
+   297→      this.critters.push({
+   298→        group: bf, type: 'butterfly', t: Math.random() * 100,
+   299→        speed: 0.5 + Math.random() * 0.7, radius: 6 + Math.random() * 16,
+   300→        height: 1 + Math.random() * 2.2, phase: Math.random() * Math.PI * 2,
+   301→      })
+   302→    }
+   303→
+   304→    // anak-anak kecil jalan-jalan di halaman masjid (menu hidup)
+   305→    const kids: CharId[] = ['ali', 'aisyah', 'umar', 'fatimah', 'misbah']
+   306→    kids.forEach((k, i) => {
+   307→      const g = getCharacterModel(k, 1)
+   308→      g.position.set(-5 + i * 3.2, 0, 9.5 + (i % 2) * 2.5)
+   309→      this.scene.add(g)
+   310→      this.wanderers.push({ group: g, target: this.randomCourtyardPoint(), speed: 0.7 + Math.random() * 0.5, phase: Math.random() * 10 })
+   311→    })
+   312→  }
+   313→
+   314→  private randomCourtyardPoint(): THREE.Vector3 {
+   315→    return new THREE.Vector3(-7 + Math.random() * 14, 0, 8.5 + Math.random() * 5)
+   316→  }
+   317→
+   318→  private setupPost() {
+   319→    const size = new THREE.Vector2()
+   320→    this.renderer.getSize(size)
+   321→    this.composer = new EffectComposer(this.renderer)
+   322→    this.composer.addPass(new RenderPass(this.scene, this.cameraCtrl.camera))
+   323→    this.bloomPass = new UnrealBloomPass(
+   324→      new THREE.Vector2(size.x, size.y),
+   325→      0.45, // kekuatan — "berkah bersinar" lembut
+   326→      0.6,
+   327→      1.05, // threshold linear: hanya elemen HDR (lampu, kubah, orb) yang berkilau
+   328→    )
+   329→    this.composer.addPass(this.bloomPass)
+   330→    const vignette = new ShaderPass(VignetteShader)
+   331→    vignette.uniforms.offset.value = 1.15
+   332→    vignette.uniforms.darkness.value = 0.32
+   333→    this.composer.addPass(vignette)
+   334→    // OutputPass wajib: tone mapping + konversi sRGB di akhir rantai
+   335→    this.composer.addPass(new OutputPass())
+   336→  }
+   337→
+   338→  /* =============================== QUALITY =============================== */
+   339→
+   340→  applyQuality(q: Quality) {
+   341→    this.quality = q
+   342→    const dpr = typeof window !== 'undefined' ? window.devicePixelRatio : 1
+   343→    if (q === 'low') {
+   344→      this.renderer.setPixelRatio(1)
+   345→      this.renderer.shadowMap.enabled = false
+   346→      this.usePost = false
+   347→    } else if (q === 'medium') {
+   348→      this.renderer.setPixelRatio(1)
+   349→      this.renderer.shadowMap.enabled = true
+   350→      this.usePost = true
+   351→    } else {
+   352→      this.renderer.setPixelRatio(Math.min(dpr, 2))
+   353→      this.renderer.shadowMap.enabled = true
+   354→      this.usePost = true
+   355→    }
+   356→    gameStore.set((s) => ({ ...s, quality: q }))
+   357→    this.resize()
+   358→  }
+   359→
+   360→  /* =============================== EVENTS =============================== */
+   361→
+   362→  private downPos = { x: 0, y: 0 }
+   363→  private isDown = false
+   364→  private moved = 0
+   365→
+   366→  /* ---------- P2: pinch-to-zoom ---------- */
+   367→  private activePointers = new Map<number, { x: number; y: number }>()
+   368→  private pinchDist = 0
+   369→  private pinchMode = false
+   370→
+   371→  private calcPinchDist(): number {
+   372→    const pts = Array.from(this.activePointers.values())
+   373→    if (pts.length < 2) return 0
+   374→    return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)
+   375→  }
+   376→
+   377→  private bindEvents() {
+   378→    const c = this.canvas
+   379→    c.addEventListener('pointerdown', this.onPointerDown)
+   380→    c.addEventListener('pointermove', this.onPointerMove)
+   381→    window.addEventListener('pointerup', this.onPointerUp)
+   382→    c.addEventListener('wheel', this.onWheel, { passive: false })
+   383→    c.addEventListener('contextmenu', this.onContextMenu)
+   384→    window.addEventListener('resize', this.resize)
+   385→    window.addEventListener('pointercancel', this.onPointerUp)
+   386→  }
+   387→
+   388→  private onContextMenu = (e: Event) => e.preventDefault()
+   389→
+   390→  private onPointerDown = (e: PointerEvent) => {
+   391→    if (e.button === 2) {
+   392→      this.cancelPlacing()
+   393→      return
+   394→    }
+   395→    // P2: catat pointer untuk pinch tracking
+   396→    this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+   397→    if (this.activePointers.size >= 2) {
+   398→      // dua jari turun → mulai pinch, batalkan drag kamera
+   399→      this.pinchMode = true
+   400→      this.isDown = false
+   401→      this.pinchDist = this.calcPinchDist()
+   402→      this.cameraCtrl.stopMomentum()
+   403→      return
+   404→    }
+   405→    this.isDown = true
+   406→    this.pinchMode = false
+   407→    this.moved = 0
+   408→    this.downPos = { x: e.clientX, y: e.clientY }
+   409→    const st = gameStore.get()
+   410→    if (st.cameraMode !== 'iso') {
+   411→      this.cameraCtrl.onPointerDown(e.clientX, e.clientY, e.button)
+   412→      return
+   413→    }
+   414→    // mode iso & sedang memilih karakter → klik slot langsung tempatkan
+   415→    if (st.selectedCharId) {
+   416→      this.updatePointerNdc(e)
+   417→      const slotIdx = this.raycastSlot()
+   418→      if (slotIdx >= 0 && this.tryPlace(slotIdx, st.selectedCharId)) {
+   419→        this.isDown = false
+   420→        return
+   421→      }
+   422→    }
+   423→    this.cameraCtrl.onPointerDown(e.clientX, e.clientY, e.button)
+   424→  }
+   425→
+   426→  private onPointerMove = (e: PointerEvent) => {
+   427→    // P2: perbarui posisi pointer aktif
+   428→    if (this.activePointers.has(e.pointerId)) {
+   429→      this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+   430→    }
+   431→    // P2: pinch-to-zoom (dua jari aktif)
+   432→    if (this.pinchMode && this.activePointers.size >= 2) {
+   433→      const d = this.calcPinchDist()
+   434→      if (this.pinchDist > 0 && d > 0) {
+   435→        this.cameraCtrl.applyPinch(d / this.pinchDist)
+   436→      }
+   437→      this.pinchDist = d
+   438→      return
+   439→    }
+   440→    if (this.isDown) {
+   441→      this.moved += Math.abs(e.clientX - this.downPos.x) + Math.abs(e.clientY - this.downPos.y)
+   442→    }
+   443→    const st = gameStore.get()
+   444→    // hover slot saat drag / memilih
+   445→    if (st.selectedCharId && st.cameraMode === 'iso' && !this.pinchMode) {
+   446→      this.updatePointerNdc(e)
+   447→      this.updateHoverSlot(st.selectedCharId)
+   448→    }
+   449→    if (this.isDown) {
+   450→      this.cameraCtrl.onPointerMove(e.clientX, e.clientY)
+   451→    }
+   452→  }
+   453→
+   454→  private onPointerUp = (e: PointerEvent) => {
+   455→    const st = gameStore.get()
+   456→    // P2: lepas pointer dari pinch tracking
+   457→    this.activePointers.delete(e.pointerId)
+   458→    if (this.activePointers.size < 2) {
+   459→      if (this.pinchMode && this.activePointers.size === 0) this.pinchMode = false
+   460→      this.pinchDist = 0
+   461→    }
+   462→    const wasClick = this.isDown && this.moved < 8 && !this.pinchMode
+   463→    this.isDown = false
+   464→    this.cameraCtrl.onPointerUp()
+   465→
+   466→    if (this.pinchMode) return
+   467→    if (st.cameraMode !== 'iso') return
+   468→
+   469→    // drag-drop: lepas di atas slot
+   470→    if (st.selectedCharId) {
+   471→      this.updatePointerNdc(e)
+   472→      const slotIdx = this.raycastSlot()
+   473→      if (slotIdx >= 0 && this.tryPlace(slotIdx, st.selectedCharId)) return
+   474→      // lepas di area bukan slot → tetap terpilih (mode klik-klik)
+   475→      return
+   476→    }
+   477→
+   478→    if (wasClick) {
+   479→      this.updatePointerNdc(e)
+   480→      const tower = this.raycastTower()
+   481→      if (tower) {
+   482→        this.selectTower(tower)
+   483→        return
+   484→      }
+   485→      // klik area kosong → batal pilih tower
+   486→      if (st.selectedTower) this.deselectTower()
+   487→    }
+   488→  }
+   489→
+   490→  private onWheel = (e: WheelEvent) => {
+   491→    e.preventDefault()
+   492→    this.cameraCtrl.onWheel(e.deltaY)
+   493→  }
+   494→
+   495→  private updatePointerNdc(e: PointerEvent) {
+   496→    const rect = this.canvas.getBoundingClientRect()
+   497→    this.pointerNdc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
+   498→    this.pointerNdc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
+   499→  }
+   500→
+   501→  private raycastSlot(): number {
+   502→    this.raycaster.setFromCamera(this.pointerNdc, this.cameraCtrl.camera)
+   503→    const pads = this.slots.map((s) => s.pad)
+   504→    const hits = this.raycaster.intersectObjects(pads, false)
+   505→    return hits.length > 0 ? (hits[0].object.userData.slotIndex as number) : -1
+   506→  }
+   507→
+   508→  private raycastTower(): Tower | null {
+   509→    this.raycaster.setFromCamera(this.pointerNdc, this.cameraCtrl.camera)
+   510→    const groups = this.manager.towers.map((t) => t.group)
+   511→    const hits = this.raycaster.intersectObjects(groups, true)
+   512→    if (hits.length === 0) return null
+   513→    let obj: THREE.Object3D | null = hits[0].object
+   514→    while (obj && !obj.userData.towerSlot) obj = obj.parent
+   515→    if (!obj) return null
+   516→    return this.manager.towers.find((t) => t.slotIndex === obj!.userData.towerSlot) ?? null
+   517→  }
+   518→
+   519→  /* =============================== PLACEMENT =============================== */
+   520→
+   521→  beginPlacing(charId: string) {
+   522→    this.ghostChar = charId
+   523→    const def = getCharDef(charId)
+   524→    if (!this.ghostRange) {
+   525→      this.ghostRange = createRangeRing(def.levels[0].range, 0xffe9a8)
+   526→      this.scene.add(this.ghostRange)
+   527→    } else {
+   528→      this.ghostRange.scale.setScalar(1)
+   529→      this.ghostRingMaterial().color.setHex(0xffe9a8)
+   530→    }
+   531→    this.ghostRange.geometry.dispose()
+   532→    this.ghostRange.geometry = new THREE.RingGeometry(def.levels[0].range - 0.16, def.levels[0].range, 48)
+   533→    this.ghostRange.visible = true
+   534→    this.refreshSlotHighlights()
+   535→  }
+   536→
+   537→  private ghostRingMaterial(): THREE.MeshBasicMaterial {
+   538→    return this.ghostRange!.material as THREE.MeshBasicMaterial
+   539→  }
+   540→
+   541→  endDrag() {
+   542→    // dipanggil UI saat pointer dilepas; jika slot valid sudah ditangani canvas handler
+   543→    if (gameStore.get().selectedCharId) this.refreshSlotHighlights()
+   544→  }
+   545→
+   546→  cancelPlacing() {
+   547→    this.ghostChar = null
+   548→    if (this.ghostRange) this.ghostRange.visible = false
+   549→    gameStore.set((s) => ({ ...s, selectedCharId: null, dragging: false }))
+   550→    this.refreshSlotHighlights()
+   551→  }
+   552→
+   553→  private updateHoverSlot(charId: string) {
+   554→    const idx = this.raycastSlot()
+   555→    if (idx === this.hoverSlot) return
+   556→    this.hoverSlot = idx
+   557→    const def = getCharDef(charId)
+   558→    const st = gameStore.get()
+   559→    this.slots.forEach((s, i) => {
+   560→      const mat = s.pad.material as THREE.MeshStandardMaterial
+   561→      const free = !s.occupied
+   562→      const affordable = st.pahala >= def.cost
+   563→      const ok = free && affordable
+   564→      mat.emissive.setHex(i === idx && ok ? 0xffd76a : ok ? 0x7bd45f : 0xd97a7a)
+   565→      mat.emissiveIntensity = i === idx ? 0.9 : 0.45
+   566→      s.ring.visible = true
+   567→      ;(s.ring.material as THREE.MeshStandardMaterial).color.setHex(
+   568→        i === idx && ok ? 0xffd76a : ok ? 0x9be07a : 0xe88a8a,
+   569→      )
+   570→    })
+   571→    if (idx >= 0 && this.ghostRange) {
+   572→      const s = this.slots[idx]
+   573→      this.ghostRange.position.set(s.x, 0.07, s.z)
+   574→    }
+   575→  }
+   576→
+   577→  private refreshSlotHighlights() {
+   578→    const st = gameStore.get()
+   579→    const active = !!st.selectedCharId
+   580→    this.slots.forEach((s) => {
+   581→      const mat = s.pad.material as THREE.MeshStandardMaterial
+   582→      if (!active) {
+   583→        mat.emissive.setHex(0x9be07a)
+   584→        mat.emissiveIntensity = s.occupied ? 0.05 : 0.14
+   585→        s.ring.visible = !s.occupied
+   586→        ;(s.ring.material as THREE.MeshStandardMaterial).color.setHex(0xffd76a)
+   587→      } else {
+   588→        const def = getCharDef(st.selectedCharId!)
+   589→        const ok = !s.occupied && st.pahala >= def.cost
+   590→        mat.emissive.setHex(ok ? 0x7bd45f : 0xd97a7a)
+   591→        mat.emissiveIntensity = 0.45
+   592→        s.ring.visible = true
+   593→        ;(s.ring.material as THREE.MeshStandardMaterial).color.setHex(ok ? 0x9be07a : 0xe88a8a)
+   594→      }
+   595→    })
+   596→  }
+   597→
+   598→  tryPlace(slotIndex: number, charId: string): boolean {
+   599→    const st = gameStore.get()
+   600→    if (st.screen !== 'playing') return false
+   601→    const def = getCharDef(charId)
+   602→    const slot = this.slots[slotIndex]
+   603→    if (!slot || slot.occupied) return false
+   604→    if (st.pahala < def.cost) {
+   605→      gameStore.get().showToast('Pahala belum cukup! Halau setan dulu ya 💫', '⭐', 'bad')
+   606→      return false
+   607→    }
+   608→    gameStore.set((s) => ({ ...s, pahala: s.pahala - def.cost }))
+   609→    slot.occupied = true
+   610→    const tower = this.manager.placeTower(charId, slotIndex, slot.x, slot.z, def.cost)
+   611→    tower.group.userData.towerSlot = slotIndex
+   612→    this.particles.levelUp(slot.x, 1, slot.z)
+   613→    this.particles.rings.spawn(slot.x, 0.1, slot.z, 0x9be07a, 3, 0.5)
+   614→    audio.place()
+   615→    // snap lucu: jatuh dari atas dengan bounce
+   616→    tower.group.position.y = 4
+   617→    gsap.to(tower.group.position, { y: 0, duration: 0.55, ease: 'bounce.out' })
+   618→    gameStore.set((s) => ({ ...s, selectedCharId: null, dragging: false }))
+   619→    this.cancelPlacing()
+   620→    this.refreshSlotHighlights()
+   621→    checkBadges({ event: 'towerPlaced', towersCount: this.manager.towers.length })
+   622→
+   623→    /* P8: funFact edukatif "Tahukah Kamu?" saat pertama memasang karakter
+   624→       (hanya bila sedang tidak bertempur supaya tidak mengganggu). */
+   625→    if (!this.placedThisRun.has(charId) && !st.waveActive) {
+   626→      this.placedThisRun.add(charId)
+   627→      if (!isHeroChar(charId)) {
+   628→        st.showFunFact(charId, def.funFact, 'place')
+   629→      }
+   630→    } else {
+   631→      this.placedThisRun.add(charId)
+   632→    }
+   633→    return true
+   634→  }
+   635→
+   636→  /* =============================== TOWER OPS =============================== */
+   637→
+   638→  selectTower(tower: Tower) {
+   639→    tower.rangeRing.visible = true
+   640→    gameStore.set((s) => ({
+   641→      ...s,
+   642→      selectedTower: {
+   643→        slot: tower.slotIndex,
+   644→        char: tower.def.id,
+   645→        level: tower.level,
+   646→        canUpgrade: tower.level < 3,
+   647→        upgradeCost: tower.level < 3 ? tower.def.upgradeCosts[tower.level - 1] : 0,
+   648→        canSell: true,
+   649→        sellValue: Math.round(tower.totalSpent * GAME_CONST.sellRefund),
+   650→        buffPct: Math.round((tower.buffMult - 1) * 100),
+   651→      },
+   652→      cameraMode: s.cameraMode === 'follow' ? 'follow' : s.cameraMode,
+   653→    }))
+   654→    audio.chime()
+   655→  }
+   656→
+   657→  deselectTower() {
+   658→    this.manager.towers.forEach((t) => (t.rangeRing.visible = false))
+   659→    gameStore.set((s) => ({ ...s, selectedTower: null }))
+   660→    if (this.cameraCtrl.mode === 'follow') {
+   661→      this.setCameraMode('iso')
+   662→    }
+   663→  }
+   664→
+   665→  upgradeTower() {
+   666→    const st = gameStore.get()
+   667→    if (!st.selectedTower) return
+   668→    const tower = this.manager.towers.find((t) => t.slotIndex === st.selectedTower!.slot)
+   669→    if (!tower || tower.level >= 3) return
+   670→    const cost = tower.def.upgradeCosts[tower.level - 1]
+   671→    if (st.pahala < cost) {
+   672→      st.showToast('Pahala belum cukup untuk upgrade! 🌟', '⭐', 'bad')
+   673→      return
+   674→    }
+   675→    gameStore.set((s) => ({ ...s, pahala: s.pahala - cost }))
+   676→    tower.totalSpent += cost
+   677→    const oldGroup = tower.group
+   678→    this.manager.group.remove(oldGroup)
+   679→    tower.setLevel(tower.level + 1)
+   680→    tower.group.userData.towerSlot = tower.slotIndex
+   681→    tower.rangeRing.scale.setScalar(tower.stats.range / tower.def.levels[0].range)
+   682→    tower.rangeRing.position.set(tower.group.position.x, 0, tower.group.position.z)
+   683→    tower.rangeRing.visible = true
+   684→    this.manager.group.add(tower.group)
+   685→    tower.group.position.y = 2
+   686→    gsap.to(tower.group.position, { y: 0, duration: 0.5, ease: 'bounce.out' })
+   687→    this.particles.levelUp(tower.group.position.x, 1.2, tower.group.position.z)
+   688→    audio.upgrade()
+   689→    gameStore.set((s) => ({
+   690→      ...s,
+   691→      selectedTower: {
+   692→        slot: tower.slotIndex,
+   693→        char: tower.def.id,
+   694→        level: tower.level,
+   695→        canUpgrade: tower.level < 3,
+   696→        upgradeCost: tower.level < 3 ? tower.def.upgradeCosts[tower.level - 1] : 0,
+   697→        canSell: true,
+   698→        sellValue: Math.round(tower.totalSpent * GAME_CONST.sellRefund),
+   699→        buffPct: Math.round((tower.buffMult - 1) * 100),
+   700→      },
+   701→    }))
+   702→  }
+   703→
+   704→  sellTower() {
+   705→    const st = gameStore.get()
+   706→    if (!st.selectedTower) return
+   707→    const tower = this.manager.towers.find((t) => t.slotIndex === st.selectedTower!.slot)
+   708→    if (!tower) return
+   709→    const pos = tower.group.position.clone()
+   710→    this.manager.removeTower(tower)
+   711→    this.slots[tower.slotIndex].occupied = false
+   712→    gameStore.set((s) => ({ ...s, pahala: s.pahala + st.selectedTower!.sellValue, selectedTower: null }))
+   713→    this.particles.deathPoof(pos.x, 0.8, pos.z)
+   714→    this.particles.showPahala(pos.x, 1.5, pos.z, st.selectedTower.sellValue)
+   715→    audio.pop()
+   716→    this.refreshSlotHighlights()
+   717→  }
+   718→
+   719→  followSelected() {
+   720→    const st = gameStore.get()
+   721→    if (!st.selectedTower) return
+   722→    const tower = this.manager.towers.find((t) => t.slotIndex === st.selectedTower!.slot)
+   723→    if (!tower) return
+   724→    this.setCameraMode('follow')
+   725→    this.cameraCtrl.setFollowTarget(tower.pos)
+   726→  }
+   727→
+   728→  /* =============================== CAMERA =============================== */
+   729→
+   730→  setCameraMode(mode: CameraMode) {
+   731→    this.cameraCtrl.setMode(mode)
+   732→    gameStore.set((s) => ({
+   733→      ...s,
+   734→      cameraMode: mode,
+   735→      hudHidden: mode === 'photo',
+   736→    }))
+   737→  }
+   738→
+   739→  rotateCamera(dir: 1 | -1) {
+   740→    this.cameraCtrl.rotateBy(dir * Math.PI / 4)
+   741→  }
+   742→
+   743→  /* ---- P2: navigasi kamera dari tombol UI (mobile D-pad) ---- */
+   744→  panCamera(dx: number, dz: number) {
+   745→    this.cameraCtrl.panBy(dx, dz)
+   746→  }
+   747→
+   748→  zoomCamera(delta: number) {
+   749→    this.cameraCtrl.zoomBy(delta)
+   750→  }
+
+[showing lines 1-750 of 1496; use offset=751 with limit to continue reading]

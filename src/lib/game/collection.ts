@@ -6,7 +6,7 @@
  * ============================================================ */
 
 import { useGameStore } from './store'
-import { getOwnedChars, getStarCurrency } from './achievements'
+import { getOwnedChars, getStarCurrency, getCharUsage } from './achievements'
 import { loadCustomChars } from './roster'
 
 /** Buka layar koleksi: muat data + jeda game bila sedang bermain. */
@@ -18,6 +18,7 @@ export function openCollection() {
     collOwned: ['hero-ali', 'hero-aisyah', ...getOwnedChars()],
     collCurrency: getStarCurrency(),
     collCustoms: loadCustomChars(),
+    collUsage: getCharUsage(),
     ...(shouldPause ? { paused: true, collPausedByUs: true } : { collPausedByUs: false }),
   })
 }
@@ -37,5 +38,6 @@ export function refreshCollData() {
     collOwned: ['hero-ali', 'hero-aisyah', ...getOwnedChars()],
     collCurrency: getStarCurrency(),
     collCustoms: loadCustomChars(),
+    collUsage: getCharUsage(),
   })
 }

@@ -13,6 +13,7 @@ import { CharacterBar } from './CharacterBar'
 import { TowerPanel } from './TowerPanel'
 import { EndScreens, PhotoControls } from './EndScreens'
 import { DuaButton, BadgeToastLayer } from './DuaButton'
+import { PowerupBadges } from './PowerupBadges'
 import { TutorialLayer } from './TutorialLayer'
 import { MobileNav } from './MobileNav'
 import { ShopScreen } from './ShopScreen'
@@ -92,6 +93,7 @@ export default function GameShell() {
       <EndScreens />
       <PhotoControls />
       <DuaButton />
+      <PowerupBadges />
       <TutorialLayer />
       <ToastLayer />
       <FunFactModal />

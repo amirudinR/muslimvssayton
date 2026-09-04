@@ -17,7 +17,7 @@ export interface LeaderEntry {
   defeated: number
   pahala: number
   createdAt: string
-  /** P8: mode asal skor — "Klasik" | "Daring Harian" | "Level N" */
+  /** P8: mode asal skor — "Klasik" | "Daring Harian" | "Tantangan Mingguan" | "Level N" */
   mode?: string
 }
 
@@ -212,10 +212,16 @@ export function LeaderboardModal({ open, onClose }: { open: boolean; onClose: ()
                     <span className="truncate text-sm font-black text-[#4a3b20]">{e.name}</span>
                     {e.mode && e.mode !== 'Klasik' && (
                       <span
-                        className={`lb-mode-chip ${e.mode === 'Daring Harian' ? 'lb-mode-daily' : 'lb-mode-level'}`}
+                        className={`lb-mode-chip ${
+                          e.mode === 'Daring Harian'
+                            ? 'lb-mode-daily'
+                            : e.mode === 'Tantangan Mingguan'
+                              ? 'lb-mode-weekly'
+                              : 'lb-mode-level'
+                        }`}
                         title={`Mode: ${e.mode}`}
                       >
-                        {e.mode === 'Daring Harian' ? '🔥' : '🗺️'} {e.mode}
+                        {e.mode === 'Daring Harian' ? '🔥' : e.mode === 'Tantangan Mingguan' ? '📅' : '🗺️'} {e.mode}
                       </span>
                     )}
                   </span>

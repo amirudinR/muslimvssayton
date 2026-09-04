@@ -520,3 +520,176 @@ Unresolved issues / risks & rekomendasi fase berikutnya:
 - Lazy preview punya potensi kedipan sangat singkat saat scroll cepat (histeresis 1.6s menahan); jika terganggu bisa naikkan ke 2.5s.
 - funFact 'place' belum muncul bila penempatan pertama terjadi saat wave aktif (by design, non-intrusif).
 - Ide lanjutan: sorting koleksi by power rarity DESC default; tab "Karya Sendiri" terpisah; pencarian tema; export/share screenshot koleksi; bahasa EN; cloud save.
+
+---
+Task ID: 10
+Agent: sub-agent (P9-a Weekly Challenge)
+Task: P9-a — TANTANGAN MINGGUAN (Weekly Challenge): mode mingguan lebih sulit berhadiah besar (tema violet), streak pekan, badge baru, skor masuk papan rekor berlabel "Tantangan Mingguan"
+
+Work Log:
+- data.ts: refactor `ModeMods` (enemyHpMult/enemySpeedMult/rewardMult/startPahalaBonus/mosqueHpBonus/duaChargeMult/stealMult) → `DailyModifier extends ModeMods`; `applyDailyMods(mod: ModeMods)` (nama fungsi dipertahankan). BARU: `WeeklyModifier` (+ rewardStars 25-40), `WEEKLY_MODIFIERS` (8 entri Indonesia ramah anak: Badai Setan 🌪️, Kabut Pekat 🌫️, Gerimis Berkah 🌧️ [chip duplikat di spec dirapikan jadi 2 chip], Malam Bermega ✨, Pasukan Gergasi 👹, Zakat Mengalir 💰, Uji Iman 🕋 [terberat, 40⭐], Jumat Berkah 🕌), helper ISO-week: `weeklyKey()` (YYYY-Www, Senin awal pekan), `pickWeeklyModifier(key)` (hash sama seperti daily), `daysUntilNextWeek()`.
+- store.ts: state baru `weeklyMode` / `weeklyMod: WeeklyModifier | null` / `weeklyStreakResult` + reset di `resetForNewGame()`; persist.ts: `SaveData` + `weeklyStreak` / `lastWeeklyWin` (default 0/null, merge defensif utk save lama).
+- achievements.ts: `getWeeklyStreakInfo()`, `recordWeeklyWin(weekKey)` (idempotent per pekan; streak+1 bila lastWeeklyWin === weeklyKey(7 hari lalu), selain itu 1); badge baru `{ weekly_win, 'Penjaga Pekanan' 📅 }` (BADGES 15→16; pill menu sudah dinamis BADGES.length — tidak ada hardcode 15); event `weeklyWin` di BadgeCtx + case unlock.
+- engine.ts: field `weeklyKeyRun`; `startGame({ weekly })` — branch setelah daily: applyDailyMods(wmod) + mosqueHpBonus + startPahalaBonus + set store weeklyMode/weeklyMod + toast "TANTANGAN PEKAN INI"; konfigurasi KLASIK (levelId 0, WAVES penuh 10 gelombang — getLevel(0)→undefined→branch klasik terverifikasi); reset weeklyKeyRun bersama dailyKeyRun di startGame; backToMenu reset weeklyMode/weeklyMod; onVictory: hitung runStarGain + bonus mingguan SEBELUM screen 'victory', recordWeeklyWin → weeklyStreakResult, addStarCurrency(rewardStars), checkBadges weeklyWin, ring burst violet 0x8b5cf6 di masjid (mirror oranye daily).
+- BARU src/components/game/WeeklyChallenge.tsx: kartu violet clone DailyChallenge — header CalendarDays + "TANTANGAN MINGGUAN" + chip "Pekan {n}", emoji besar animasi, effect chips `.weekly-effect-chip`, pill emas "🏆 Bonus +N⭐ kalau menang!", streak pill "🔥 N pekan beruntun" / hint, tombol `.btn-weekly` "TERIMA TANTANGAN!" / "Main Lagi Minggu Ini?", footnote countdown "Pekan baru dalam N hari" + "skor masuk papan rekor".
+- MainMenu.tsx: `<WeeklyChallengeCard />` tepat setelah `<DailyChallengeCard />`.
+- EndScreens.tsx: mode label skor `weeklyMode ? 'Tantangan Mingguan' : ...`; banner kemenangan violet `.weekly-won-banner` (📅 "Tantangan Mingguan Selesai!" + nama mod + streak pekan, mirror JSX daily); restart `weeklyMode ? { weekly: true } : ...`; ScoreSubmit TETAP tampil utk mingguan (hanya daily yang suppress — sesuai spec).
+- Hud.tsx: chip `.weekly-chip` "📅 PEKANAN · {nama}" mirror animasi chip daily.
+- MenuModals.tsx: chip mode leaderboard → 'Tantangan Mingguan' kelas `lb-mode-weekly` emoji 📅; api/leaderboard/route.ts: MODE_WHITELIST + 'Tantangan Mingguan'.
+- globals.css: famili WEEKLY violet (~130 baris, header `/* ===== TANTANGAN MINGGUAN ===== */`): `.weekly-card` (bg #f3efff→#ece4ff, border #c4b5fd), `.weekly-effect-chip`, `.weekly-week-chip`, `.weekly-reward-pill` (emas), `.weekly-streak-pill`, `.btn-weekly` (gradient #a78bfa→#8b5cf6, shadow #7c3aed), `.weekly-chip`, `.weekly-won-banner`, `.lb-mode-weekly` (#ede9fe/#6d28d9/#c4b5fd) — semua mirror konvensi famili .daily-*.
+
+BUG DITEMUKAN & DIPERBAIKI:
+- [FIX] PRE-EXISTING (P4): banner "+N Bintang Toko!" di layar kemenangan TIDAK PERNAH tampil — EndScreens ter-mount sejak awal aplikasi sehingga `useState(() => __pmEngine?.runStarGain)` selalu terbaca 0 (engine dibuat di useEffect setelah render pertama). Fix: starGain kini dibaca saat render layar 'victory' (bukan sekali di mount) + onVictory menghitung runStarGain SEBELUM `screen: 'victory'` agar nilai selalu final. Terverifikasi klasik (25⭐) & mingguan (26+30=56⭐ kini tampil).
+- Catatan QA: submit skor pertama via eval tampak "gagal" (scoreSubmitted false) — artefak HMR (edit EndScreens di tengah tes me-remount form & reset state lokal); POST-nya sendiri sukses masuk DB. Re-test setelah reload: UI submit → DB mode "Tantangan Mingguan" ✓.
+
+VERIFIKASI (probe __pmEngine/__pmStore + DOM + API + VLM):
+- ✓ lint bersih; tsc --noEmit: src/ 0 error (hanya error pre-existing di examples/ & skills/ scaffold); dev.log HMR "✓ Compiled" tanpa error.
+- ✓ Menu: .weekly-card + .btn-weekly render di bawah .daily-card; chip "Pekan 36"; pill "🏆 Bonus +30⭐"; tombol "TERIMA TANTANGAN!".
+- ✓ startGame({weekly:true}) → screen 'playing', weeklyMode true, mod 'Jumat Berkah' 🕌 (varian mingguan, ≠ daily 'Jumat Berkah' 🌟), mosqueMaxHp 145 (120+25), RUN_MODS {rewardMult 1.25, duaChargeMult 1.7}, totalWaves 10, levelId 0, dailyMode false; advance(5) tanpa error.
+- ✓ HUD: .weekly-chip "🕌 PEKANAN · Jumat Berkah".
+- ✓ Menang (onVictory): weeklyStreakResult 1, starCurrency 103→133 (+30), badge weekly_win terbuka, lastWeeklyWin '2026-W36'; menang kedua pekan sama → streak tetap 1 (idempotent); backdate lastWeeklyWin ke W35 → menang W36 → streak 2 ✓.
+- ✓ Layar menang: banner violet "Tantangan Mingguan Selesai!" + "+56 Bintang Toko!" (termasuk bonus) + form submit skor TAMPIL (tidak di-suppress); submit UI "PekanJuara" → DB mode "Tantangan Mingguan" ✓; XSS mode tetap ditolak → "Klasik".
+- ✓ Leaderboard modal: chip violet 📅 "Tantangan Mingguan" (kelas lb-mode-weekly).
+- ✓ VLM: kartu violet rapi di bawah kartu oranye tanpa glitch; banner menang + banner bintang + form submit terkonfirmasi visual; chip HUD terkonfirmasi.
+- Artefak: download/weekly_card.png, weekly_card_won.png, weekly_hud.png, weekly_victory.png, weekly_leaderboard.png.
+
+Stage Summary:
+- P9-a SELESAI: mode Tantangan Mingguan penuh — modifier pekan-seeded lebih sulit (8 varian, hingga musuh +35% kuat / imbalan +60%), bonus ⭐ toko 25-40 saat menang, streak pekan beruntun + badge "Penjaga Pekanan", tema violet konsisten (kartu menu, chip HUD, banner menang, chip leaderboard), dan skor TETAP masuk papan rekor berlabel "Tantangan Mingguan" (whitelist API + UI). Bonus: bug lama banner bintang toko P4 ikut diperbaiki sehingga bonus mingguan terlihat di layar menang.
+
+---
+Task ID: 11
+Agent: sub-agent (P9-c Kotak Sedekah power-ups)
+Task: P9-c — KOTAK SEDEKAH: power-up in-run — kotak sedekah ajaib muncul di lapangan saat wave aktif, diketuk pemain untuk buff sementara (damage/rate/pahala berdurasi + Perisai Masjid 3 muatan) dengan klaster pill HUD + hitung mundur.
+
+Work Log:
+- data.ts: section baru `P9-c: KOTAK SEDEKAH` — `PowerupDef` (id/name/emoji/desc/color/duration/kind), `POWERUPS` 4 varian (🏹 Panah Berkah +30% dmg 20dtk, 🪭 Kipas Ajaib rate×0.75 18dtk, 💰 Hujan Pahala +40% 25dtk, 🛡️ Perisai Masjid 3 muatan instan), `POWERUP_CONST` (firstDelay 22, interval [26,40], lifetime 14, bobHeight 0.55, baseY 0.9), `POWERUP_MULT` {damage 1.3, rate 0.75, pahala 1.4}.
+- entities.ts: ManagerCtx +`powerDamageUntil`/`powerRateUntil`/`powerRewardUntil` (init -1 di constructor EntityManager, ikut direset di reset()); Tower.update: pengali `pwDmg`/`pwRate` dari ctx diterapkan ke dmg DAN ke semua 4 jalur cooldown (aura/sedekah/adzan/proyektil orb-bubble-coin); `activatePowerup(kind, duration)` + getter `powerDamageUntil`/`powerRateUntil`/`powerRewardUntil`/`powerRewardActive` utk engine.
+- store.ts: `ActivePowerup` (id/name/emoji/remaining/kind), state `activePowerups` + `shieldCharges`, action `setActivePowerups`/`setShieldCharges`, keduanya di-reset `resetForNewGame()`.
+- engine.ts (section `P9-c: KOTAK SEDEKAH`): field `private` TS (bukan #, agar probe QA bisa baca) powerupGroup/powerupDef/powerupSpawnedAt/powerupExpiresAt/nextPowerupAt/powerupSpin/shieldCharges/lastPowerupHudJson + Plane hit-test. `randomPowerupSpot()`: lane acak t∈[0.3,0.7] + offset tegak lurus 2.2–2.8 sisi acak, validasi ≥1.8 dari SLOTS, luar platform masjid, dalam rumput inti, retry 10×, fallback (-6, 10.8) halaman depan. `buildPowerupBox()`: BoxGeometry emas 0.62×0.5 + tutup warna def.color + RingGeometry emisif 0.7 di bawah. `spawnPowerupAt()` set expiry + jadwal next rand(26..40). Pickup di onPointerUp (SEBELUM logika slot/tower, unified mouse+touch, wasClick + jarak bidang < 1.3): buyRarity('epik') + firework + sparkleRise×2 + rings, `collectPowerup()` refactored shared dengan `debugCollectPowerup()`, toast "{emoji} {name} aktif!". `updatePowerups(waveActive)` di simTick (gameDt>0): spawn hanya saat wave aktif, expire → smokePuff + toast "Kotak sedekah menghilang... 😢", `syncPowerupHud()` recompute list dari getter until (banding JSON anti re-render spam, force saat collect) + sync shield. `updatePowerupVisual(dt)` selalu: bob sin(now*2.2), spin dt*1.4, 3 dtk terakhir pulse scale 1±0.18 + kedip emisif, auto-despawn saat screen bukan 'playing'. onEnemyLeaked: shield > 0 → charge--, rings biru 0x9ecbff + sparkle + toast "🛡️ Perisai masjid menahan 1 musuh!", return dini (musuh tetap leaked/terbersihkan, HP & curian tuyuh TIDAK jalan). onEnemyKilled: reward × POWERUP_MULT.pahala saat powerRewardActive. beginWave wave-1: nextPowerupAt 0 → now+firstDelay. startGame/backToMenu/dispose: despawn + reset semua field. QA: `debugSpawnPowerup(defId?)` + `debugCollectPowerup()`.
+- BARU src/components/game/PowerupBadges.tsx: klaster pill fixed bottom-32 left-3 z-30 (di bawah DuaButton yang di tengah-kiri), AnimatePresence slide-in/out, pill per activePowerup (emoji + nama + ⏳ countdown ceil) + pill perisai "🛡️ Perisai ×N"; kind → kelas aksen. Dipasang di GameShell setelah <DuaButton />.
+- globals.css: section `===== POWERUP (KOTAK SEDEKAH) =====` (~65 baris) — .powerup-pill (rounded-full border-2 font-black 11px px-3 py-1 backdrop-blur hard-shadow pointer-events-none + animasi powerup-pulse 1↔1.04), .powerup-pill-time (tabular-nums), varian -damage (emas #f5c518), -rate (teal #2dd4bf), -pahala (hijau #86d95c), -shield (biru #7cb6f9).
+
+VERIFIKASI (agent-browser probe __pmEngine/__pmStore + DOM + PointerEvent sintetis + VLM):
+- ✓ lint bersih; tsc --noEmit: src/ 0 error (hanya pre-existing examples/ & skills/); dev.log HMR "✓ Compiled" tanpa error; console 0 error.
+- ✓ startGame level 1 → activePowerups [], shieldCharges 0; advance(26) → wave 1 aktif, nextPowerupAt 47 (=25+22), belum ada kotak; advance(23) → kotak natural muncul (hujan-pahala).
+- ✓ debugSpawnPowerup('perisai-masjid') → powerupGroup truthy di (13.55, 1.66, -1.77) — jauh dari slot; debugCollectPowerup → shieldCharges 3 + toast "🛡️ Perisai Masjid aktif!".
+- ✓ PICKUP POINTER NYATA: proyeksi posisi kotak → layar (1204, 332), dispatch PointerEvent pointerdown+pointerup di canvas → kotak terkumpul via jalur player (bukan debug), activePowerups terisi + powerRewardActive true.
+- ✓ Panah Berkah: collect → remaining 20 → berkurang tiap detik → kosong setelah advance melewati durasi; Kipas: rateUntil = now+18; kotak tak diambil → expire 14 dtk + toast "Kotak sedekah menghilang... 😢" + rateUntil tetap -1.
+- ✓ Hujan Pahala: kill pocong 8 → 11 pahala (×1.4) — starsEarned 22 utk 2 kill (deterministik, buff dikumpulkan setelah wave mulai).
+- ✓ Perisai: 6 pocong lolos tanpa tower → shield 3→0 menahan 3 (mosqueHp penuh), 3 sisanya lolos normal (130→121 = 3×3 dmg) — perisai membatalkan leak sepenuhnya.
+- ✓ Gate wave: nextPowerupAt sengaja jatuh di jeda antar-wave → TIDAK spawn; wave 2 mulai → langsung spawn.
+- ✓ startGame reset (active 0, shield 0, box null, nextAt 0, until -1); screen 'victory' → kotak & pill otomatis bersih; run kemenangan penuh level 1 (3 tower, 170 dtk) sukses tanpa error — siklus natural spawn berjalan (nextAt 47→128).
+- ✓ DOM pills: ".powerup-pill-shield | 🛡️Perisai ×3", ".powerup-pill-damage | 🏹Panah Berkah⏳ 20s", ".powerup-pill-rate | 🪭Kipas Ajaib⏳ 18s" — VLM konfirmasi klaster 3 pill (biru/emas/teal) di kiri-bawah, tampil rapi tanpa tumpang tindih DuaButton.
+- Artefak: download/powerup_box.png, download/powerup_hud.png.
+
+Stage Summary:
+- P9-c SELESAI: Kotak Sedekah hadir sebagai engagement aktif mid-wave — kotak emas melayang (bob + spin + cincin warna buff + pulse/kedip 3 dtk terakhir) muncul tiap 26–40 dtk selama wave aktif (pertama 22 dtk setelah wave 1), diketuk (mouse/touch, hit-test bidang radius 1.3) untuk power-up sementara: +30% damage / +25% kecepatan serang (semua jenis serangan & sedekah) / +40% pahala kill — dengan pill HUD countdown per kind — atau Perisai Masjid 3 muatan yang menahan leak tanpa HP/curian. QA helpers debugSpawnPowerup/debugCollectPowerup + probe field private-TS tersedia untuk pengujian otomatis; semua mode (klasik/level/harian/mingguan) didukung.
+
+---
+Task ID: 12
+Agent: sub-agent (P9-b usage stats)
+Task: P9-b — STATISTIK PEMAKAIAN KARAKTER: lacak berapa kali tiap karakter dipasang & ikut menang (persist), tampilkan di layar KOLEKSI (badge kartu + chip modal detail) + sorting "📊 Paling Dipakai".
+
+Work Log:
+- persist.ts: `SaveData` + `charUsage: Record<string, { placed: number; wins: number }>` (key = id gameplay: 'ali', 'gen-13', 'custom-1'); DEFAULT_SAVE + `charUsage: {}`; merge defensif `sanitizeCharUsage()` di loadSave — entri malformed (placed/wins bukan number, entri string, object tanpa field) DILEWATI, nilai di-clamp ≥0; semua jalur return loadSave kini memberi object `charUsage` segar (hindari referensi bersama dgn DEFAULT_SAVE).
+- achievements.ts: section "P9-b: statistik pemakaian karakter" — `getCharUsage()` (salinan defensif dari saveCache), `recordCharPlaced(charId)` (placed++, init entri, flush write-through → localStorage langsung), `recordCharsWon(charIds)` (wins++ per id UNIK via Set, flush).
+- engine.ts: import + 2 hook — `tryPlace()`: `recordCharPlaced(def.id)` tepat setelah checkBadges towerPlaced; `onVictory()`: `recordCharsWon([...new Set(this.manager.towers.map(t => t.def.id))])` setelah clearLossStreak (semua tower yang masih berdiri dianggap ikut menang).
+- store.ts: state `collUsage` (default {}) di antara field koleksi.
+- collection.ts: `openCollection()` + `refreshCollData()` kini memuat `collUsage: getCharUsage()` sinkron ke store.
+- CollectionScreen.tsx: (1) badge kartu `.coll-usage-badge` "📊 N×" kanan-bawah kartu MILIK yang pernah dipasang (lookup via `placeIdOf(c)` → id gameplay; title "Dipasang N× · Menang N×"); (2) modal detail: 2 chip `.coll-usage-chip` "📊 Dipasang N×" + "🏆 Menang N×" (hanya jika milik + placed > 0); (3) toggle urutan di baris filter: "Urutkan: ⭐ Rarity | 📊 Paling Dipakai" — mode usage = milik by placed DESC → sisa milik → belum dimilik by rarity (tie-break rarity+nama), berlaku utk tab Milikku & Semua.
+- globals.css: section "P9-b — STATISTIK PEMAKAIAN KARAKTER" (~65 baris): `.coll-usage-badge` (absolute bottom-right, white/85, border 1.5px emerald-200, 9px font-black, rounded-full, pointer-events-none), `.coll-usage-chip` (emerald-50/200/700, 10px), `.coll-sort-chip`/`-on` (clone .coll-tab versi mungil).
+- [FIX] PRE-EXISTING (P8/Task 9): modal detail koleksi "nyangkut" — menutup layar koleksi saat modal terbuka (X / "Mainkan Koleksimu!" / PASANG) TIDAK menghapus state `selected`, sehingga modal karakter lama muncul lagi begitu koleksi dibuka ulang. Fix: `setSelected(null)` di `close()` + `pickAndPlace()`.
+
+VERIFIKASI (agent-browser probe __pmEngine/__pmStore + localStorage + DOM + VLM):
+- ✓ lint bersih; tsc --noEmit: src/ 0 error (hanya pre-existing examples/ & skills/); dev.log HMR "✓ Compiled" tanpa error; console browser 0 error.
+- ✓ SAVE LAMA → save existing tanpa charUsage tetap aman dimuat; startGame({levelId:1}) → tryPlace(0,'ali') → localStorage LANGSUNG berisi charUsage.ali = {placed:1, wins:0} (write-through terbukti); tryPlace(1,'aisyah')+(2,'umar') sukses, tryPlace(3,'ali') ditolak benar (pahala tinggal 10 < cost — ekonomi jalan).
+- ✓ MENANG: advance(400) dgn 3 tower → screen 'victory' → charUsage ketiga karakter wins:1 (placed tetap).
+- ✓ KOLEKSI NYATA: backToMenu → klik tile KOLEKSI (DOM click) → collUsage termuat ke store; tab Milikku 4 kartu → 2 badge "📊 1×" (ali+aisyah; kartu tanpa pemakaian tanpa badge, umar tak dimiliki → tak berbadge) dgn title "Dipasang 1× · Menang 1×"; computed style badge: absolute/right-bottom 6px/rounded-full/pointer-events none.
+- ✓ MODAL DETAIL: klik kartu Ali → 2 chip "📊 Dipasang 3× | 🏆 Menang 1×" (setelah run tambahan ali 2×).
+- ✓ SORTING: chip "⭐ Rarity | 📊 Paling Dipakai" render; klik Paling Dipakai → Ali (3×) jadi kartu PERTAMA di Milikku & Semua (100 kartu, owned+usage di atas, lalu milik, lalu unowned by rarity); chip aktif bergaya hijau (.coll-sort-chip-on).
+- ✓ DEFENSIF: inject charUsage malformed (placed:"broke", entri tanpa wins, entri string) + reload → buka koleksi → collUsage hanya berisi entri valid (umar), 0 badge, tanpa crash; state valid dipulihkan setelahnya (2 badge kembali).
+- ✓ [FIX] modal nyangkut: buka modal Ali → tutup koleksi (X) → buka lagi → modal TIDAK muncul lagi (sebelum fix: muncul — terkonfirmasi lewat screenshot awal).
+- ✓ VLM: grid sorted (badge "📊 3×/1×" kanan-bawah kartu, chip urutan aktif hijau, Ali pertama, tanpa tumpang tindih); modal (2 chip hijau rapi); mobile 390px badge+chip terbaca, layout utuh.
+- Artefak: download/coll_usage.png, coll_usage_modal.png, coll_usage_sorted.png, coll_usage_mobile.png, coll_usage_final.png.
+
+Stage Summary:
+- P9-b SELESAI: Statistik pemakaian karakter kini terekam permanen (placed/wins per id gameplay, write-through ke localStorage, tahan save lama & entri rusak) dan tampil di KOLEKSI: badge "📊 N×" di kartu milik, chip "Dipasang/Menang" di modal detail, plus sorting "Paling Dipakai" (favorit pemain naik ke atas). Bonus: bug modal detail koleksi yang muncul kembali saat dibuka ulang (P8) ikut diperbaiki.
+
+---
+Task ID: 13
+Agent: sub-agent (P9 final QA)
+Task: QA integrasi final fase P9 — regresi clean-load + alur penuh Tantangan Mingguan (menang, streak, submit skor) + cross-check Kotak Sedekah + statistik pemakaian koleksi + leaderboard mode + mobile 390×844 + audit console/lint/tsc (tanpa mengubah source).
+
+Work Log:
+- SETUP: dev server 200; localStorage dibersihkan → save segar (collOwned hero-ali+hero-aisyah, charUsage kosong); probe lengkap (__pmEngine/__pmStore/__THREE true). [A PASS]
+- MENU: .weekly-card (violet) + .daily-card + tombol MAIN render; page errors kosong; VLM konfirmasi kartu violet rapi di bawah kartu oranye tanpa glitch. Artefak download/qa_final_menu.png. [A PASS]
+- MINGGUAN startGame({weekly:true}) → screen playing, weeklyMode true, weeklyMod "Jumat Berkah" 🕌, totalWaves 10, levelId 0, mosqueMaxHp 145 (120+25), pahala 180. HUD .weekly-chip "🕌 PEKANAN · Jumat Berkah" (artefak qa_final_weekly_hud.png). [B PASS]
+- CROSS-FEATURE: debugSpawnPowerup('panah-berkah') + debugCollectPowerup di mode mingguan → activePowerups 1 (remaining 20). [B PASS]
+- RUN MINGGUAN #1: 10 tower (ali, aisyah×2, umar×2, fatimah×2, misbah, kakek×2) → VICTORY wave 10, mosqueHp 62/145 (bintang 1); weeklyStreakResult 1; banner violet "📅 Tantangan Mingguan Selesai!" + "⭐ +137 Bintang Toko!" (107 run + 30 bonus mingguan); form ScoreSubmit TAMPIL (tidak di-suppress utk mingguan); starCurrency 0→137; badge weekly_win terbuka; lastWeeklyWin 2026-W36. Submit "QA-P9 Mingguan" → scoreSubmitted true, POST 200, DB id 69 mode "Tantangan Mingguan" (verif sqlite langsung; bintang 1 → peringkat di luar top-10 papan). Artefak qa_final_weekly_victory.png (VLM: banner violet + banner bintang + form submit terkonfirmasi). [B PASS]
+- RUN MINGGUAN #2 (agar entri QA masuk top-10 papan utk cek UI): auto-place loop 10 tower → VICTORY mosqueHp 102/145 (70% → bintang 2), streak TETAP 1 (idempotent pekan sama — benar), pahala 2299, defeated 153; starCurrency 137→281 (+144 = 114 run + 30 bonus); submit "QA-P9 Mingguan" lagi → rank 9 papan rekor. charUsage tercatat lintas fitur: ali 2/2, aisyah 4/2, umar 5/2, fatimah 5/2, misbah 2/2, kakek 5/2 (placed/wins) — persist di localStorage. [B PASS]
+- POWERUP RESET: startGame({levelId:1}) setelah run mingguan → activePowerups [], shieldCharges 0, weeklyMode false, mosqueMaxHp 130, totalWaves 3. [C PASS]
+- SPAWN NATURAL: advance(50) → wave 1 aktif + kotak powerup muncul sendiri (powerupGroup truthy), nextPowerupAt 80. [C PASS]
+- PERISAI: collect 'perisai-masjid' → shieldCharges 3 (kind instan, benar tidak masuk activePowerups). Tanpa tower: sebelum perisai 6 pocong lolos (HP 130→112); dengan perisai HP TETAP 112 saat shield 3→2 (advance 30dtk), lalu 2→0 (2 serapan) dan HP mulai turun 112→92 (20 dmg leak sisa) — perisai 100% menahan leak tanpa HP turun selama muatan ada. [C PASS]
+- PILL HUD: .powerup-pill-shield "🛡️Perisai ×3" + .powerup-pill-damage "🏹Panah Berkah⏳ 20s" + .powerup-pill-rate "🪭Kipas Ajaib⏳ 18s" di DOM; artefak qa_final_powerup.png (retake: potret pertama tertutup modal "Karakter Baru Terbuka!" Fatimah — perilaku unlock normal; VLM konfirmasi pill terbaca, tidak tumpang tindih tombol DOA BERSAMA). [C PASS]
+- KOLEKSI: klik nyata tile KOLEKSI → collUsage termuat; badge kartu "📊 4×" (Aisyah, title "Dipasang 4× · Menang 2×") & "📊 2×" (Ali); modal detail 2 chip "📊 Dipasang 4×" + "🏆 Menang 2×". Artefak qa_final_coll.png, qa_final_coll_modal.png. [D PASS]
+- SORTING: tab Semua urut Rarity → kartu pertama "Adib si Rajin Sholat" (belum dimiliki); klik chip "📊 Paling Dipakai" (.coll-sort-chip) → kartu pertama BERUBAH jadi "Aisyah si Penghafal Doa 📊 4×" lalu "Ali 📊 2×" (milik ber-pemakaian dulu) → milik lain → belum dimilik by rarity; chip aktif bergaya .coll-sort-chip-on; 0 error. Artefak qa_final_coll_sorted.png. [D PASS]
+- LEADERBOARD: modal Papan Rekor → 10 baris, 4 chip violet .lb-mode-weekly "📅 Tantangan Mingguan"; baris "9 | QA-P9 Mingguan | 📅 Tantangan Mingguan | 👻 153 · 🛡️ gel. 10 · 🌟 2299 | ⭐⭐" — identik dgn DB/API. Artefak qa_final_leaderboard.png (baris perlu discroll ke dalam list max-h-80; VLM konfirmasi rank 9 + chip violet). [E PASS]
+- MOBILE 390×844: menu scrollable (854>691), kartu mingguan terjangkau scroll (top 429→bottom 747 in-view); game mingguan: chip (x99,y172,w191) vs pill perisai (x10,y687,w106) vs tombol DOA BERSAMA (x10,y430-516) — TIDAK overlap, chip tidak keluar layar; VLM: readable, tanpa glitch. Artefak qa_final_mobile_menu.png, qa_final_mobile_weekly_card.png, qa_final_mobile_game.png. Viewport dikembalikan 1280×800. [F PASS]
+- AUDIT: agent-browser errors KOSONG (dicek berkali); console 0 [error], hanya 1 warning benign "THREE.WebGLRenderer: WEBGL_lose_context extension not supported" (headless, lazy preview — sesuai spec OK); dev.log semua "✓ Compiled" + GET / 200 + POST/GET /api/leaderboard 200, tanpa error kompilasi; `bun run lint` (eslint .) BERSIH; `npx tsc --noEmit`: src/ 0 error (hanya 4 error pre-existing di examples/ & skills/ scaffold, exit 0). Reload final: probe + menu + save (starCurrency 281, weeklyStreak 1, charUsage utuh) semuanya sehat. [G PASS]
+
+BUG / TEMUAN:
+- [MINOR — laten, tanpa dampak pemain] engine.ts backToMenu() (baris 934-963) me-reset state powerup di sisi engine (despawnPowerupBox) tetapi TIDAK me-reset store activePowerups/shieldCharges → nilai basi tersisa di store setelah kembali ke menu mid-run (teramati: activePowerups 1, shieldCharges 3 di menu). Tidak terlihat pemain karena PowerupBadges.tsx (baris 32) hanya render saat screen === 'playing', dan startGame → resetForNewGame membersihkan keduanya. SARAN FIX: tambahkan `activePowerups: [], shieldCharges: 0` pada gameStore.set di backToMenu() (opsional + `this.lastPowerupHudJson = ''`).
+- [OBSERVASI] collUsage di store bernilai {} sampai layar koleksi dibuka (lazy sync load by design P9-b); localStorage tetap berisi data — bukan bug.
+- [OBSERVASI] Screenshot pertama powerup tertutup modal unlock karakter (timing unlock sesudah victory run) — bukan bug, retake sukses.
+- TIDAK ADA blocker kritis; TIDAK ADA file source diubah.
+
+Stage Summary:
+- A Clean-load regression: PASS (probes, kartu menu, MAIN, errors kosong, save segar).
+- B Tantangan Mingguan full flow: PASS (start→HUD chip→powerup cross-test→10 tower→VICTORY 2× , streak 1 idempotent, banner "+137/+144 Bintang" termasuk bonus +30⭐, form submit tampil, POST 200 mode "Tantangan Mingguan", rank 9 papan).
+- C Kotak Sedekah cross-check: PASS (reset store, spawn natural ~22dtk, perisai 3 muatan menahan leak tanpa HP turun, pill HUD shield+damage+rate, screenshot).
+- D Statistik pemakaian: PASS (badge 📊 N× + title, chip modal Dipasang/Menang, sorting "Paling Dipakai" mengubah kartu pertama → terpakai terbanyak, 0 error).
+- E Leaderboard mode: PASS ("QA-P9 Mingguan" rank 9 dgn chip violet 📅 Tantangan Mingguan, identik DB/API).
+- F Mobile 390×844: PASS (menu scrollable + kartu mingguan terbaca; HUD chip + pill + DOA BERSAMA tanpa overlap).
+- G Audit: PASS (errors kosong; console 0 error + 1 warning benign; dev.log bersih 200s; lint bersih; tsc src/ 0 error).
+- VERDICT: P9 (Task 10+11+12) LULUS QA INTEGRASI FINAL — 7/7 seksi PASS, 1 bug minor laten (reset store powerup di backToMenu) dilaporkan dgn saran fix, 0 blocker.
+
+---
+Task ID: 13-b
+Agent: sub-agent (bugfix backToMenu powerup state)
+Task: Fix stale activePowerups/shieldCharges in store after backToMenu()
+
+Work Log:
+- Baca laporan QA Task 13 (bug MINOR laten) + engine.ts backToMenu() (baris 934-963): gameStore.set me-reset screen/popup/mode TETAPI tidak me-reset activePowerups/shieldCharges → nilai basi (mis. shield 3, act 1) tertinggal di store setelah quit mid-run (tak terlihat pemain; resetForNewGame membersihkan di startGame berikutnya).
+- FIX engine.ts backToMenu(): (1) tambah `activePowerups: []` + `shieldCharges: 0` di objek gameStore.set (dgn komentar) — sesuai saran QA; (2) reset mirror engine `this.shieldCharges = 0` + `this.lastPowerupHudJson = ''` di samping despawnPowerupBox() — meniru pola startGame (baris 885-888) agar syncPowerupHud tidak pernah menulis balik nilai basi ke store (defensive, 0 risiko regresi).
+- VERIFIKASI STATIS: `bun run lint` (eslint .) BERSIH exit 0; `npx tsc --noEmit` exit 0 — src/ 0 error (hanya 4 error pre-existing di examples/ & skills/, sama spt sebelum fix).
+- VERIFIKASI BROWSER (agent-browser, dev server 3000): open + 3s → probe __pmEngine/__pmStore true.
+  - startGame({levelId:1}) → 'ok'; debugSpawnPowerup('perisai-masjid') + debugCollectPowerup() → 'done'; store: {shield:3, act:0} ✓ (state basi terbentuk sesuai skenario QA).
+  - backToMenu() → 'back'; store: {screen:'menu', shield:0, act:0} ✓✓ FIX TERBUKTI (sebelum fix: shield tetap 3).
+  - REGRESI tambahan: 'panah-berkah' (kind damage/timed) → {playing, shield:0, act:1}; backToMenu → {menu, shield:0, act:0} ✓; startGame({levelId:1}) berikutnya sehat → {playing, shield:0, act:0, wave:0}, lalu backToMenu 'clean'. agent-browser errors KOSONG.
+
+Stage Summary:
+- BUGFIX 13-b SELESAI: backToMenu() kini me-reset activePowerups [] + shieldCharges 0 di store (plus mirror engine shieldCharges/lastPowerupHudJson agar konsisten) — tidak ada lagi nilai power-up basi di store setelah kembali ke menu mid-run. Lint bersih, tsc src/ 0 error baru, verifikasi browser PASS utk powerup instan (perisai) & timed (panah) + startGame berikutnya normal + 0 page error.
+
+---
+Task ID: P9-FINAL
+Agent: main-agent (Z.ai Code)
+Task: PENUTUP FASE P9 — Tantangan Mingguan + Kotak Sedekah + Statistik Koleksi
+
+Status Proyek Saat Ini:
+- Game dalam kondisi sehat dan lengkap: seluruh fitur inti P1-P8 stabil (terverifikasi ulang lewat regresi clean-load QA final) — engine 3D Three.js + bloom + kamera pro, PETA 8 level + mode klasik + Daring Harian + Tantangan Mingguan, TOKO 100 karakter (6 hero legendaris + 94 generatif) + character creator, layar KOLEKSI penuh (statistik kepemilikan + filter + beli + deploy langsung + lazy WebGL preview), buff Nasihat nyata di gameplay, funFact edukatif, leaderboard berlabel mode, 20 hantu lokal Indonesia chibi dengan mekanik unik, 16 badge, dan sistem ekonomi ⭐ lengkap (TOKO → KOLEKSI → GAMEPLAY → MENANG → ⭐) — ditambah fase P9 yang baru saja selesai dan LULUS QA integrasi final 7/7 seksi. Audit menyeluruh bersih: `bun run lint` (eslint .) PASS, `npx tsc --noEmit` src/ 0 error (hanya 4 error pre-existing di scaffold examples/ & skills/), console browser 0 error (1 warning benign WebGL headless), dev.log hanya "✓ Compiled" + GET/POST 200.
+
+Tujuan Fase / Modifikasi Selesai / Hasil Verifikasi:
+- P9-a (Task ID 10): TANTANGAN MINGGUAN — 8 modifier pekanan bertema violet (WEEKLY_MODIFIERS: Badai Setan 🌪️, Kabut Pekat 🌫️, Gerimis Berkah 🌧️, Malam Bermega ✨, Pasukan Gergasi 👹, Zakat Mengalir 💰, Uji Iman 🕋 terberat 40⭐, Jumat Berkah 🕌) deterministik per pekan ISO (weeklyKey "YYYY-Www" Senin awal pekan + pickWeeklyModifier, hash sama seperti daily); startGame({weekly:true}) → konfigurasi klasik 10 wave penuh + mosqueHpBonus + startPahalaBonus + toast "TANTANGAN PEKAN INI"; streak idempotent per pekan (recordWeeklyWin: menang 2× di pekan sama streak tetap 1; backdate W35→W36 membuktikan streak 2) + badge baru "Penjaga Pekanan" 📅 (BADGES 15→16, event weeklyWin); bonus rewardStars 25-40⭐ masuk banner kemenangan violet "+N Bintang Toko!" (dihitung SEBELUM screen 'victory') + ring burst violet di masjid; skor TETAP masuk leaderboard mode "Tantangan Mingguan" (MODE_WHITELIST API + chip violet .lb-mode-weekly, XSS tetap ditolak); WeeklyChallengeCard violet di menu (chip "Pekan N" + pill bonus emas + streak + countdown pekan baru) + chip HUD .weekly-chip + banner .weekly-won-banner, famili CSS ~130 baris mirror konvensi .daily-*. BUGFIX BONUS (pre-existing P4): banner "+N Bintang Toko!" tidak pernah tampil (useState membaca runStarGain sekali saat mount, padahal engine baru dibuat di useEffect setelah render pertama → selalu 0) — diperbaiki dengan membaca nilai saat render layar 'victory'; terverifikasi klasik +25⭐ & mingguan +56⭐ (26 run + 30 bonus) kini tampil.
+- P9-c (Task ID 11): KOTAK SEDEKAH power-up — 4 varian POWERUPS: 🏹 Panah Berkah (+30% damage, 20 dtk), 🪭 Kipas Ajaib (rate ×0.75, 18 dtk), 💰 Hujan Pahala (+40% reward kill, 25 dtk), 🛡️ Perisai Masjid (3 muatan instan — blok leak tanpa HP/curian turun); kotak emas melayang (bob + spin + cincin emisif warna buff + pulse/kedip 3 dtk terakhir) spawn HANYA saat wave aktif (firstDelay 22 dtk, interval rand 26-40 dtk, umur 14 dtk → smokePuff + toast "Kotak sedekah menghilang... 😢"), randomPowerupSpot memvalidasi posisi ≥1.8 dari SLOTS + luar platform masjid + dalam rumput inti (retry 10×, fallback halaman depan); pickup via pointer unified mouse+touch (hit-test bidang jarak < 1.3, diproses sebelum logika slot/tower) → SFX jingle epik buyRarity('epik') + firework + sparkle; multiplier diterapkan ke dmg DAN semua attack kind / 4 jalur cooldown (aura/sedekah/adzan/proyektil) + reward kill saat powerRewardActive; HUD PowerupBadges: klaster pill kiri-bawah dengan emoji + ⏳ countdown per warna (damage emas / rate teal / pahala hijau) + pill biru "🛡️ Perisai ×N", diff JSON anti re-render spam, auto-despawn saat bukan 'playing'; helper QA debugSpawnPowerup(defId?)/debugCollectPowerup(); berlaku di semua mode (klasik/level/harian/mingguan).
+- P9-b (Task ID 12): STATISTIK PEMAKAIAN — SaveData.charUsage: Record<id gameplay, {placed, wins}> (key 'ali'/'gen-13'/'custom-1') write-through ke localStorage + merge defensif sanitizeCharUsage (entri malformed dilewati, nilai clamp ≥0, aman untuk save lama); recordCharPlaced() di-hook di engine.tryPlace() + recordCharsWon() di onVictory() (tower yang masih berdiri saat menang, id unik via Set); tampil di layar KOLEKSI: badge "📊 N×" kanan-bawah kartu milik (title "Dipasang N× · Menang N×"), 2 chip modal detail "📊 Dipasang N×" + "🏆 Menang N×" (hanya jika milik + placed > 0), dan toggle urutan "⭐ Rarity | 📊 Paling Dipakai" (milik by placed DESC dulu → milik lain → belum dimilik by rarity; berlaku di tab Milikku & Semua); collUsage dimuat sinkron via openCollection()/refreshCollData(). BUGFIX (pre-existing P8): stale detail modal koleksi — state selected tidak di-clear saat close()/pickAndPlace() sehingga modal karakter lama muncul lagi begitu koleksi dibuka ulang — diperbaiki dengan setSelected(null).
+- BUGFIX 13-b: backToMenu() kini membersihkan activePowerups/shieldCharges di store (nilai basi tersembunyi).
+- VERIFIKASI TOTAL (Task ID 13): QA 7/7 PASS — (A) regresi clean-load: probe + kartu menu + save segar + errors kosong; (B) alur penuh mingguan 2× victory: streak idempotent pekan sama, "+137⭐ & +144⭐ termasuk bonus +30⭐" (107+30 lalu 114+30), submit DB/UI cocok (POST 200, mode "Tantangan Mingguan", rank 9 papan rekor, verif sqlite langsung); (C) Kotak Sedekah: reset store bersih, spawn natural ~22 dtk, shield blok 100% bocor saat aktif (HP tetap saat muatan 3→0 lalu turun normal setelah habis), multiplier pahala 8→11 (×1.4) verified, pill HUD DOM benar; (D) statistik koleksi: badge 📊 4×/2× + chip modal + sorting "Paling Dipakai" mengubah kartu pertama; (E) leaderboard: baris rank 9 + chip violet identik DB/API; (F) mobile 390×844: menu scrollable, chip HUD vs pill perisai vs tombol DOA BERSAMA tanpa overlap; (G) audit akhir: lint bersih, tsc src/ 0 error, console 0 error, dev.log bersih. 11 screenshot artefak di download/qa_final_*.png (menu, weekly_hud, weekly_victory, powerup, coll, coll_modal, coll_sorted, leaderboard, mobile_menu, mobile_weekly_card, mobile_game). Follow-up BUGFIX 13-b juga diverifikasi ulang di browser (powerup instan & timed, startGame berikutnya normal, 0 page error) — P9 dinyatakan LULUS dengan 0 blocker.
+
+Isu Belum Terselesaikan / Risiko & Rekomendasi Prioritas Fase Berikutnya:
+- Karakter roster/custom belum punya funFact edukatif unik (masih generik) — prioritas sedang.
+- Bahasa EN belum ada (i18n) — prioritas sedang, tugas besar menyentuh semua komponen.
+- Lazy preview koleksi bisa kedip singkat saat scroll cepat (histeresis 1.6s) — naikkan ke 2.5s bila terganggu.
+- Power-up: belum ada variasi kotak spesial/langka (mis. kotak hujan bintang event) — ide pengayaan.
+- Statistik charUsage belum dipakai untuk rekomendasi strategi (mis. "Karakter andalanmu") — ide.
+- Cloud save & export screenshot koleksi — ide jangka panjang.
+- Prisma client dev server masih versi lama (leaderboard raw-SQL aman) — tidak mempengaruhi fungsi.

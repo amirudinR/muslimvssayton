@@ -33,8 +33,8 @@ const NAME_MIN = 2
 const NAME_MAX = 16
 const MODE_MAX = 24
 
-/** Mode label yang diizinkan di papan rekor (P8). */
-const MODE_WHITELIST = ['Klasik', 'Daring Harian']
+/** Mode label yang diizinkan di papan rekor (P8 + P9 mingguan). */
+const MODE_WHITELIST = ['Klasik', 'Daring Harian', 'Tantangan Mingguan']
 
 /** Sanitasi label mode: whitelist / pola "Level N" / fallback "Klasik". */
 function sanitizeMode(value: unknown): string {

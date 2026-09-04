@@ -41,11 +41,15 @@ export function CollectionScreen() {
   const owned = useGameStore((s) => s.collOwned)
   const currency = useGameStore((s) => s.collCurrency)
   const customs = useGameStore((s) => s.collCustoms)
+  /* P9-b: statistik pemakaian (key = id gameplay, lihat placeIdOf) */
+  const usage = useGameStore((s) => s.collUsage)
 
   const [tab, setTab] = useState<CollTab>('milik')
   const [filterPower, setFilterPower] = useState<PowerCategory | 'semua'>('semua')
   const [filterRarity, setFilterRarity] = useState<Rarity | 'semua'>('semua')
   const [query, setQuery] = useState('')
+  /* P9-b: pengurutan daftar — rarity (default) / paling dipakai */
+  const [sortBy, setSortBy] = useState<'rarity' | 'usage'>('rarity')
   const [selected, setSelected] = useState<RosterChar | null>(null)
   const [toastMsg, setToastMsg] = useState<{ text: string; tone: 'good' | 'bad' } | null>(null)
 
@@ -78,14 +82,27 @@ export function CollectionScreen() {
       const q = query.trim().toLowerCase()
       list = list.filter((c) => c.name.toLowerCase().includes(q) || c.themeLabel.toLowerCase().includes(q))
     }
-    list.sort((a, b) => RARITY_ORDER[a.rarity] - RARITY_ORDER[b.rarity] || a.name.localeCompare(b.name))
+    if (sortBy === 'usage') {
+      /* P9-b: "Paling Dipakai" — milik dgn pemakaian terbanyak di atas,
+         lalu sisa milik, lalu yang belum dimiliki tetap by rarity. */
+      list.sort(
+        (a, b) =>
+          (ownedSet.has(b.id) ? usage[placeIdOf(b)]?.placed ?? 0 : -1) -
+            (ownedSet.has(a.id) ? usage[placeIdOf(a)]?.placed ?? 0 : -1) ||
+          RARITY_ORDER[a.rarity] - RARITY_ORDER[b.rarity] ||
+          a.name.localeCompare(b.name),
+      )
+    } else {
+      list.sort((a, b) => RARITY_ORDER[a.rarity] - RARITY_ORDER[b.rarity] || a.name.localeCompare(b.name))
+    }
     return list
-  }, [allChars, ownedSet, tab, filterPower, filterRarity, query])
+  }, [allChars, ownedSet, tab, filterPower, filterRarity, query, sortBy, usage])
 
   if (!open) return null
 
   const close = () => {
     audio.chime()
+    setSelected(null) // [FIX] jangan biarkan modal detail terbuka saat koleksi dibuka lagi
     closeCollection()
   }
 
@@ -117,10 +134,13 @@ export function CollectionScreen() {
     useGameStore.getState().setSelectedChar(pid)
     useGameStore.getState().setDragging(true)
     engine.beginPlacing(pid)
+    setSelected(null) // [FIX] bersihkan modal agar tidak muncul lagi saat koleksi dibuka
     closeCollection()
   }
 
   const selectedDef = selected ? getCharDef(placeIdOf(selected)) : null
+  /* P9-b: statistik pemakaian karakter yang sedang dilihat di modal */
+  const selectedUsage = selected ? usage[placeIdOf(selected)] : undefined
 
   return (
     <div className="pointer-events-auto fixed inset-0 z-50 flex flex-col bg-gradient-to-b from-[#f2fbf4] via-[#e6f5e9] to-[#d4eccf]">
@@ -228,6 +248,15 @@ export function CollectionScreen() {
               {RARITY_INFO[r].emoji} {RARITY_INFO[r].label}
             </button>
           ))}
+          <div className="mx-1 h-4 w-px bg-emerald-200" />
+          {/* P9-b: pengurutan daftar */}
+          <span className="text-[10px] font-black uppercase tracking-wider text-[#4a7a5e]">Urutkan:</span>
+          <button className={`coll-sort-chip ${sortBy === 'rarity' ? 'coll-sort-chip-on' : ''}`} onClick={() => setSortBy('rarity')}>
+            ⭐ Rarity
+          </button>
+          <button className={`coll-sort-chip ${sortBy === 'usage' ? 'coll-sort-chip-on' : ''}`} onClick={() => setSortBy('usage')}>
+            📊 Paling Dipakai
+          </button>
         </div>
       </div>
 
@@ -239,6 +268,8 @@ export function CollectionScreen() {
             const ri = RARITY_INFO[c.rarity]
             const power = POWERS.find((p) => p.id === c.power)!
             const isCustom = c.id.startsWith('custom-')
+            /* P9-b: statistik pemakaian karakter ini (dipasang / menang) */
+            const u = usage[placeIdOf(c)]
             return (
               <motion.button
                 key={c.id}
@@ -276,6 +307,12 @@ export function CollectionScreen() {
                 <p className="line-clamp-1 w-full text-center text-[9px] font-bold text-[#4a7a5e]">
                   {isCustom ? '🎨' : power.emoji} {isCustom ? 'Karya Sendiri' : power.label} · {c.themeLabel}
                 </p>
+                {/* P9-b: badge statistik pemakaian (hanya milik + pernah dipasang) */}
+                {isOwned && u && u.placed > 0 && (
+                  <span className="coll-usage-badge" title={`Dipasang ${u.placed}× · Menang ${u.wins}×`}>
+                    📊 {u.placed}×
+                  </span>
+                )}
               </motion.button>
             )
           })}
@@ -359,6 +396,18 @@ export function CollectionScreen() {
                     <span>Biaya pasang</span>
                     <span>⭐ {selectedDef.cost} pahala</span>
                   </div>
+                </div>
+              )}
+
+              {/* P9-b: chip statistik pemakaian (milik + pernah dipasang) */}
+              {ownedSet.has(selected.id) && selectedUsage && selectedUsage.placed > 0 && (
+                <div className="flex flex-wrap items-center justify-center gap-1.5">
+                  <span className="coll-usage-chip" title={`Karakter ini dipasang ${selectedUsage.placed} kali`}>
+                    📊 Dipasang {selectedUsage.placed}×
+                  </span>
+                  <span className="coll-usage-chip" title={`Ikut menang ${selectedUsage.wins} kali`}>
+                    🏆 Menang {selectedUsage.wins}×
+                  </span>
                 </div>
               )}
 

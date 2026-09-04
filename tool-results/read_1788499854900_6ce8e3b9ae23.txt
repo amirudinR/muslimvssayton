@@ -1,0 +1,917 @@
+     1→/* ============================================================
+     2→ * PENJAGA MASJID — Data & Definitions
+     3→ * Karakter anak sholeh (tower), setan jahil versi lucu (enemy),
+     4→ * wave, jalur (lane), slot penempatan, dan tips edukatif.
+     5→ * ============================================================ */
+     6→
+     7→export type CharId = 'ali' | 'aisyah' | 'umar' | 'fatimah' | 'misbah' | 'kakek'
+     8→
+     9→/** P5: 20 jenis hantu lokal Indonesia (semua versi chibi lucu). */
+    10→export type EnemyId =
+    11→  | 'pocong' | 'kunti' | 'genderuwo' | 'tuyul' | 'wewe' | 'kuyang' | 'banaspati'
+    12→  // 13 tambahan (P5):
+    13→  | 'sundel' | 'leak' | 'kolongwewe' | 'jailangkung' | 'bunian' | 'butoijo'
+    14→  | 'nyiblorong' | 'palasik' | 'suster' | 'cindaku' | 'gendruwo' | 'wewerawa' | 'kober'
+    15→
+    16→export type AttackKind = 'orb' | 'bubble' | 'coin' | 'aura' | 'adzan' | 'sedekah'
+    17→
+    18→export interface CharLevelStats {
+    19→  damage: number
+    20→  fireRate: number // detik antar serangan
+    21→  range: number
+    22→}
+    23→
+    24→export interface CharDef {
+    25→  /** id karakter — hero ('ali' dll) ATAU id roster ('gen-13', 'custom-…') */
+    26→  id: string
+    27→  name: string
+    28→  shortName: string
+    29→  role: string
+    30→  desc: string
+    31→  funFact: string
+    32→  emoji: string
+    33→  color: number // warna jubah utama
+    34→  accent: number // warna aksen (peci/hijab/ atribut)
+    35→  skin: number
+    36→  cost: number
+    37→  upgradeCosts: [number, number]
+    38→  attack: AttackKind
+    39→  unlockWave: number
+    40→  levels: [CharLevelStats, CharLevelStats, CharLevelStats]
+    41→  aoeRadius?: number[] // per level
+    42→  slowFactor?: number[] // 0..1 multiplier kecepatan musuh
+    43→  slowDuration?: number[]
+    44→  knockback?: number
+    45→  stunDuration?: number
+    46→  /** Misbah: [jumlahPahala, intervalDetik] per level — kotak sedekah pasif */
+    47→  pahalaGen?: [number, number][]
+    48→  /** P7: rarity (karakter roster) — utk aura partikel & styling */
+    49→  rarity?: 'umum' | 'langka' | 'epik' | 'legendaris'
+    50→}
+    51→
+    52→export interface EnemyDef {
+    53→  id: EnemyId
+    54→  name: string
+    55→  emoji: string
+    56→  desc: string
+    57→  hp: number
+    58→  speed: number
+    59→  damage: number // kerusakan ke masjid saat lolos
+    60→  reward: number // pahala saat dihalau
+    61→  scale: number
+    62→  steals?: number // tuyul: mencuri pahala saat lolos
+    63→  buff?: { radius: number; speedMult: number; duration: number; interval: number }
+    64→  knockResist?: number // 0..1
+    65→  fleesOnHit?: boolean
+    66→  isBoss?: boolean
+    67→  flying?: boolean // melayang — tinggi & kebal slow
+    68→  slowImmune?: boolean
+    69→}
+    70→
+    71→export interface WaveSpawn {
+    72→  type: EnemyId
+    73→  count: number
+    74→  interval: number // detik antar spawn
+    75→  delay?: number // jeda awal sekelompok spawn
+    76→}
+    77→
+    78→export interface WaveDef {
+    79→  spawns: WaveSpawn[]
+    80→  reward: number
+    81→  isBoss?: boolean
+    82→}
+    83→
+    84→/* ------------------------- KARAKTER ANAK SHOLEH ------------------------- */
+    85→
+    86→export const CHAR_DEFS: Record<CharId, CharDef> = {
+    87→  ali: {
+    88→    id: 'ali',
+    89→    name: 'Ali si Rajin Sholat',
+    90→    shortName: 'Ali',
+    91→    role: 'Cahaya Sajadah',
+    92→    desc: 'Melempar cahaya sajadah bersinar ke setan. Cepat dan rajin!',
+    93→    funFact: 'Ali tidak pernah bolong sholat 5 waktu. Karena itu hatinya selalu cerah ✨',
+    94→    emoji: '🤲',
+    95→    color: 0x2ea36a, // hijau jubah
+    96→    accent: 0xf5d76e,
+    97→    skin: 0xffd9b3,
+    98→    cost: 50,
+    99→    upgradeCosts: [45, 90],
+   100→    attack: 'orb',
+   101→    unlockWave: 1,
+   102→    levels: [
+   103→      { damage: 9, fireRate: 0.9, range: 9 },
+   104→      { damage: 14, fireRate: 0.75, range: 10 },
+   105→      { damage: 20, fireRate: 0.6, range: 11 },
+   106→    ],
+   107→  },
+   108→  aisyah: {
+   109→    id: 'aisyah',
+   110→    name: 'Aisyah si Penghafal Doa',
+   111→    shortName: 'Aisyah',
+   112→    role: 'Gelembung Dzikir',
+   113→    desc: 'Gelembung dzikir bikin setan kliyengan dan mundur (kena area).',
+   114→    funFact: 'Aisyah hafal doa harian. Kalau berdoa, hatinya jadi tenang dan percaya diri 🌸',
+   115→    emoji: '📖',
+   116→    color: 0xe86a92, // pink jubah
+   117→    accent: 0xfff3c9,
+   118→    skin: 0xffe0c2,
+   119→    cost: 70,
+   120→    upgradeCosts: [60, 110],
+   121→    attack: 'bubble',
+   122→    unlockWave: 1,
+   123→    levels: [
+   124→      { damage: 10, fireRate: 2.2, range: 8 },
+   125→      { damage: 15, fireRate: 1.9, range: 9 },
+   126→      { damage: 22, fireRate: 1.6, range: 9.5 },
+   127→    ],
+   128→    aoeRadius: [2.8, 3.2, 3.8],
+   129→    slowDuration: [1.2, 1.4, 1.6],
+   130→  },
+   131→  umar: {
+   132→    id: 'umar',
+   133→    name: 'Umar si Kuat Sedekah',
+   134→    shortName: 'Umar',
+   135→    role: 'Koin Emas Sedekah',
+   136→    desc: 'Lempar koin emas! Setan kaget dan terpental (splash + dorong mundur).',
+   137→    funFact: 'Umar selalu menyisihkan uang saku untuk sedekah. Sedekah itu menolak bala! 🪙',
+   138→    emoji: '💝',
+   139→    color: 0xf5b83d, // kuning-oranye jubah
+   140→    accent: 0x8a5a2b,
+   141→    skin: 0xf3c69a,
+   142→    cost: 90,
+   143→    upgradeCosts: [80, 140],
+   144→    attack: 'coin',
+   145→    unlockWave: 2,
+   146→    levels: [
+   147→      { damage: 22, fireRate: 2.6, range: 10 },
+   148→      { damage: 32, fireRate: 2.2, range: 11 },
+   149→      { damage: 45, fireRate: 1.8, range: 12 },
+   150→    ],
+   151→    aoeRadius: [2.4, 2.8, 3.4],
+   152→    knockback: 1.4,
+   153→  },
+   154→  fatimah: {
+   155→    id: 'fatimah',
+   156→    name: 'Fatimah si Wangi Wudhu',
+   157→    shortName: 'Fatimah',
+   158→    role: 'Aroma Wangi Wudhu',
+   159→    desc: 'Semburan wangi wudhu bikin setan lambat dan mabuk kebangaan wangi.',
+   160→    funFact: 'Fatimah selalu berwudhu sebelum bermain. Badannya segar dan wanginya memikat 🌷',
+   161→    emoji: '💧',
+   162→    color: 0x5bc8c0, // teal jubah
+   163→    accent: 0xffe9a8,
+   164→    skin: 0xffdcbb,
+   165→    cost: 60,
+   166→    upgradeCosts: [50, 95],
+   167→    attack: 'aura',
+   168→    unlockWave: 3,
+   169→    levels: [
+   170→      { damage: 3, fireRate: 2.0, range: 7 },
+   171→      { damage: 5, fireRate: 1.7, range: 8 },
+   172→      { damage: 8, fireRate: 1.4, range: 8.5 },
+   173→    ],
+   174→    slowFactor: [0.45, 0.4, 0.35],
+   175→    slowDuration: [2.5, 3.0, 3.5],
+   176→  },
+   177→  kakek: {
+   178→    id: 'kakek',
+   179→    name: 'Kakek Imam Bijak',
+   180→    shortName: 'Kakek Imam',
+   181→    role: 'Cahaya Adzan',
+   182→    desc: 'ULTIMATE! Cahaya adzan bikin SEMUA setan di layar kaget & mundur jauh.',
+   183→    funFact: 'Kakek Imam selalu mengajak anak-anak ke masjid dengan suara lembut 🕌',
+   184→    emoji: '📢',
+   185→    color: 0xf0ead6, // jubah putih krem
+   186→    accent: 0x2ea36a,
+   187→    skin: 0xf0c8a0,
+   188→    cost: 220,
+   189→    upgradeCosts: [180, 300],
+   190→    attack: 'adzan',
+   191→    unlockWave: 5,
+   192→    levels: [
+   193→      { damage: 16, fireRate: 8, range: 99 },
+   194→      { damage: 24, fireRate: 6.5, range: 99 },
+   195→      { damage: 34, fireRate: 5, range: 99 },
+   196→    ],
+   197→    knockback: 2.6,
+   198→    stunDuration: 1.5,
+   199→  },
+   200→  misbah: {
+   201→    id: 'misbah',
+   202→    name: 'Misbah si Muadzin Muda',
+   203→    shortName: 'Misbah',
+   204→    role: 'Kotak Sedekah',
+   205→    desc: 'Tidak suka bertarung — kotak sedekahnya menghasilkan pahala otomatis! Pasang dini, untung besar 💰',
+   206→    funFact: 'Misbah menyalakan lampu masjid tiap maghrib. Katanya: "Sedekah itu investasi akhirat!" 💡',
+   207→    emoji: '💡',
+   208→    color: 0x6db3d9, // biru jubah lembut
+   209→    accent: 0xffd76a,
+   210→    skin: 0xffd9b3,
+   211→    cost: 80,
+   212→    upgradeCosts: [70, 120],
+   213→    attack: 'sedekah',
+   214→    unlockWave: 4,
+   215→    levels: [
+   216→      { damage: 0, fireRate: 6, range: 2 },
+   217→      { damage: 0, fireRate: 5, range: 2 },
+   218→      { damage: 0, fireRate: 4, range: 2 },
+   219→    ],
+   220→    pahalaGen: [
+   221→      [5, 6],
+   222→      [8, 5],
+   223→      [12, 4],
+   224→    ],
+   225→  },
+   226→}
+   227→
+   228→export const CHAR_ORDER: CharId[] = ['ali', 'aisyah', 'umar', 'fatimah', 'misbah', 'kakek']
+   229→
+   230→/* --------------------------- SETAN JAHIL LUCU --------------------------- */
+   231→
+   232→export const ENEMY_DEFS: Record<EnemyId, EnemyDef> = {
+   233→  pocong: {
+   234→    id: 'pocong',
+   235→    name: 'Pocong Lucu',
+   236→    emoji: '👻',
+   237→    desc: 'Jalan loncat-loncat mengantuk. Cepat tapi ringkih.',
+   238→    hp: 22,
+   239→    speed: 2.3,
+   240→    damage: 3,
+   241→    reward: 8,
+   242→    scale: 1,
+   243→  },
+   244→  kunti: {
+   245→    id: 'kunti',
+   246→    name: 'Kunti Cilik',
+   247→    emoji: '🎀',
+   248→    desc: 'Ketawa cekikikan lalu bikin teman-temannya semangat (buff).',
+   249→    hp: 32,
+   250→    speed: 1.8,
+   251→    damage: 5,
+   252→    reward: 12,
+   253→    scale: 1,
+   254→    buff: { radius: 4.5, speedMult: 1.35, duration: 2.5, interval: 4 },
+   255→  },
+   256→  genderuwo: {
+   257→    id: 'genderuwo',
+   258→    name: 'Genderuwo Kecil',
+   259→    emoji: '🧸',
+   260→    desc: 'Gempal berbulu lembut kayak boneka. Jalan santai, badan tebal.',
+   261→    hp: 95,
+   262→    speed: 1.05,
+   263→    damage: 10,
+   264→    reward: 20,
+   265→    scale: 1.25,
+   266→    knockResist: 0.7,
+   267→  },
+   268→  tuyul: {
+   269→    id: 'tuyul',
+   270→    name: 'Tuyul Usil',
+   271→    emoji: '🪙',
+   272→    desc: 'Gesit & usil — kalau lolos, dia mencuri pahalamu!',
+   273→    hp: 14,
+   274→    speed: 3.4,
+   275→    damage: 2,
+   276→    reward: 10,
+   277→    scale: 0.75,
+   278→    steals: 8,
+   279→  },
+   280→  wewe: {
+   281→    id: 'wewe',
+   282→    name: 'Wewe Gombel Baik Hati',
+   283→    emoji: '👵',
+   284→    desc: 'Pura-pura mau menculik, padahal malu-malu. Kena serang langsung kabur!',
+   285→    hp: 42,
+   286→    speed: 1.6,
+   287→    damage: 6,
+   288→    reward: 14,
+   289→    scale: 1.1,
+   290→    fleesOnHit: true,
+   291→  },
+   292→  kuyang: {
+   293→    id: 'kuyang',
+   294→    name: 'Kuyang Melayang Lucu',
+   295→    emoji: '🎈',
+   296→    desc: 'Kepala terbang penuh rasa penasaran. Melayang tinggi — wangi wudhu tak tersentuh!',
+   297→    hp: 24,
+   298→    speed: 2.15,
+   299→    damage: 4,
+   300→    reward: 12,
+   301→    scale: 0.9,
+   302→    flying: true,
+   303→    slowImmune: true,
+   304→  },
+   305→  banaspati: {
+   306→    id: 'banaspati',
+   307→    name: 'Banaspati Ngambek',
+   308→    emoji: '🔥',
+   309→    desc: 'BOSS bola api gembul yang lagi ngambek. Asap ungu kalau kesal!',
+   310→    hp: 650,
+   311→    speed: 0.95,
+   312→    damage: 25,
+   313→    reward: 120,
+   314→    scale: 1.9,
+   315→    knockResist: 0.9,
+   316→    isBoss: true,
+   317→  },
+   318→
+   319→  /* ---------- P5: 13 hantu baru, semua versi menggemaskan ---------- */
+   320→  sundel: {
+   321→    id: 'sundel',
+   322→    name: 'Sundel Bolong Comel',
+   323→    emoji: '🎀',
+   324→    desc: 'Terbang melayang pelan dengan pita pink di punggung. Angin bawa-bawa bau wangi!',
+   325→    hp: 38,
+   326→    speed: 1.75,
+   327→    damage: 6,
+   328→    reward: 16,
+   329→    scale: 1.05,
+   330→    flying: true,
+   331→  },
+   332→  leak: {
+   333→    id: 'leak',
+   334→    name: 'Leak Mini',
+   335→    emoji: '🦋',
+   336→    desc: 'Kepala terbang kecil dari Bali dengan ekor pita warna-warni — melayang zig-zag!',
+   337→    hp: 26,
+   338→    speed: 2.3,
+   339→    damage: 4,
+   340→    reward: 14,
+   341→    scale: 0.85,
+   342→    flying: true,
+   343→    slowImmune: true,
+   344→  },
+   345→  kolongwewe: {
+   346→    id: 'kolongwewe',
+   347→    name: 'Kolong Wewe Penggemas',
+   348→    emoji: '🙈',
+   349→    desc: 'Suka sembunyi di kolong meja — jalannya jongkok lucu, suka ngintip-ngintip.',
+   350→    hp: 48,
+   351→    speed: 1.35,
+   352→    damage: 7,
+   353→    reward: 15,
+   354→    scale: 1,
+   355→    knockResist: 0.4,
+   356→  },
+   357→  jailangkung: {
+   358→    id: 'jailangkung',
+   359→    name: 'Jailangkung Jenaka',
+   360→    emoji: '🪆',
+   361→    desc: 'Boneka kayu yang gerakannya patah-patah — suka menari aneh sambil jalan!',
+   362→    hp: 30,
+   363→    speed: 1.9,
+   364→    damage: 5,
+   365→    reward: 13,
+   366→    scale: 1,
+   367→  },
+   368→  bunian: {
+   369→    id: 'bunian',
+   370→    name: 'Orang Bunian Pemalu',
+   371→    emoji: '🍃',
+   372→    desc: 'Makhluk hutan bertopi daun — kalau dilihat langsung, dia malu-malu ngebut!',
+   373→    hp: 20,
+   374→    speed: 2.6,
+   375→    damage: 3,
+   376→    reward: 11,
+   377→    scale: 0.9,
+   378→    fleesOnHit: true,
+   379→  },
+   380→  butoijo: {
+   381→    id: 'butoijo',
+   382→    name: 'Buto Ijo Mini',
+   383→    emoji: '💚',
+   384→    desc: 'Raksasa hijau versi gembul — ekspresi polos bingung, badannya tebal!',
+   385→    hp: 130,
+   386→    speed: 0.9,
+   387→    damage: 13,
+   388→    reward: 26,
+   389→    scale: 1.4,
+   390→    knockResist: 0.75,
+   391→  },
+   392→  nyiblorong: {
+   393→    id: 'nyiblorong',
+   394→    name: 'Nyi Blorong Comel',
+   395→    emoji: '🐍',
+   396→    desc: 'Setengah putri setengah ular kecil emas-hijau — geraknya meliuk-meliuk lucu.',
+   397→    hp: 55,
+   398→    speed: 1.55,
+   399→    damage: 8,
+   400→    reward: 18,
+   401→    scale: 1.1,
+   402→  },
+   403→  palasik: {
+   404→    id: 'palasik',
+   405→    name: 'Palasik Kecil',
+   406→    emoji: '🐱',
+   407→    desc: 'Melayang ringan dengan wajah kucing-kucingan — iseng suka pura-pung kucing!',
+   408→    hp: 28,
+   409→    speed: 2.05,
+   410→    damage: 4,
+   411→    reward: 13,
+   412→    scale: 0.9,
+   413→    flying: true,
+   414→  },
+   415→  suster: {
+   416→    id: 'suster',
+   417→    name: 'Suster Ngesot Ceria',
+   418→    emoji: '👩‍⚕️',
+   419→    desc: 'Ngesot ala breakdance lucu — geser mundur cepat di lantai!',
+   420→    hp: 34,
+   421→    speed: 1.85,
+   422→    damage: 5,
+   423→    reward: 14,
+   424→    scale: 1,
+   425→  },
+   426→  cindaku: {
+   427→    id: 'cindaku',
+   428→    name: 'Cindaku Comel',
+   429→    emoji: '🐯',
+   430→    desc: 'Anak harimau berjalan dua kaki — malu-malu tapi gesit!',
+   431→    hp: 42,
+   432→    speed: 2.0,
+   433→    damage: 6,
+   434→    reward: 15,
+   435→    scale: 1,
+   436→  },
+   437→  gendruwo: {
+   438→    id: 'gendruwo',
+   439→    name: 'Gendruwo Bukit',
+   440→    emoji: '🌼',
+   441→    desc: 'Genderuwo varian gunung — badannya ditumbuhi lumut & bunga kecil. Ramah lingkungan!',
+   442→    hp: 105,
+   443→    speed: 0.98,
+   444→    damage: 11,
+   445→    reward: 22,
+   446→    scale: 1.3,
+   447→    knockResist: 0.7,
+   448→  },
+   449→  wewerawa: {
+   450→    id: 'wewerawa',
+   451→    name: 'Wewe Rawa',
+   452→    emoji: '🪷',
+   453→    desc: 'Wewe rawa-rawa bawa payung daun teratai — jalan santai gemoy.',
+   454→    hp: 60,
+   455→    speed: 1.2,
+   456→    damage: 9,
+   457→    reward: 18,
+   458→    scale: 1.15,
+   459→    knockResist: 0.5,
+   460→  },
+   461→  kober: {
+   462→    id: 'kober',
+   463→    name: 'Setan Kober Jahil',
+   464→    emoji: '😈',
+   465→    desc: 'Sembunyi di balik pohon sambil usil — kalau kena serang langsung kabur terbirit!',
+   466→    hp: 24,
+   467→    speed: 2.2,
+   468→    damage: 4,
+   469→    reward: 12,
+   470→    scale: 0.95,
+   471→    fleesOnHit: true,
+   472→  },
+   473→}
+   474→
+   475→/* ------------------------------- WAVE (10) ------------------------------- */
+   476→
+   477→export const WAVES: WaveDef[] = [
+   478→  { spawns: [{ type: 'pocong', count: 6, interval: 1.6 }], reward: 24 },
+   479→  { spawns: [{ type: 'pocong', count: 8, interval: 1.4 }, { type: 'tuyul', count: 2, interval: 2.5, delay: 5 }], reward: 30 },
+   480→  { spawns: [{ type: 'pocong', count: 6, interval: 1.2 }, { type: 'kunti', count: 4, interval: 2.2, delay: 2 }], reward: 36 },
+   481→  { spawns: [{ type: 'genderuwo', count: 2, interval: 3 }, { type: 'pocong', count: 8, interval: 1.1, delay: 2 }, { type: 'tuyul', count: 3, interval: 2, delay: 8 }], reward: 42 },
+   482→  { spawns: [{ type: 'kunti', count: 5, interval: 1.8 }, { type: 'genderuwo', count: 3, interval: 2.6, delay: 3 }], reward: 50 },
+   483→  { spawns: [
+   484→    { type: 'wewe', count: 5, interval: 2 },
+   485→    { type: 'sundel', count: 3, interval: 2.2, delay: 3 },
+   486→    { type: 'tuyul', count: 4, interval: 1.5, delay: 3 },
+   487→    { type: 'pocong', count: 6, interval: 0.9, delay: 5 },
+   488→  ], reward: 60 },
+   489→  { spawns: [
+   490→    { type: 'genderuwo', count: 4, interval: 2 },
+   491→    { type: 'kunti', count: 4, interval: 1.6, delay: 2 },
+   492→    { type: 'kuyang', count: 3, interval: 2, delay: 6 },
+   493→    { type: 'leak', count: 3, interval: 2.2, delay: 8 },
+   494→    { type: 'pocong', count: 5, interval: 0.8, delay: 6 },
+   495→  ], reward: 70 },
+   496→  { spawns: [
+   497→    { type: 'suster', count: 4, interval: 1.8 },
+   498→    { type: 'jailangkung', count: 4, interval: 2, delay: 2 },
+   499→    { type: 'gendruwo', count: 3, interval: 2.4, delay: 3 },
+   500→    { type: 'kuyang', count: 3, interval: 1.8, delay: 5 },
+   501→    { type: 'kolongwewe', count: 3, interval: 2.2, delay: 7 },
+   502→    { type: 'tuyul', count: 4, interval: 1, delay: 6 },
+   503→  ], reward: 78 },
+   504→  { spawns: [
+   505→    { type: 'butoijo', count: 2, interval: 3 },
+   506→    { type: 'nyiblorong', count: 4, interval: 1.8, delay: 2 },
+   507→    { type: 'cindaku', count: 4, interval: 1.6, delay: 3 },
+   508→    { type: 'wewerawa', count: 3, interval: 2.4, delay: 5 },
+   509→    { type: 'kuyang', count: 3, interval: 1.6, delay: 7 },
+   510→    { type: 'sundel', count: 3, interval: 2, delay: 8 },
+   511→    { type: 'tuyul', count: 4, interval: 0.9, delay: 9 },
+   512→  ], reward: 88 },
+   513→  {
+   514→    spawns: [
+   515→      { type: 'banaspati', count: 1, interval: 3, delay: 2 },
+   516→      { type: 'pocong', count: 8, interval: 0.8, delay: 5 },
+   517→      { type: 'kunti', count: 5, interval: 1.4, delay: 9 },
+   518→      { type: 'butoijo', count: 2, interval: 3.2, delay: 10 },
+   519→      { type: 'palasik', count: 4, interval: 1.6, delay: 12 },
+   520→      { type: 'bunian', count: 4, interval: 1.4, delay: 13 },
+   521→      { type: 'kober', count: 5, interval: 1.2, delay: 15 },
+   522→    ],
+   523→    reward: 150,
+   524→    isBoss: true,
+   525→  },
+   526→]
+   527→
+   528→export const HP_WAVE_SCALE = (wave: number) => 1 + 0.12 * (wave - 1)
+   529→
+   530→/* ------------------------------- JALUR LANE ------------------------------- */
+   531→
+   532→export type Lane = [number, number][]
+   533→
+   534→export const LANES: Lane[] = [
+   535→  // Barat
+   536→  [
+   537→    [-36, -8],
+   538→    [-26, -8],
+   539→    [-26, 4],
+   540→    [-16, 4],
+   541→    [-16, -2],
+   542→    [-10, -2],
+   543→  ],
+   544→  // Utara
+   545→  [
+   546→    [0, -22],
+   547→    [0, -14],
+   548→    [9, -14],
+   549→    [9, -9],
+   550→    [2, -9],
+   551→  ],
+   552→  // Timur
+   553→  [
+   554→    [36, 8],
+   555→    [26, 8],
+   556→    [26, -2],
+   557→    [16, -2],
+   558→    [16, 5],
+   559→    [9, 5],
+   560→  ],
+   561→]
+   562→
+   563→export const BOSS_LANE = 1
+   564→
+   565→/* ----------------------------- SLOT TOWER ----------------------------- */
+   566→
+   567→export interface Slot {
+   568→  x: number
+   569→  z: number
+   570→}
+   571→
+   572→export const SLOTS: Slot[] = [
+   573→  // Barat
+   574→  { x: -30, z: -5 },
+   575→  { x: -23, z: -3 },
+   576→  { x: -21, z: 7 },
+   577→  { x: -13, z: 1 },
+   578→  { x: -13, z: -5 },
+   579→  // Utara
+   580→  { x: -3, z: -18 },
+   581→  { x: 3, z: -11 },
+   582→  { x: 6, z: -17 },
+   583→  { x: 12, z: -11 },
+   584→  { x: 13, z: -6 },
+   585→  // Timur
+   586→  { x: 30, z: 5 },
+   587→  { x: 23, z: 2 },
+   588→  { x: 29, z: -5 },
+   589→  { x: 13, z: -5.5 },
+   590→  { x: 19, z: 2 },
+   591→  { x: 12, z: 8 },
+   592→  // Selatan (halaman masjid)
+   593→  { x: -11, z: 9 },
+   594→  { x: 0, z: 10.5 },
+   595→  { x: 11, z: 9 },
+   596→]
+   597→
+   598→/* ------------------------------ TIPS EDUKATIF ------------------------------ */
+   599→
+   600→export const TIPS: string[] = [
+   601→  'Sedekah itu menolak bala, lho! 💝',
+   602→  'Yuk rajin sholat 5 waktu! 🕌',
+   603→  "Membaca Al-Qur'an bikin hati tenang 💚",
+   604→  'Berdoa sebelum bermain itu baik ✨',
+   605→  'Berwudhu bikin kita segar dan wangi 🌸',
+   606→  'Sayangi dan hormati orang tua kita 🤗',
+   607→  'Menolong teman itu perbuatan mulia 🤝',
+   608→  'Makan makanan halal dan bergizi 🍎',
+   609→  'Dzikir bikin hati jadi tenang 😊',
+   610→]
+   611→
+   612→/* ------------------------------ KONSTANTA GAME ------------------------------ */
+   613→
+   614→export const GAME_CONST = {
+   615→  startPahala: 180,
+   616→  mosqueMaxHp: 120,
+   617→  firstWaveDelay: 25, // detik sebelum wave 1
+   618→  betweenWaveDelay: 16,
+   619→  maxEnemies: 40,
+   620→  sellRefund: 0.6, // fraksi dari total biaya
+   621→} as const
+   622→
+   623→/* --------------------------- Kekuatan DOA BERSAMA --------------------------- */
+   624→export const DUA_CONST = {
+   625→  /** energi doa maksimum (terisi dengan menghalau setan) */
+   626→  max: 100,
+   627→  /** energi per setan dihalau */
+   628→  perKill: 8,
+   629→  /** energi bonus saat gelombang selesai */
+   630→  perWave: 14,
+   631→  /** durasi berkah (detik) */
+   632→  duration: 12,
+   633→  /** pengali damage tower saat berkah aktif */
+   634→  damageMult: 1.6,
+   635→  /** pengali kecepatan serang tower (lebih kecil = lebih cepat) */
+   636→  rateMult: 0.65,
+   637→  /** setan jadi lambat karena kaget khusyuk */
+   638→  enemySlow: 0.55,
+   639→  /** masjid dipulihkan sedikit — rezeki doa */
+   640→  heal: 8,
+   641→} as const
+   642→
+   643→/* --------------------------- TANTANGAN HARIAN --------------------------- */
+   644→
+   645→/** pengali efek mode — dibagikan Tantangan Harian & Mingguan. */
+   646→export interface ModeMods {
+   647→  enemyHpMult?: number
+   648→  enemySpeedMult?: number
+   649→  rewardMult?: number
+   650→  startPahalaBonus?: number
+   651→  mosqueHpBonus?: number
+   652→  duaChargeMult?: number
+   653→  stealMult?: number
+   654→}
+   655→
+   656→/** Modifier harian — ditentukan dari tanggal (semua pemain dapat sama). */
+   657→export interface DailyModifier extends ModeMods {
+   658→  id: string
+   659→  name: string
+   660→  emoji: string
+   661→  desc: string
+   662→  /** chip efek singkat untuk UI */
+   663→  effects: string[]
+   664→}
+   665→
+   666→export const DAILY_MODIFIERS: DailyModifier[] = [
+   667→  {
+   668→    id: 'jumat_berkah',
+   669→    name: 'Jumat Berkah',
+   670→    emoji: '🌟',
+   671→    desc: 'Hari berkah! Setan-setan "ketiban berkah" — hadiah pahala lebih melimpah!',
+   672→    effects: ['Hadiah pahala +30% 🪙'],
+   673→    rewardMult: 1.3,
+   674→  },
+   675→  {
+   676→    id: 'angin_kencang',
+   677→    name: 'Angin Kencang',
+   678→    emoji: '💨',
+   679→    desc: 'Angin bertiup kencang di halaman masjid — setan lari lebih gesit hari ini!',
+   680→    effects: ['Setan +15% gesit 💨', 'Hadiah pahala +10% 🪙'],
+   681→    enemySpeedMult: 1.15,
+   682→    rewardMult: 1.1,
+   683→  },
+   684→  {
+   685→    id: 'masjid_kokoh',
+   686→    name: 'Masjid Kokoh',
+   687→    emoji: '💪',
+   688→    desc: 'Masjid direnovasi lebih kuat hari ini. Tenang, fondasinya tebal!',
+   689→    effects: ['HP masjid +40 💪'],
+   690→    mosqueHpBonus: 40,
+   691→  },
+   692→  {
+   693→    id: 'gerhana_ceria',
+   694→    name: 'Gerhana Ceria',
+   695→    emoji: '🌙',
+   696→    desc: 'Gerhana membuat setan lebih bersemangat — tapi hadiahnya juga melimpah!',
+   697→    effects: ['Setan +20% kuat 😤', 'Hadiah pahala +25% 🪙'],
+   698→    enemyHpMult: 1.2,
+   699→    rewardMult: 1.25,
+   700→  },
+   701→  {
+   702→    id: 'rezeki_subur',
+   703→    name: 'Rezeki Subur',
+   704→    emoji: '🪙',
+   705→    desc: 'Rezeki subur! Modal awal lebih besar — bangun regu anak sholeh yang besar!',
+   706→    effects: ['Modal awal +80 🪙'],
+   707→    startPahalaBonus: 80,
+   708→  },
+   709→  {
+   710→    id: 'bulan_purnama',
+   711→    name: 'Bulan Purnama',
+   712→    emoji: '✨',
+   713→    desc: 'Cahaya purnama membuat doa cepat terkabul — energi DOA terisi kilat!',
+   714→    effects: ['Energi DOA 2× lebih cepat ⚡'],
+   715→    duaChargeMult: 2,
+   716→  },
+   717→  {
+   718→    id: 'tuyul_pesta',
+   719→    name: 'Tuyul Pesta',
+   720→    emoji: '😅',
+   721→    desc: 'Tuyul-tuyul ulang tahun! Mereka kalau lolos mencuri lebih banyak pahala…',
+   722→    effects: ['Curian Tuyul 2× 😅', 'Hadiah pahala +15% 🪙'],
+   723→    stealMult: 2,
+   724→    rewardMult: 1.15,
+   725→  },
+   726→  {
+   727→    id: 'pagi_cerah',
+   728→    name: 'Pagi Cerah',
+   729→    emoji: '☀️',
+   730→    desc: 'Pagi yang cerah membuat setan males jalan — sambil rebahan-santai!',
+   731→    effects: ['Setan -10% gesit 🐢', 'Modal awal +40 🪙'],
+   732→    enemySpeedMult: 0.9,
+   733→    startPahalaBonus: 40,
+   734→  },
+   735→]
+   736→
+   737→/** kunci tanggal lokal "YYYY-MM-DD" */
+   738→export function dailyKey(d = new Date()): string {
+   739→  const y = d.getFullYear()
+   740→  const m = String(d.getMonth() + 1).padStart(2, '0')
+   741→  const day = String(d.getDate()).padStart(2, '0')
+   742→  return `${y}-${m}-${day}`
+   743→}
+   744→
+   745→/** modifier hari ini — deterministik dari tanggal (semua orang sama) */
+   746→export function pickDailyModifier(key = dailyKey()): DailyModifier {
+   747→  let h = 0
+   748→  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0
+   749→  return DAILY_MODIFIERS[h % DAILY_MODIFIERS.length]
+   750→}
+   751→
+   752→/* --------------------------- TANTANGAN MINGGUAN --------------------------- */
+   753→
+   754→/** Modifier mingguan — LEBIH SULIT dari harian, imbalan bintang toko besar. */
+   755→export interface WeeklyModifier extends ModeMods {
+   756→  id: string
+   757→  name: string
+   758→  emoji: string
+   759→  desc: string
+   760→  /** chip efek singkat untuk UI */
+   761→  effects: string[]
+   762→  /** bonus ⭐ currency toko saat menang */
+   763→  rewardStars: number
+   764→}
+   765→
+   766→export const WEEKLY_MODIFIERS: WeeklyModifier[] = [
+   767→  {
+   768→    id: 'badai-setan',
+   769→    name: 'Badai Setan',
+   770→    emoji: '🌪️',
+   771→    desc: 'Angin kencang! Setan lari 25% lebih cepat dan HP +15%. Imbalan besar menantimu!',
+   772→    effects: ['⚡ Musuh +25% cepat', '❤️ Musuh +15% kuat', '💰 Imbalan +50%'],
+   773→    enemySpeedMult: 1.25,
+   774→    enemyHpMult: 1.15,
+   775→    rewardMult: 1.5,
+   776→    rewardStars: 35,
+   777→  },
+   778→  {
+   779→    id: 'kabut-pekat',
+   780→    name: 'Kabut Pekat',
+   781→    emoji: '🌫️',
+   782→    desc: 'Kabut tebal menutup jalan... setan melambat tapi doa lebih sulit terkumpul.',
+   783→    effects: ['🐢 Musuh -10% lambat', '✨ Doa +60% cepat terisi', '💰 Imbalan +30%'],
+   784→    enemySpeedMult: 0.9,
+   785→    duaChargeMult: 1.6,
+   786→    rewardMult: 1.3,
+   787→    rewardStars: 25,
+   788→  },
+   789→  {
+   790→    id: 'gerimis-berkah',
+   791→    name: 'Gerimis Berkah',
+   792→    emoji: '🌧️',
+   793→    desc: 'Hujan ringan membawa berkah: pahala awal extra dan imbalan lebih!',
+   794→    effects: ['🪙 Pahala awal +80', '💰 Imbalan +35%'],
+   795→    startPahalaBonus: 80,
+   796→    rewardMult: 1.35,
+   797→    rewardStars: 25,
+   798→  },
+   799→  {
+   800→    id: 'malam-bermega',
+   801→    name: 'Malam Bermega',
+   802→    emoji: '✨',
+   803→    desc: 'Langit penuh bintang! Doa terkumpul jauh lebih cepat malam ini.',
+   804→    effects: ['✨ Doa +80% cepat terisi', '❤️ Masjid +30 HP'],
+   805→    duaChargeMult: 1.8,
+   806→    mosqueHpBonus: 30,
+   807→    rewardStars: 25,
+   808→  },
+   809→  {
+   810→    id: 'pasukan-gergasi',
+   811→    name: 'Pasukan Gergasi',
+   812→    emoji: '👹',
+   813→    desc: 'Setan gergasi lambat tapi sangat kuat! Siapkan penjaga terbaikmu.',
+   814→    effects: ['❤️ Musuh +35% kuat', '🐢 Musuh -15% lambat', '💰 Imbalan +40%'],
+   815→    enemyHpMult: 1.35,
+   816→    enemySpeedMult: 0.85,
+   817→    rewardMult: 1.4,
+   818→    rewardStars: 35,
+   819→  },
+   820→  {
+   821→    id: 'zakat-mengalir',
+   822→    name: 'Zakat Mengalir',
+   823→    emoji: '💰',
+   824→    desc: 'Rezeki melimpah! Tapi setan juga lebih rakus mencuri...',
+   825→    effects: ['🪙 Pahala awal +150', '⚠️ Pencuri +30% rakus', '💰 Imbalan +25%'],
+   826→    startPahalaBonus: 150,
+   827→    stealMult: 1.3,
+   828→    rewardMult: 1.25,
+   829→    rewardStars: 25,
+   830→  },
+   831→  {
+   832→    id: 'uji-iman',
+   833→    name: 'Uji Iman',
+   834→    emoji: '🕋',
+   835→    desc: 'Ujian terberat pekan ini! Semua setan lebih kuat dan cepat. Bintang besar menunggu!',
+   836→    effects: ['❤️ Musuh +20% kuat', '⚡ Musuh +15% cepat', '💰 Imbalan +60%', '❤️ Masjid +20 HP'],
+   837→    enemyHpMult: 1.2,
+   838→    enemySpeedMult: 1.15,
+   839→    mosqueHpBonus: 20,
+   840→    rewardMult: 1.6,
+   841→    rewardStars: 40,
+   842→  },
+   843→  {
+   844→    id: 'jumat-berkah',
+   845→    name: 'Jumat Berkah',
+   846→    emoji: '🕌',
+   847→    desc: 'Berkah hari Jumat mengalir! Doa cepat terisi dan masjid kokoh.',
+   848→    effects: ['✨ Doa +70% cepat terisi', '❤️ Masjid +25 HP', '💰 Imbalan +25%'],
+   849→    duaChargeMult: 1.7,
+   850→    mosqueHpBonus: 25,
+   851→    rewardMult: 1.25,
+   852→    rewardStars: 30,
+   853→  },
+   854→]
+   855→
+   856→/** kunci pekan ISO "YYYY-Www" (Senin sebagai awal pekan). */
+   857→export function weeklyKey(d = new Date()): string {
+   858→  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+   859→  const dayNum = date.getUTCDay() || 7
+   860→  date.setUTCDate(date.getUTCDate() + 4 - dayNum)
+   861→  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1))
+   862→  const weekNo = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
+   863→  return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`
+   864→}
+   865→
+   866→/** modifier pekan ini — deterministik dari kunci pekan (semua orang sama). */
+   867→export function pickWeeklyModifier(key = weeklyKey()): WeeklyModifier {
+   868→  let h = 0
+   869→  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0
+   870→  return WEEKLY_MODIFIERS[h % WEEKLY_MODIFIERS.length]
+   871→}
+   872→
+   873→/** berapa hari lagi sampai Senin pekan depan (1..7). */
+   874→export function daysUntilNextWeek(): number {
+   875→  const now = new Date()
+   876→  return ((8 - (now.getDay() || 7)) % 7) || 7
+   877→}
+   878→
+   879→/* --------------------- Modifier runtime per pertandingan --------------------- */
+   880→
+   881→export interface RunMods {
+   882→  enemyHpMult: number
+   883→  enemySpeedMult: number
+   884→  rewardMult: number
+   885→  stealMult: number
+   886→  duaChargeMult: number
+   887→}
+   888→
+   889→/** modifier aktif untuk pertandingan berjalan (diubah saat mulai game). */
+   890→export const RUN_MODS: RunMods = {
+   891→  enemyHpMult: 1,
+   892→  enemySpeedMult: 1,
+   893→  rewardMult: 1,
+   894→  stealMult: 1,
+   895→  duaChargeMult: 1,
+   896→}
+   897→
+   898→export function resetRunMods() {
+   899→  RUN_MODS.enemyHpMult = 1
+   900→  RUN_MODS.enemySpeedMult = 1
+   901→  RUN_MODS.rewardMult = 1
+   902→  RUN_MODS.stealMult = 1
+   903→  RUN_MODS.duaChargeMult = 1
+   904→}
+   905→
+   906→export function applyDailyMods(mod: ModeMods) {
+   907→  resetRunMods()
+   908→  if (mod.enemyHpMult) RUN_MODS.enemyHpMult = mod.enemyHpMult
+   909→  if (mod.enemySpeedMult) RUN_MODS.enemySpeedMult = mod.enemySpeedMult
+   910→  if (mod.rewardMult) RUN_MODS.rewardMult = mod.rewardMult
+   911→  if (mod.stealMult) RUN_MODS.stealMult = mod.stealMult
+   912→  if (mod.duaChargeMult) RUN_MODS.duaChargeMult = mod.duaChargeMult
+   913→}
+   914→
+   915→export const QUALITY_LEVELS = ['low', 'medium', 'high'] as const
+   916→export type Quality = (typeof QUALITY_LEVELS)[number]
+   917→

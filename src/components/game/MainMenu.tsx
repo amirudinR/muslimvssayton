@@ -24,6 +24,7 @@ import {
   MenuLeaderboardButton,
 } from './MenuModals'
 import { DailyChallengeCard } from './DailyChallenge'
+import { WeeklyChallengeCard } from './WeeklyChallenge'
 
 const AVATARS = ['🤲', '📖', '💝', '💧', '💡', '📢']
 
@@ -217,6 +218,9 @@ export function MainMenu() {
 
           {/* Kartu Tantangan Hari Ini */}
           <DailyChallengeCard />
+
+          {/* P9: Kartu Tantangan Mingguan */}
+          <WeeklyChallengeCard />
         </div>
       </div>
 

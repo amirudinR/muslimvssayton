@@ -4,7 +4,7 @@
  * ============================================================ */
 
 import { create } from 'zustand'
-import { GAME_CONST, DUA_CONST, RUN_MODS, type DailyModifier } from './data'
+import { GAME_CONST, DUA_CONST, RUN_MODS, type DailyModifier, type WeeklyModifier, type PowerupDef } from './data'
 import type { RosterChar } from './roster'
 
 export type Screen = 'menu' | 'playing' | 'victory' | 'gameover' | 'shop' | 'levels' | 'settings'
@@ -28,6 +28,16 @@ export interface SelectedTowerInfo {
   sellValue: number
   /** P8: persen berkah nasihat aktif (0 = tanpa buff). */
   buffPct: number
+}
+
+/** P9-c: power-up Kotak Sedekah yang sedang aktif (untuk pill HUD). */
+export interface ActivePowerup {
+  id: string
+  name: string
+  emoji: string
+  /** sisa detik efek (dinormalisasi ulang tiap frame oleh engine) */
+  remaining: number
+  kind: PowerupDef['kind']
 }
 
 export interface GameStore {
@@ -71,10 +81,15 @@ export interface GameStore {
   /* --- mode Tantangan Harian aktif --- */
   dailyMode: boolean
   dailyMod: DailyModifier | null
+  /* --- P9: mode Tantangan Mingguan aktif --- */
+  weeklyMode: boolean
+  weeklyMod: WeeklyModifier | null
   /* --- saran strategi Kakek Imam saat kalah --- */
   coachTips: string[] | null
   /* --- streak Tantangan Harian hasil kemenangan (untuk layar menang) --- */
   dailyStreakResult: number
+  /* --- P9: streak Tantangan Mingguan hasil kemenangan (untuk layar menang) --- */
+  weeklyStreakResult: number
   /* --- P3: level aktif (0 = mode klasik 10 wave) --- */
   levelId: number
   /* --- P3: total gelombang level aktif (dinamis utk level select) --- */
@@ -87,6 +102,13 @@ export interface GameStore {
   collCustoms: RosterChar[]
   /** jeda dilakukan oleh layar koleksi (untuk restore saat ditutup) */
   collPausedByUs: boolean
+  /** P9-b: statistik pemakaian karakter (id gameplay → placed/wins) */
+  collUsage: Record<string, { placed: number; wins: number }>
+  /* --- P9-c: Kotak Sedekah (power-up) --- */
+  /** daftar power-up berdurasi yang sedang aktif (pill HUD) */
+  activePowerups: ActivePowerup[]
+  /** sisa muatan Perisai Masjid (menahan musuh yang lolos) */
+  shieldCharges: number
 }
 
 interface GameActions {
@@ -129,6 +151,9 @@ interface GameActions {
   setLevelInfo: (levelId: number, totalWaves: number) => void
   /* P8 */
   setCollectionOpen: (open: boolean) => void
+  /* P9-c */
+  setActivePowerups: (list: ActivePowerup[]) => void
+  setShieldCharges: (n: number) => void
 }
 
 let toastId = 0
@@ -168,8 +193,11 @@ export const useGameStore = create<GameStore & GameActions>()((set) => ({
   tutorialStep: 0,
   dailyMode: false,
   dailyMod: null,
+  weeklyMode: false,
+  weeklyMod: null,
   coachTips: null,
   dailyStreakResult: 0,
+  weeklyStreakResult: 0,
   levelId: 0,
   totalWaves: 10,
   collectionOpen: false,
@@ -177,6 +205,9 @@ export const useGameStore = create<GameStore & GameActions>()((set) => ({
   collCurrency: 0,
   collCustoms: [],
   collPausedByUs: false,
+  collUsage: {},
+  activePowerups: [],
+  shieldCharges: 0,
 
   setScreen: (s) => set({ screen: s }),
   setPaused: (p) => set({ paused: p }),
@@ -247,6 +278,9 @@ export const useGameStore = create<GameStore & GameActions>()((set) => ({
   setLevelInfo: (levelId: number, totalWaves: number) => set({ levelId, totalWaves }),
   setCollectionOpen: (open) => set({ collectionOpen: open }),
 
+  setActivePowerups: (list) => set({ activePowerups: list }),
+  setShieldCharges: (n) => set({ shieldCharges: Math.max(0, Math.round(n)) }),
+
   resetForNewGame: () =>
     set({
       screen: 'playing',
@@ -278,10 +312,15 @@ export const useGameStore = create<GameStore & GameActions>()((set) => ({
       tutorialStep: 0,
       dailyMode: false,
       dailyMod: null,
+      weeklyMode: false,
+      weeklyMod: null,
       coachTips: null,
       dailyStreakResult: 0,
+      weeklyStreakResult: 0,
       levelId: 0,
       totalWaves: 10,
+      activePowerups: [],
+      shieldCharges: 0,
     }),
 }))
 

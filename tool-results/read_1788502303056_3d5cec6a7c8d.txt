@@ -1,0 +1,617 @@
+     1→# Worklog — PENJAGA MASJID: Anak Sholeh vs Setan Jahil (3D Tower Defense)
+     2→
+     3→Proyek: Game 3D Tower Defense ramah anak bertema islami-ceria dibangun di Next.js 16 (App Router) + Three.js.
+     4→
+     5→---
+     6→Task ID: 1
+     7→Agent: main-agent (Z.ai Code)
+     8→Task: Setup awal — install dependensi game & inisialisasi worklog
+     9→
+    10→Work Log:
+    11→- Cek struktur proyek Next.js 16 (App Router, Tailwind 4, shadcn/ui lengkap, Zustand tersedia).
+    12→- Pastikan dev server jalan di port 3000 (HTTP 200) dan baca dev.log (bersih).
+    13→- Install: three@0.185.1, gsap@3.15.0, @types/three@0.185.4 (dev).
+    14→- Rencana arsitektur:
+    15→  - src/lib/game/data.ts — definisi karakter (5 anak sholeh), musuh (6 setan lucu), 10 wave, lane jalur, slot tower, tips edukatif.
+    16→  - src/lib/game/store.ts — Zustand store untuk state UI (screen, pahala, HP masjid, wave, kamera, dsb).
+    17→  - src/lib/game/audio.ts — SFX & BGM ceria via Web Audio API sintetis (tanpa file audio eksternal).
+    18→  - src/lib/game/models.ts — model 3D prosedural (masjid kubah emas, karakter chibi, setan lucu, taman).
+    19→  - src/lib/game/particles.ts — VFX pooling (sparkle emas, poof ungu, confetti, bintang kliyengan).
+    20→  - src/lib/game/entities.ts — Enemy/Tower/Projectile + logika combat.
+    21→  - src/lib/game/camera.ts — 3 mode kamera (iso, ikuti karakter, foto) + transisi GSAP bouncy.
+    22→  - src/lib/game/engine.ts — GameEngine inti (scene, bloom, wave manager, placement, screenshot).
+    23→  - src/components/game/* — UI React ramah anak (menu, HUD, kartu karakter, layar akhir).
+    24→  - Catatan performa: multi-part chibi karakter tidak praktis pakai InstancedMesh; ganti dengan object pooling + shared geometry/material cache (setara tujuan performa).
+    25→
+    26→Stage Summary:
+    27→- Dependensi game siap; worklog dibuat; arsitektur ditetapkan. Lanjut ke penulisan modul inti.
+    28→
+    29→---
+    30→Task ID: 2-13
+    31→Agent: main-agent (Z.ai Code)
+    32→Task: Implementasi lengkap game 3D Tower Defense "PENJAGA MASJID" + QA via agent-browser
+    33→
+    34→Work Log:
+    35→- Menulis seluruh modul game (frontend-first, tanpa server — game full client-side Three.js):
+    36→  - src/lib/game/data.ts — 5 karakter (Ali/Aisyah/Umar/Fatimah/Kakek), 6 setan lucu (pocong/kunti/genderuwo/tuyul/wewe/banaspati), 10 wave + boss, 3 lane jalur, 19 slot, tips edukatif.
+    37→  - src/lib/game/store.ts — Zustand store (screen, pahala, HP masjid, wave, kamera, toast, fun fact, unlock, stats).
+    38→  - src/lib/game/audio.ts — SFX & BGM ceria sintetis Web Audio (pop, tada, giggle, coin, adzan chime, cheer, fireworks, BGM pentatonik marimba + kicau burung).
+    39→  - src/lib/game/models.ts — model prosedural: masjid (kubah emas metalik + menara + lampu hias emissive + air mancur), chibi anak sholeh (kepala besar, wajah imut, aksesori unik per karakter), setan versi lucu, pohon/bunga(merged 1 draw call)/awan/burung/kupu-kupu, slot pad, proyektil.
+    40→  - src/lib/game/particles.ts — VFX pooling: 4 pool THREE.Points (glow/cloud/star/confetti) via custom shader (1 draw call/pool), ring FX pool, damage number sprite pool (canvas texture + font bulat).
+    41→  - src/lib/game/entities.ts — Enemy (animasi per tipe: pocong loncat, kunti melayang+buff ketawa, genderuwo waddle, tuyul zigzag+curi pahala, wewe kabur malu-malu, banaspati api+shockwave), Tower (serangan orb/bubble/coin/aura/adzan, upgrade visual), Projectile (homing/arc), EntityManager.
+    42→  - src/lib/game/camera.ts — 5 mode kamera (menu orbit, iso pan/zoom, follow bouncy, photo orbit bebas, boss intro) + transisi GSAP elastic/back.
+    43→  - src/lib/game/engine.ts — GameEngine: scene, lighting, PMREM environment, bloom+vignette+OutputPass, wave manager, placement drag&drop + raycast slot, upgrade/sell/follow, screenshot (mode foto), victory (kembang api + menari), game over lembut, quality Low/Med/High, ambient hidup (anak jalan-jalan, burung, kupu-kupu, awan, aura kubah).
+    44→- UI React ramah anak (src/components/game/*): MainMenu (judul besar, MULAI, kualitas, footer sticky), Hud (HP masjid, pahala, wave, boss bar, banner, countdown+MULAI GELOMBANG, kontrol kamera/speed/pause/sound), CharacterBar (kartu besar + drag&drop + ghost kursor + preview 3D mini CharPreview), TowerPanel (upgrade/ikuti/jual), EndScreens (victory/gameover lembut/pause/foto), toast & fun fact modal — semua framer-motion bouncy, font Fredoka (next/font), palet krem/hijau pastel/emas, tombol chunky "bisa ditekan".
+    45→- page.tsx: dynamic import ssr:false + loading screen lucu. layout.tsx: metadata + viewport + Fredoka. globals.css: kelas game (panel-cute, btn-cute*, card-char) + animasi (bounce-soft, spin-slow, wiggle) + scrollbar lucu.
+    46→
+    47→QA & BUGFIX (via agent-browser + VLM screenshot):
+    48→1. [FIX] Object3D.clone() JSON round-trip merusak userData.parts → referensi mati. Solusi: beri .name pada tiap bagian, resolve ulang via traverse setelah clone (collectNamed/collectListed).
+    49→2. [FIX] Postprocessing tanpa OutputPass → bloom meledak putih (tone mapping/sRGB tidak diterapkan). Solusi: tambah OutputPass di akhir rantai.
+    50→3. [FIX] Over-lighting (rumput 253,253,253) → sun 2.4→1.5, hemi 0.85→0.45, fill 0.55→0.25, environmentIntensity 0.3, dome light 26→12, bloom threshold 1.05. Hasil: rumput hijau (186,211,160), kubah emas, exposure seimbang.
+    51→4. [FIX] MainMenu capture engine di render-time (null saat pertama) → klik MULAI tidak berfungsi. Solusi: getEngine() dipanggil di dalam handler (diterapkan ke semua komponen).
+    52→5. [FIX] Deprecated THREE.Clock → akumulator elapsed; PCFSoftShadowMap → PCFShadowMap.
+    53→6. [FIX] Rules of Hooks (useEffect setelah early return) di CharacterBar; setState-in-effect lint di Hud/CharacterBar.
+    54→7. [FIX] Tombol jeda kiri-bawah ditutup badge dev-tools Next.js → dihapus (jeda sudah ada di bar atas).
+    55→8. [FIX] Typo >> di TowerPanel.
+    56→- Refactor: loop → simTick(dt) + advance(seconds) publik untuk QA otomatis (simulasi tanpa render — penting karena screenshot headless tidak menangkap WebGL; gunakan probe window.__pmEngine/__pmStore/__THREE + snapshot canvas 2D overlay .pm-snap).
+    57→- Balance tuning ramah anak: startPahala 160→180, mosqueMaxHp 100→120, damage pocong 4→3.
+    58→
+    59→VERIFIKASI GOLDEN PATH (semua via UI nyata + probe):
+    60→- ✓ Menu → klik MULAI BERMAIN → playing (pahala 180, HP 120, cam iso).
+    61→- ✓ Pilih kartu Ali → klik slot → tower terpasang (snap bounce, pahala berkurang).
+    62→- ✓ Wave 1: spawn pocong, tower menyerang, kill reward +8, wave complete +24, countdown wave 2.
+    63→- ✓ Leak → damage masjid + goyang lucu + toast; game over lembut "Yuk Coba Lagi!" + setan lari senang.
+    64→- ✓ Restart via tombol Coba Lagi.
+    65→- ✓ Unlock umar/fatimah/kakek sesuai wave + modal fun fact.
+    66→- ✓ Full run 10 wave (10 tower L3 + 2 kakek): HP 100/100, boss Banaspati kalah, VICTORY "ALHAMDULILLAH!" + kembang api + stats.
+    67→- ✓ Upgrade tower via UI (L1→L2), jual tower (refund, slot bebas), follow camera, photo mode (masuk/keluar/Jepret → toast), speed 1x/2x, pause/resume, rotate camera, quality, sound.
+    68→- ✓ Lint bersih, dev.log bersih, halaman 200, tanpa runtime error.
+    69→
+    70→Stage Summary:
+    71→- Game lengkap & playable end-to-end (menu → 10 wave → boss → victory/try-again).
+    72→- Semua fitur spesifikasi terpenuhi: 5 karakter unik 3 level, 6 setan lucu khas cerita rakyat, kamera 3 mode + foto + screenshot, VFX ceria (poof ungu, confetti, bintang kliyengan, aura masjid), audio prosedural, tips edukatif + fun fact, speed 1x/2x, quality Low/Med/High, UI ikon-besar ramah anak, pesan positif saat kalah.
+    73→- Probe debug tersedia: window.__pmEngine (engine), window.__pmStore (store), window.__THREE, engine.advance(seconds) untuk majukan simulasi tanpa render.
+    74→- Catatan lingkungan QA: browser headless SwiftShader ~4fps & screenshot tidak menangkap canvas WebGL — verifikasi visual pakai trik salin frame ke canvas 2D (kelas .pm-snap).
+    75→
+    76→Unresolved issues / risks & rekomendasi fase berikutnya:
+    77→- Balance perlu playtest nyata lebih lanjut (HP masjid, harga upgrade, HP scaling boss).
+    78→- Mobile touch: pointer events sudah dipakai, tapi perlu uji device asli (drag & drop di tablet).
+    79→- Ide pengembangan: mini-service leaderboard/HighScore (wajib route / tetap satu), simpan progres localStorage, karakter tambahan (Misbah si Muadzin?), setan baru (kuyang, palasik), power-up doa kolektif, mode tantangan harian, pilihan bahasa ID/EN.
+    80→- Bisa tambah pre-rendered audio file bila ingin kualitas musik lebih kaya (saat ini sintetis).
+    81→
+    82→---
+    83→Task ID: 2-b s/d 9-b (main round)
+    84→Agent: main-agent (Z.ai Code)
+    85→Task: QA menyeluruh + perbaikan bug styling + fitur baru besar (Doa Bersama, Kuyang, lencana, rekor, leaderboard, star rating) + polish UI
+    86→
+    87→Task ID: 7-a (delegated)
+    88→Agent: full-stack-developer (subagent)
+    89→Task: Backend leaderboard (Prisma ScoreEntry + API route /api/leaderboard GET/POST + pruning + validasi + seed 5 entri)
+    90→(Catatan: entri worklog subagent tidak tersimpan di file — hasilnya diverifikasi & dipakai langsung oleh main-agent; detail lihat Task 7-b di bawah.)
+    91→
+    92→Work Log (main-agent):
+    93→QA FASE AWAL (agent-browser + VLM):
+    94→- Golden path lama tetap sehat: menu → main → place tower → wave → unlock → victory/gameover → restart; 0 console error; dev.log bersih.
+    95→- Temuan QA: (1) baris instruksi menu tertutup objek 3D gelap (alpha bg), (2) deskripsi menu kontras rendah, (3) banner wave kontras di atas kubah emas, (4) langit "washed out", (5) HP bar memakai max=100 padahal mosqueMaxHp=120 (bug tampilan: bar penuh di 100/120), (6) menu terlalu tinggi di viewport pendek (577px) — tombol bawah terpotong.
+    96→
+    97→FITUR BARU:
+    98→- persist.ts (baru): localStorage "penjaga-masjid-save-v1" (playerName, bestStars, bestPahala, bestWave, gamesPlayed, wins, totalDefeated, totalStars, totalDuaUsed, achievements[]) + computeStars(hp/max: >=85% → 3, >=60% → 2, else 1).
+    99→- data.ts: EnemyId + 'kuyang' (Kuyang Melayang Lucu 🎈 hp24 speed2.15 dmg4 reward12 flying+slowImmune); flag flying/slowImmune di EnemyDef; wave 6-9 + boss wave ditambah grup kuyang; DUA_CONST (charge 100, perKill 7, perWave 12, durasi 12s, dmg ×1.6, rate ×0.65, enemySlow 0.55, heal 8).
+   100→- store.ts: state duaCharge/duaReady/duaActive + resultStars/duaUsedThisGame/scoreSubmitted/badgeToast + aksi (addDuaCharge dengan toast saat penuh, consumeDuaCharge, tickDuaActive, dst.) + reset di resetForNewGame.
+   101→- models.ts: model kuyang (kepala bulat imut + rambut + poni + pita kuning + sayap kecil kepak + helai rambut bergoyang + wajah pipi merona) — parts wingL/wingR/ribbon/strands di-resolve via collectNamed/collectListed.
+   102→- entities.ts: kuyang terbang (y ~1.15 + bob, sway lateral, kepakan sayap, goyang rambut/pita); slowImmune di takeDamage; ManagerCtx.duaActiveUntil + manager.activateDuaBlessing(duration)/duaBlessed; Tower damage ×1.6 & fireRate ×0.65 saat diberkati (semua tipe serangan: orb/bubble/coin/aura/adzan) + duaGlow ring emas berputar di kaki tiap tower.
+   103→- audio.ts: duaBlessing() — arpeggio harpa naik + bel + sorak.
+   104→- engine.ts: activateDua() (buff tower, slow semua setan kecuali kuyang, heal masjid +8, VFX ring besar dari kubah + adzanWave + sparkleRise ×10 + ring di tiap tower, overlay DOM .dua-glow-overlay, toast); countdown duaActive di simTick + auto clear overlay + toast selesai; charge per kill/wave via onEnemyKilled/onWaveComplete; bintang rating di onVictory (computeStars → resultStars); checkBadges di kill/wave/place/dua/victory/gameover; recordSessionEnd; clearDuaOverlay di startGame/dispose/victory/gameover; guard tryPlace hanya saat playing; langit 0xa9e2ff→0x8fd4ff.
+   105→- achievements.ts (baru): 12 lencana (first_tower, kills_10/50/150, wave_5, first_win, perfect_win, dua_1, dua_5, pahala_1000, squad_8, kuyang) + checkBadges(event) + toast lucu + persist; getRecords()/setPlayerName().
+   106→- UI: DuaButton.tsx (baru) — tombol bulat emas 🤲 kiri-tengah + meter vertikal + badge countdown + animasi glow saat siap; BadgeToastLayer. MenuModals.tsx (baru) — BadgesModal (grid 3×4, locked abu 🔒 ???) + LeaderboardModal (fetch /api/leaderboard, baris medali emas/perak/perunggu, muat ulang, error state ramah) + tombol menu. MainMenu.tsx — panel Rekor Kamu (bintang/menang/main/lencana), tombol Lencana Ku & Papan Rekor, toolbar bawah selalu terlihat (restrukturisasi: area tengah scroll + bottom fixed), how-to 2×2 grid, hiasan emoji melayang, kontras ditingkatkan. EndScreens.tsx — StarRating animasi stagger, form kirim skor (nama + POST), tombol Lihat Papan Rekor, stats kesehatan masjid. Hud.tsx — HP bar segmented + pulse merah saat low + jantung berdetak, wave progress dots, banner wave kelas .wave-banner kontras kuat. GameShell.tsx — pasang DuaButton + BadgeToastLayer; bg sama dengan langit.
+   107→- globals.css: .dua-glow-overlay, .btn-dua(+ready/active ring), .hp-segments/.hp-low-pulse, .star-big/.star-empty, .badge-card(+locked), .lb-row(1/2/3/n), .wave-banner, .record-pill.
+   108→- Prisma (oleh subagent 7-a): model ScoreEntry; route /api/leaderboard GET top10 (stars→defeated→pahala→createdAt) + POST (validasi name 2-16, clamp 16, stars 1-3, dll) + prune best 50; db:push non-destruktif (User/Post utuh); seed 5 entri; curl tests OK; API 200 di dev.log.
+   109→
+   110→BUGFIX TAMBAHAN (ditemukan tsc):
+   111→- [FIX] Hud mosqueMaxHp tidak ada di store (bar HP salah skala 100 vs 120) → pakai GAME_CONST.mosqueMaxHp.
+   112→- [FIX] GameShell ro?.observe(parent) TS error → if (parent && ro).
+   113→- [FIX] particles.ts ParticleData init kurang 'opacity' → tambah opacity: 1.
+   114→- [FIX] stray save.duaUsedThisGame di achievements → dihapus.
+   115→- [FIX] tryPlace bisa dipanggil dari menu (QA probe) → guard screen playing.
+   116→
+   117→VERIFIKASI (agent-browser + VLM + probe):
+   118→- ✓ Tipe & lint bersih (bun run lint, tsc --noEmit — hanya error lama di folder examples/ & skills/ yang tak terpakai).
+   119→- ✓ Doa Bersama: charge terisi (per kill/wave), tombol glow saat siap, aktivasi → duaActive 12s, buff tower aktif (manager.duaBlessed), masjid heal +8, overlay emas muncul lalu hilang otomatis + toast selesai; digunakan 6× dalam 1 run.
+   120→- ✓ Kuyang: spawn wave 6+, terbang y≈1.2, kepakan sayap, slow-immune (slowUntil tetap -1), damage tetap masuk; visual VLM: "kepala melayang lucu bersayap + pita pink, imut, tanpa glitch".
+   121→- ✓ Victory: star rating animasi (2⭐ terverifikasi visual; run lain 1⭐), stats HP masjid, submit skor "Ali Zahran" → muncul di Papan Rekor rank 5 dengan 2⭐ (POST+GET 200 di dev.log).
+   122→- ✓ Menu: Rekor Kamu tampil (2 main, 1 menang, 11/12 lencana), tombol Lencana Ku (modal grid OK: unlocked warna, locked abu 🔒) & Papan Rekor (top-10 + medali) OK; semua muat di viewport 577px (restrukturisasi toolbar bawah) & mobile 390×844 (tanpa overlap DuaButton vs kartu).
+   123→- ✓ Gameover lembut tetap bekerja; unlock modal (Kakek/Fatimah) tampil.
+   124→- ✓ Full-run simulasi final: 14 tower, wave 10 boss kalah, victory 1⭐ HP 63/120, 0 error.
+   125→- ✓ Mobile 390×844: HUD tidak terpotong, tombol DOA tidak menutupi gameplay, kartu scroll horizontal.
+   126→
+   127→Stage Summary:
+   128→- 4 fitur besar baru: (1) Doa Bersama — kekuatan spesial aktif yang mengisi dari aksi menghalau setan (memberi anak "moment kejutan" positif), (2) musuh ke-7 Kuyang Melayang Lucu dengan mekanik terbang + kebal slow, (3) sistem rekor & 12 lencana tersimpan localStorage, (4) Papan Rekor global fullstack (Prisma + API + submit skor + bintang rating 1-3 di layar menang).
+   129→- Polish styling menyeluruh: HP bar segmented + pulse, wave progress dots, banner kontras kuat, langit lebih jenuh, menu responsif pendek/mobile, overlay berkah keemasan.
+   130→- Bug tampilan HP max tersembunyi diperbaiki (100→120).
+   131→- Backend leaderboard teruji (subagent + integrasi UI).
+   132→
+   133→Unresolved issues / risks & rekomendasi fase berikutnya:
+   134→- Balance kuyang & wave 6-10 kini lebih menantang (run QA lemah kalah di wave 9) — run kuat masih menang nyaman; pertimbangkan playtest nyata, muali tweak startPahala/reward bila perlu.
+   135→- Escape tidak menutup modal menu (hanya klik X / klik luar) — kecil, bisa ditambah keydown handler.
+   136→- Ide lanjutan: karakter Misbah si Muadzin, setan palasik, mode tantangan harian, pilihan bahasa ID/EN, audio pre-rendered, animasi intro boss sinematik lebih kaya.
+   137→- Pengujian tablet fisik untuk drag & drop masih belum bisa dilakukan di sandbox.
+   138→
+   139→---
+   140→Task ID: 1-c s/d 7-c
+   141→Agent: main-agent (Z.ai Code)
+   142→Task: QA rutin + perbaikan bug (Escape modal, popup nyangkut) + rebalancing gelombang + karakter baru MISBAH si Muadzin Muda (tower ekonomi) + 3 jenis banner wave + polish UI
+   143→
+   144→Work Log:
+   145→QA AWAL (agent-browser + probe):
+   146→- Build sehat (halaman 200, 0 console error, API leaderboard jalan).
+   147→- Konfirmasi risiko balance dari ronde lalu: run lemah (4 tower tanpa upgrade) mati di wave 6 (sebelum kuyang ditambah: wave 9) — kuyang di wave 6 membuat kurva terlalu curam untuk anak.
+   148→- Bug ditemukan: (1) tombol Escape tidak menutup modal Lencana/Papan Rekor, (2) FunFactModal (unlock karakter) NYANGKUT terbuka saat kembali ke menu — backdrop z-50 memblokir semua klik menu (ditemukan via elementFromPoint).
+   149→
+   150→FITUR BARU — MISBAH SI MUADZIN MUDA (karakter ke-6, tower ekonomi):
+   151→- data.ts: CharId + 'misbah', AttackKind + 'sedekah', CharDef.pahalaGen?: [jumlah, intervalDetik][] per level. Misbah: 💡 biru, cost 80, upgrade [70,120], unlockWave 4, gen L1 +5/6s, L2 +8/5s, L3 +12/4s (≈50/96/180 per menit). damage 0 (tidak menyerang — edukasi "investasi sedekah").
+   152→- models.ts: aksesori misbah — peci biru + KOTAK SEDEKAH kayu (tutup + celah koin emas + koin melayang bernama 'koinSedekah') + lampion kecil menyala di tangan kiri ('lampion') + tiang. ChibiParts + koinSedekah/lampion (opsional), getCharacterModel me-resolve via collectNamed.
+   153→- entities.ts: ManagerCtx + onPahalaTick(amount, pos, level); branch attack 'sedekah' di Tower.update (cooldown = fireRate; BERKAH DOA mempercepat interval ×0.65 — sinergi lucu "sedekah diberkahi"); animasi idle: koin melayang naik-turun + rotasi, lampion berdenyut emissive ±0.5.
+   154→- engine.ts: callback onPahalaTick → addPahala + showPahala VFX + ring emas + audio.coin (rate-limit 1.2s) + tracking misbahGenTotal + checkBadges('sedekahTick'); reset counter di startGame; Misbah ikut jadi wanderer halaman masjid di menu (5 anak).
+   155→- achievements.ts: lencana ke-13 'sedekah_300' (Jutawan Sedekah 💰 — kotak Misbah menghasilkan 300 pahala sekali main).
+   156→- CharacterBar.tsx: ACCENT misbah #6db3d9 + badge 💰 kecil di pojok kartu (penanda ekonomi).
+   157→- TowerPanel.tsx: panel stats khusus sedekah — 💰 Sedekah/tik (+5 → +8), ⏱️ Interval (6s → 5s), 📊 Estimasi/menit (~50 → ~96) dengan preview upgrade.
+   158→
+   159→REBALANCING (ramah anak):
+   160→- Wave 6: kuyang DIHAPUS (dipindah ke wave 7+), pocong 8→6 (kembali lebih ringan dari game original).
+   161→- Wave 7/8/9: kuyang 3/3/4 (sebelumnya 3/4/5), reward 56/64/72/80 → 60/70/78/88 (lebih banyak uang untuk bangun tower).
+   162→- DUA_CONST: perKill 7→8, perWave 12→14 (ultimate terisi lebih cepat — lebih sering merasakan "momen seru").
+   163→
+   164→FITUR BARU — 3 JENIS BANNER WAVE:
+   165→- Hud.tsx: banner state {text, kind: 'normal'|'boss'|'newEnemy', enemyEmoji}; deteksi FIRST_APPEARANCE (map enemyType→wave pertama muncul, dihitung dari WAVES) → wave 7 tampil "🎈 Setan Baru: Kuyang Melayang Lucu!" dengan emoji wiggle; wave 10 tampil boss banner.
+   166→- CSS: .boss-banner (gradasi oranye hangat + animasi boss-shake + label "🔥 BOSS GELOMBANG 🔥"), .new-enemy-banner (ungu ceria + sub-teks tips).
+   167→
+   168→BUGFIX:
+   169→- [FIX] Escape tidak menutup modal menu → CuteModal (MenuModals.tsx) pasang window keydown listener capture + e.stopPropagation(); terverifikasi dengan dispatch manual DAN agent-browser press Escape asli.
+   170→- [FIX] FunFactModal nyangkut di menu → backToMenu() kini membersihkan funFact/toast/badgeToast/selectedTower/selectedCharId/dragging/paused/bossHp + clearDuaOverlay.
+   171→- [FIX] (tuning) Misbah test: 2 tick pertama tepat +10 pahala; L2 tepat 8/5s.
+   172→
+   173→VERIFIKASI (semua via probe + VLM + DOM):
+   174→- ✓ Misbah: place → gen tepat (isolasi: 180-80+10 = 110 ✓), upgrade L2 = 8/5s ✓, berkah doa mempercepat tick ✓, badge sedekah_300 terbuka natural saat run ✓, model 3D terverifikasi VLM ("blue prayer cap, wooden charity box, glowing lantern") ✓, wanderer menu tampil ✓.
+   175→- ✓ TowerPanel Misbah: stats ekonomi + preview upgrade terverifikasi VLM ("+5 → +8, 6s → 5s, ~50 → ~96/menit, Upgrade ⭐70") ✓.
+   176→- ✓ Balance: run MEDIOKRE (6-8 tower + upgrade + dua + misbah) = VICTORY 2⭐ HP 95/120, 8 tower, duaUsed 8×, 0 error. Run kuat tanpa misbah juga menang 2⭐ (dua strategi viable). Run 4-tower murni tetap kalah (pembelajaran yang sehat).
+   177→- ✓ Banner: DOM observer menangkap "Setan Baru: Kuyang Melayang Lucu!" (wave 7) + "Gelombang N datang!" + boss banner live "🔥 BOSS GELOMBANG 🔥 BANASPATI NGAMBEK!" dengan class .boss-banner ✓.
+   178→- ✓ Escape modal: badges + leaderboard modal tertutup dengan keyboard asli ✓.
+   179→- ✓ backToMenu cleanup: tidak ada backdrop nyangkut, klik menu berfungsi ✓.
+   180→- ✓ Mobile 390×844: kartu Misbah (karakter ke-6) tampil di baris scroll, DOA button, HUD utuh ✓.
+   181→- ✓ lint bersih, tsc --noEmit bersih (kode game), dev.log bersih, API leaderboard 200.
+   182→
+   183→Stage Summary:
+   184→- Karakter ke-6 MISBAH si Muadzin Muda: tower ekonomi pasif (kotak sedekah) — strategi baru "investasi dini", berempat dengan Doa Bersama (berkah mempercepat sedekah), lencana ke-13 Jutawan Sedekah.
+   185→- Balance wave 6-10 dikembalikan ramah anak (kuyang diperkenalkan bertahap mulai wave 7, reward naik, ultimate terisi lebih cepat); run wajar menang 2⭐ nyaman.
+   186→- 3 jenis banner wave dengan kepribadian berbeda (normal emas, setan-baru ungu + emoji wiggle, boss oranye + shake) — info musuh baru lebih jelas untuk anak.
+   187→- 2 bug UX diperbaiki (Escape modal, popup nyangkut di menu).
+   188→
+   189→Unresolved issues / risks & rekomendasi fase berikutnya:
+   190→- Run 4-tower tanpa strategi tetap kalah di wave 6 — sesuai desain (pembelajaran), tapi bisa dipantau dari playtest nyata.
+   191→- Ide lanjutan: setan palasik, mode tantangan harian, pilihan bahasa ID/EN, tutorial interaktif pertama main (overlay langkah), saran strategi saat game over berulang, audio pre-rendered, karakter perempuan ke-2 (Sarah si Penjahit?).
+   192→- Screenshot headless tetap tidak menangkap WebGL — tetap gunakan trik .pm-snap + probe.
+   193→
+   194→---
+   195→Task ID: 1-d s/d 6-d
+   196→Agent: main-agent (Z.ai Code)
+   197→Task: QA rutin + 3 fitur besar baru (Tutorial Interaktif, Smart Coach, Tantangan Harian) + polish styling menyeluruh
+   198→
+   199→Work Log:
+   200→
+   201→QA AWAL (agent-browser + probe __pmEngine/__pmStore):
+   202→- Build sehat: halaman 200, 0 console error, API leaderboard 200, dev.log bersih.
+   203→- Golden path terverifikasi ulang: gameover lemah (run 1 tower mati wave 5-6 — sesuai desain), victory run kuat (bot strategis lane-distribusi: wave 10, HP 95/120, 2⭐, 14 tower, dua 10×).
+   204→- Catatan QA bot: `Tower.charId` tidak ada (pakai `t.def.id`); `tryPlace(slotIndex, charId)` — urutan argumen. Bot yang menara satu jalur saja kalah wajar (lane lain bocor) — bukan bug balance.
+   205→
+   206→FITUR BARU 1 — TUTORIAL INTERAKTIF (state-driven, main pertama):
+   207→- store.ts: `tutorialStep` (0=off, 1..6) + aksi setTutorialStep.
+   208→- engine.ts: state machine `updateTutorial(dt, st)` dipanggil di simTick — langkah maju dari AKSI nyata pemain: (1) pilih kartu → (2) pasang di slot → (3) mulai gelombang → (4) kill pertama → (5) intro DOA → (6) penutup → selesai. Timeout aman tiap langkah (bisa macet dihilangkan). `skipTutorial()` publik (tombol Lewati) tetap menandai selesai.
+   209→- persist.ts: `tutorialSeen`; achievements.ts: `isTutorialSeen()/markTutorialDone()` + lencana ke-14 'tutorial_done' (Murid Rajin 🎓).
+   210→- TutorialLayer.tsx (baru): gelembung Kakek Imam (mascot 👴 mengapung + badge 🕌, ekor gelembung, titik langkah 1/6, tombol Lewati pointer-events-auto) + cincin sorot `.tut-ring` (pulsing gold) yang mengukur bounding rect target `data-tut` tiap 700ms (hook useTargetRect, setState asinkron agar lolos lint react-hooks/set-state-in-effect).
+   211→- data-tut target: "cards" (CharacterBar baris kartu), "wave-btn" (tombol MULAI GELOMBANG di Hud), "dua-btn" (DuaButton wrapper).
+   212→- MainMenu: tombol "🎓 Ulangi Tutorial" (startGame({forceTutorial:true})) — hanya tampil jika tutorialSeen.
+   213→
+   214→FITUR BARU 2 — SMART COACH (Saran Kakek Imam di Game Over):
+   215→- engine.onGameOver → `buildCoachTips(st, lossStreak)`: analisis run nyata (jumlah tower <6, tower L3 = 0, tidak ada Misbah & wave≥4, duaUsed=0, wave≥8) + empati saat lossStreak≥2; ambil 3 tips teratas; semua kalimat positif ramah anak.
+   216→- persist: `lossStreak` (bump saat kalah, clear saat menang); store: `coachTips`.
+   217→- EndScreens: CoachTipsCard (kartu hijau dash-border + avatar 👴 + baris tips stagger anim) menggantikan tip statis lama.
+   218→- Bonus fix: onGameOver/onVictory kini meng-clear funFact (modal unlock tidak menumpuk di layar akhir).
+   219→
+   220→FITUR BARU 3 — TANTANGAN HARIAN (Daily Challenge):
+   221→- data.ts: `DailyModifier` + 8 modifier lucu (Jumat Berkah 🌟 reward+30%, Angin Kencang 💨 speed+15%, Masjid Kokoh 💪 HP+40, Gerhana Ceria 🌙 hp+20%/reward+25%, Rezeki Subur 🪙 modal+80, Bulan Purnama ✨ doa 2×, Tuyul Pesta 😅 steal 2×, Pagi Cerah ☀️ speed-10%/modal+40); `dailyKey()` (YYYY-MM-DD lokal) + `pickDailyModifier()` (hash tanggal → deterministic sama untuk semua pemain); `RUN_MODS` mutable + `resetRunMods()/applyDailyMods()`.
+   222→- Integrasi: Enemy constructor maxHp × enemyHpMult; Enemy.update speed × enemySpeedMult; onEnemyKilled reward × rewardMult (round); onEnemyLeaked steals × stealMult; store.addDuaCharge × duaChargeMult; startGame({daily:true}) → pahala+bonus, mosqueMaxHp+bonus (store.mosqueMaxHp baru — HUD & computeStars & heal DOA pakai max dinamis), toast pengumuman modifier.
+   223→- Victory daily: `recordDailyWin(todayKey)` → streak (kemarin menang → +1, else 1, idempotent per hari) + lencana ke-15 'daily_win' (Juara Harian 🔥) + banner "Tantangan Hari Ini Selesai!" + streak di layar menang; skor tantangan TIDAK masuk leaderboard (UI pengganti form submit); tombol Coba Lagi di layar akhir mempertahankan mode (restart {daily:true}).
+   224→- UI: DailyChallenge.tsx (kartu menu oranye: nama hari, modifier emoji+nama+desc, chip efek, streak pill 🔥, tombol MAIN TANTANGAN!, catatan tidak masuk papan rekor); chip `.daily-chip` di HUD saat mode aktif; backToMenu mereset mode.
+   225→- Probe QA baru: `window.__pmMods` (RUN_MODS) — verifikasi multiplier live.
+   226→
+   227→STYLING (mandatory "lebih banyak detail"):
+   228→- CSS baru (globals.css +270 baris): .tut-bubble (panel krem + ekor), .tut-mascot (float anim + badge), .tut-skip, .tut-dot(-on), .tut-ring + @keyframes tut-pulse, .coach-card (dash border hijau), .coach-avatar, .daily-card (gradient peach oranye), .daily-effect-chip, .streak-pill, .btn-daily, .daily-chip, .daily-won-banner, .title-shimmer (judul menu gradient emerald→amber berjalan), :focus-visible outline emas untuk SEMUA tombol (a11y anak), .safe-bottom (env safe-area-inset untuk notch).
+   229→- BadgesModal: grid max-h-[52vh] + scroll (15 lencana).
+   230→- CharacterBar: safe-bottom.
+   231→
+   232→BUGFIX/TEMUAN:
+   233→- [FIX] FunFact modal menumpuk di layar akhir → di-clear di onVictory/onGameOver.
+   234→- [PENTING untuk QA/dev] append CSS via bash `cat >>` TIDAK memicu recompile Turbopack — gunakan tool Edit/Write (kasus: semua class baru sempat hilang dari chunk CSS; setelah edit ulang → muncul). Chunk CSS: /_next/static/chunks/...css — cek via curl.
+   235→- [Artfak QA bukan bug] aksi sinkron sekaligus (pilih+pasang dalam satu eval) membuat tutorial step tertinggal — pemain nyata selalu ada frame di antara aksi; verifikasi ulang dengan advance() di antara aksi → langkah benar (2→3→4).
+   236→
+   237→VERIFIKASI (probe + DOM + VLM + screenshot; artefak di /home/z/my-project/download/):
+   238→- ✓ Tutorial full flow: step 1→2 (pilih kartu) →3 (pasang) →4 (mulai wave) →6 (kill pertama, dua intro) → selesai (tutStep 0, tutorialSeen true, badge Murid Rajin); skip via klik DOM asli bekerja; tidak muncul lagi di game ke-2; force replay bekerja.
+   239→- ✓ Ring: membungkus kartu (349,576,582,120 vs kartu 357,584,566,104) & tombol MULAI (ringY 160 vs btnY 170, wraps=true); VLM: "cream bubble with round elderly-man avatar + gold pulsing ring".
+   240→- ✓ Bulan Purnama (modifier hari ini, 4 Sep 2026): duaCharge 16/kill (8×2 ✓); RUN_MODS via probe: enemyHp 22→26 (×1.2 ✓), reward 8→10 (×1.25 ✓); startGame klasik me-reset RUN_MODS ke 1 ✓.
+   241→- ✓ Daily victory: wave 10, streak 1 tersimpan (lastDailyWin 2026-09-04), badge daily_win, banner "Tantangan Hari Ini Selesai!", form skor disembunyikan + catatan tidak masuk papan rekor; chip HUD "✨TANTANGAN · Bulan Purnama" (desktop+mobile).
+   242→- ✓ Coach: 3 tips personal muncul (DOM .coach-card 3 baris + avatar); lossStreak 2 → tip empati di posisi pertama; VLM konfirmasi render bersih; funFact ter-clear di layar akhir.
+   243→- ✓ Menu: title shimmer gradient (computed style: linear-gradient + clip:text + transparent) — VLM: "green-to-gold gradient text"; kartu daily styled oranye (VLM konfirmasi); tombol MAIN TANTANGAN dalam viewport (desktop y 632-672 < 720; mobile btnVisible true).
+   244→- ✓ Mobile 390×844: menu, tutorial bubble (y 531-668 fit), daily chip + DOA button terlihat; VLM: tanpa overlap/kliping.
+   245→- ✓ Regression: victory klasik penuh (wave 10, 2⭐, HP 95/120, 140 defeated, dua 10×), lossStreak ter-reset saat menang, 0 console error, lint & tsc bersih.
+   246→- ✓ Probe tersedia: __pmEngine, __pmStore, __THREE, __pmMods (baru).
+   247→
+   248→Stage Summary:
+   249→- 3 fitur besar: (1) Tutorial Interaktif 6 langkah state-driven dengan maskot Kakek Imam + cincin sorot pulsing — anak baru langsung dibimbing aksi nyata; (2) Smart Coach — analisis gaya main → 3 saran personal positif + empati kekalahan beruntun di layar Game Over; (3) Tantangan Harian — 8 modifier date-seeded, streak harian, lencana, chip HUD, mode terjaga saat retry, skor terpisah dari leaderboard.
+   250→- 2 lencana baru (Murid Rajin 🎓, Juara Harian 🔥) → total 15; grid modal scrollable.
+   251→- Styling: ~270 baris CSS baru (tutorial/coach/daily/shimmer/focus-visible/safe-area), judul menu gradient animasi, a11y keyboard focus jelas.
+   252→- Bug fix: modal funFact menumpuk di layar akhir.
+   253→- Catatan lingkungan: append CSS via bash tidak memicu recompile — WAJIB pakai tool file-edit untuk CSS; verifikasi chunk CSS via curl.
+   254→
+   255→Unresolved issues / risks & rekomendasi fase berikutnya:
+   256→- Tantangan Harian belum punya tanda khusus di leaderboard (skipped by design — skema DB tidak diubah). Fase lanjut bisa tambah kolom `mode` + tab Klasik/Tantangan di Papan Rekor.
+   257→- Ide lanjutan dari backlog: karakter Sarah si Penjahit, setan Palasik, mode tantangan mingguan, pilihan bahasa ID/EN, audio pre-rendered, intro boss sinematik lebih kaya.
+   258→- Tutorial hanya klasik (daily tidak menampilkan tutorial — by design agar tantangan langsung menantang).
+   259→- Tablet fisik drag&drop tetap belum teruji di sandbox (pointer events sudah dipakai).
+   260→- Playtest nyata untuk panjang tutorial (timeout langkah 4/5 mungkin perlu tuning) dan pace streak harian.
+   261→
+   262→---
+   263→Task ID: 7
+   264→Agent: main-agent (Z.ai Code)
+   265→Task: PROMPT LENGKAP PENYEMPURNAAN (P1-P6) — Fix layout void dunia, kamera pro (inertia/pinch/D-pad), Main Menu & Level Select & Settings profesional, Toko 100 karakter + character creator, roster 20 hantu lokal Indonesia, sistem generatif + star currency
+   266→
+   267→Work Log:
+   268→
+   269→QA AWAL (agent-browser + probe __pmEngine/__pmStore):
+   270→- Build sehat: halaman 200, 0 console error, smoke test bot (place tower → wave → kill) jalan normal, menu reset bersih.
+   271→- Probe: __pmEngine.get() tersedia; state store terverifikasi via probe (screen/menu, unlockedChars [ali,aisyah]).
+   272→
+   273→P1 — WORLD EXPANSION (hilangkan kotak abu-abu kosong):
+   274→- Baru: src/lib/game/world.ts (~500 baris) — modul dunia luas:
+   275→  - createMegaGround(): plane rumput 230×150 (dari 76×48 — 4.5× lebih luas) dgn tekstur canvas 2048²: gradasi radial rumput, 340 bercak, halaman masjid + 3 jalur setan digambar ulang di posisi sama, jalanan desa dekoratif, 900 noise dots, 260 bunga luar arena.
+   276→  - buildWorldExpansion(): SEMUA merged (mergeGeometries) jadi 2 draw call (worldTerrain castShadow + worldDecor):
+   277→    * 22 perbukitan (elevasi kubah rendah, dikecualikan dari koridor sungai/kolam)
+   278→    * 210 pohon (round & pinus bertingkat, vertex-colored 5 varian hijau)
+   279→    * 6 cluster taman (pohon rapi + semak)
+   280→    * 130 batu/semak tersebar
+   281→    * 10 rumah desa (box + atap cone merah/oranye)
+   282→    * SUNGAI (ShapeGeometry bezier + tepian pasir, animasi emissive naik-turun)
+   283→    * KOLAM bulat + 10 bunga teratai (lily pads + bunga pink)
+   284→    * JEMBATAN KAYU 7 papan + pagar + 6 tiang di atas sungai
+   285→    * createMountainRange(): 2 lapis pegunungan parallax jauh (biru pucat 195u + hijau kabur 152u) — desaturasi + fog
+   286→    * createHighClouds(): 16 cluster awan tinggi statis (kesan luas)
+   287→- engine.ts: megaGround + worldExp + highClouds di setupWorld; fog diperluas 90/170 → 110/230; worldExp.update(elapsed) animasi air di simTick.
+   288→- [FIX] mergeGeometries gagal (indexed vs non-indexed geometry campur) → normGeo() konversi semua ke non-indexed + normal + uv seragam.
+   289→- [FIX] Bukit menutupi sungai/jembatan (hill di (58,-14) r30 overlap) → hillSpots digeser + safety-check koridor sungai/kolam di forEach.
+   290→- VERIFIKASI VLM: rumput memenuhi seluruh area sampai tepi (tidak ada void abu-abu) ✓; sungai+jembatan terlihat dari atas ✓; gunung parallax putih-biru terlihat dari photo mode ✓; burung/hills ✓.
+   291→
+   292→P2 — KAMERA PRO:
+   293→- camera.ts (rewrite penting):
+   294→  - INERTIA: velocity tracking saat drag (lerp eksponensial), momentum 0.85s setelah lepas (damping lembut berhenti) — terverifikasi probe: drag 200px → momentum meluncur tx 12→68 unit.
+   295→  - ZOOM DAMPING: targetDist di-lerp (dt*7) — tidak lompat langsung; zoomBy/applyPinch pakai targetDist.
+   296→  - PINCH-TO-ZOOM: applyPinch(scaleRatio) — dua jari membuka → zoom in.
+   297→  - BOUNDS diperluas: pan ±88×62 (dari ±36×24) sesuai world baru; camera far 300→480.
+   298→  - recenter(): GSAP back.out 0.85s ke HOME (0,2,dist 40, elev 0.98) — terverifikasi (tunggu real-time utk GSAP tween).
+   299→  - rotateBy pakai stopMomentum.
+   300→- engine.ts: pinch tracking (activePointers Map, pinchDist, pinchMode); pointerdown kedua → mulai pinch & batal drag; pointermove ≥2 jari → applyPinch; pointerup hapus dari map; pointercancel listener.
+   301→- API publik baru: panCamera(dx,dz), zoomCamera(delta), recenterCamera() — dipakai tombol UI.
+   302→- Baru: src/components/game/MobileNav.tsx — D-pad 3×3 semi-transparan (4 arah + recenter tengah) + 3 tombol (zoom +/-, recenter ikon crosshair); auto-hide (opacity 0.55→1 saat sentuh/hover, label "🕹️ Geser kamera" muncul 2.6s); hold-to-accelerate pan (makin lama makin cepat ×3).
+   303→- CSS: .nav-cam-btn/.nav-cam-recenter/.nav-dpad(-cell/-active) grid 3×3.
+   304→- P3 tambahan: readDragSens()/readZoomSens() dari localStorage settings (0.3–2.2×) — dipakai panSpeed & zoomBy.
+   305→- VERIFIKASI: panWorked ✓, recentered ✓ (GSAP real-time), zoom damping smooth ✓, D-pad tampil di mobile 390×844 (VLM: "D-pad, zoom +/-, target button, character cards") ✓.
+   306→
+   307→P3 — MAIN MENU PRO + LEVEL SELECT + SETTINGS:
+   308→- levels.ts (baru): 8 LEVEL bertema taman/kampung islami (Taman Masjid Raya → Kampung Santri → Kebun Kurma → Kolam Wudhu → Pasar Bunga → Puncak Menara → Hutan Bambu → Kubah Emas), tiap level: mapX/mapY posisi node di peta, waves (3-10 potongan WAVES), startPahala & mosqueHp berbeda, emoji, desc.
+   309→- store.ts: Screen + 'shop'|'levels'|'settings'; state levelId & totalWaves + setLevelInfo.
+   310→- engine.ts: startGame({levelId}) → levelWaves config; beginWave/updateWavePreview/onWaveComplete pakai this.levelWaves (dinamis); backToMenu reset levelId & levelWaves.
+   311→- HUD.tsx: wave counter & progress dots pakai totalWaves + levelWaves(levelId) dinamis.
+   312→- persist.ts: levelStars[] (rating 1-3 per level), bestLevelDone, ownedChars[], starCurrency.
+   313→- achievements.ts: getLevelProgress(), recordLevelResult(levelId, stars) — unlock level berikutnya; getStarCurrency/addStarCurrency/grantRunReward(pahala→⭐ 20:1)/getOwnedChars/buyChar(id, cost).
+   314→- engine.onVictory: recordLevelResult jika levelId>0 + grantRunReward → runStarGain.
+   315→- MainMenu.tsx (rewrite): profil chip pojok atas (avatar emoji rotasi + nama + total bintang) + currency chip ⭐; tombol MAIN besar (badge "Lanjut: Lv.N"); grid 3 ubin (TOKO 100 karakter/PETA 8 level/ATURAN); DailyChallengeCard tetap; tombol lencana/rekor/tutorial di bawah.
+   316→- LevelSelectScreen.tsx (baru): peta petualangan dgn polyline dashed jalur SVG, 8 node (locked/unlocked/current bouncing), rating ⭐1-3 per node, header total ⭐/MAX, dekorasi emoji (🌳🌴⛲🦋), modal preview level (emoji, gelombang+HP, desc, preview musuh dgn count, rekor bintang, tombol MULAI).
+   317→- SettingsScreen.tsx (baru): slider SFX & Musik terpisah (audio.setSfxVolume/setMusicVolume baru), toggle on/off, kualitas grafis 3 tombol (Ringan/Sedang/Jempolan), sensitivitas drag & zoom (localStorage pm-drag-sens/pm-zoom-sens → dipakai camera), reset progres (2-step confirm).
+   318→- audio.ts: sfxVolume/musicVolume + setSfxVolume(v)/setMusicVolume(v) — GainNode live.
+   319→- EndScreens: victory → tampil "+N Bintang Toko! (belanja di TOKO 🛒)" jika starGain>0; restart pertahankan levelId.
+   320→- CSS: profile-chip/-avatar, menu-tile, level-node(-unlocked/-locked/-current bounce), settings-card/-title, quality-opt(-active), cute-range slider (webkit+moz thumb bulat), shop-tab(-active), chip-filter(-on), shop-card, swatch(-on), creator-power(-on), scrollbar vertikal lucu.
+   321→- VERIFIKASI: Level 1 start → levelId=1, totalWaves=3, pahala 220, HP 130 ✓; bot run level 1 → VICTORY 2⭐, levelStars=[2], bestLevelDone=1, starCurrency=8 ✓; level 2 terkunci (terkunci label) ✓; settings slider event 50→80 ✓; VLM settings: sliders+quality+sens+reset semua ✓; mobile menu DOM: profile/mainBtn/tiles×3/dailyCard visible ✓; mobile levels 8 node visible ✓.
+   322→
+   323→P4 — TOKO (100 karakter):
+   324→- roster.ts (baru ~330 baris): sistem generatif — 6 POWERS (Cahaya/Dzikir/Sedekah/Wangi/Nasihat/Adzan) × 3 sub-varian (Cepat/Tembus/Meledak dll — damageMult/rateMult/rangeMult balanced) × 10 THEMES visual (Santri Desa→Imam Muda, robe+accent hex) × 4 RARITY (Umum⚪/Langka🔵/Epik🟣/Legendaris🟠 dgn harga 15/40/90/200 + variasi).
+   325→  - 6 HERO signature (Ali/Aisyah/Umar/Fatimah/Misbah/Kakek) = legendaris 120⭐ dgn model CHAR_DEFS asli.
+   326→  - 94 generatif deterministik (mulberry seed): nama dari 40 FIRST_NAMES × 12 TITLES islami (unik, anti-duplikat), presentation (anak-laki/anak-perempuan/kakek), skin 5 tone.
+   327→  - CharCustom interface + palet warna (12 robe/6 accent/6 skin/6 hair) + aksesoris (tasbih/tas/sajadah/buku/lampion) + ekspresi (ceria/pemalu/semangat).
+   328→- models.ts: buildGenChibi(opts) — chibi generatif lengkap (pedestal ring accent, badan jubah dgn rarity glow emissive, kepala+addFace expression-scaled, peci/hijab+turban per presentation, aksesoris 3D per pilihan, halo cincin rarity epik+/bintang level); getRosterModel(rc)/getCustomModel(cc) dgn cache.
+   329→- ShopScreen.tsx (baru ~470 baris): header (back, judul, ⭐currency); TAB Beli/Buat; search input; panel filter (6 power chips + 4 rarity chips + 4 sort mode); GRID 100 kartu (2 col mobile → 5 col xl) tiap kartu: rarity badge pojok + "Milikmu" hijau jika owned + preview 3D RosterPreview berputar + nama + power·tema + harga/bintang (merah jika tak cukup); modal detail (preview besar, desc, varian power, tombol BELI N⭐); toast lokal sukses/gagal.
+   330→- CharCreator (tab Buat): preview 3D real-time CustomPreview 184px + panel: presentasi tubuh, swatch warna baju/aksen/kulit/rambut, aksesoris, ekspresi, 6 power (dgn catatan "tetap fair dari sistem game ⚖️") + 3 sub-varian; SIMPAN → localStorage penjaga-masjid-custom-char (max 12).
+   331→- RosterPreview.tsx (baru): useSpinPreview hook — WebGL kecil alpha canvas, auto-spin 0.9 rad/s + bob, try-catch WebGL fallback.
+   332→- VERIFIKASI: 100 kartu shop ✓ (totalCards=100); beli gen-13 (15⭐, currency 300→285, ownedChars=[gen-13]) ✓; filter/sort/search UI jalan ✓; character creator: tab buka, save → localStorage 1 entry (custom-*, presentation/robe/accent/skin/hair/accessory/expression/power/variant lengkap) ✓; VLM shop: grid kartu 3D + rarity badge + currency + polish ✓.
+   333→
+   334→P5 — ROSTER 20 HANTU LOKAL INDONESIA:
+   335→- data.ts: EnemyId + 13 baru (sundel/leak/kolongwewe/jailangkung/bunian/butoijo/nyiblorong/palasik/suster/cindaku/gendruwo/wewerawa/kober); ENEMY_DEFS lengkap dgn hp/speed/damage/reward/scale + mekanik pembeda:
+   336→  * flying: sundel (pita pink), leak (zigzag+slowImmune), palasik (kucing melayang)
+   337→  * fleesOnHit: bunian (pemalu ngebut), kober (cape merah)
+   338→  * knockResist: kolongwewe 0.4, wewerawa 0.5, gendruwo 0.7, butoijo 0.75
+   339→  * tanker: butoijo 130hp, gendruwo 105hp
+   340→- models.ts: 13 model chibi unik dibangun (~460 baris): sundel (dress+rambut panjang+pita punggung+2 ekor pita berkibar), leak (kepala+rambut mengembang+3 pita warna-warni+taring), kolongwewe (jongkok+rambut acak+tangan dagu ngintip), jailangkung (boneka kayu+sendi kapsul+tali), bunian (topi daun kerucut+4 daun), butoijo (raksasa hijau+perut terang+telinga raksasa+taring+lengan panjang), nyiblorong (putri+rambut panjang+ekor ular emas-hijau 4 segmen+mahkota), palasik (kepala kucing+telinga+kumis+selimut melayang+ekor pita), suster (seragam putih+salib merah+topi perawat+rambut pirang+kaki ngesot depan), cindaku (harimau oranye+loreng+ekor+moncong+telinga), gendruwo (genderuwo lumut+bunga+sprout daun), wewerawa (ibu-ibu+PAYUNG TERATAI PINK+tangan pegang), kober (merah+tanduk kecil+CAPE berkibar+ekor).
+   341→- getEnemyModel parts +: cape, umbrella, hat.
+   342→- entities.ts: headY 13 baru; Enemy.update animasi idle unik per jenis: sundel pita berkibar+melayang, leak zigzag cepat 5.5Hz+pita memuntir, kolongwewe jongkok goyang+kepala ngintip kiri-kanan, jailangkung STOP-MOTION patah-patah (quantized 5Hz), bunian cepat malu-malu+topi goyang, butoijo goyangan lambat+lengan ayun, nyiblorong meliuk lateral+ekor bergelombang, palasik melayang+selimut berkibar, suster NGESOT condong belakang+geser lateral, cindaku jalan gesit+ekor goyang, gendruwo gempal goyang+lengan lebar, wewerawa santai+payung goyang, kober lari zigzag cape berkibar.
+   343→- WAVES rebalanced: wave 6 +sundel; wave 7 +leak; wave 8 suster/jailangkung/gendruwo/kolongwewe; wave 9 butoijo/nyiblorong/cindaku/wewerawa; wave 10 boss +palasik/bunian/kober (pocong/kunti dikurangi utk kompensasi).
+   344→- VERIFIKASI: spawn 13 enemy semua ok (0 error) ✓; VLM: "multiple different cute creature models… chibi… no broken/floating" ✓; FULL RUN 10 wave victory 2⭐ HP 95 (14 tower) dgn enemy baru ✓; run lemah (3 tower) kalah wave 7 — balance sehat ✓.
+   345→
+   346→BUGFIX RINGAN:
+   347→- RosterPreview: hapus eslint-disable tak terpakai.
+   348→- ShopScreen: useMemo dipindah SEBELUM early-return (rules-of-hooks).
+   349→- models: comma-expression → block statement (no-unused-expressions).
+   350→- roster: perbaiki TS2367 comparison.
+   351→
+   352→STYLING DETAIL TAMBAHAN (mandatory "lebih banyak detail"):
+   353→- ~330 baris CSS baru: navigasi kamera mobile (nav-dpad/nav-cam), profil chip + avatar gradient hijau, menu tile 3D shadow, level node (current bounce anim), settings card + slider lucu (thumb bulat radial-gradient), shop tab/chip/swatch/creator-power, scrollbar vertikal kustom emas utk semua overflow-y-auto, glow inset legendaris card.
+   354→
+   355→VERIFIKASI TOTAL (probe + DOM + VLM + mobile 390×844):
+   356→- ✓ P1 world: megaGround/terrain/river/pond/mountains/bridge/highClouds semua di scene; rumput penuh sampai tepi (VLM konfirmasi); sungai+jembatan terlihat top-down (VLM).
+   357→- ✓ P2 kamera: inertia (drag→momentum tx 12→68), zoom damping (39.9→43.5→50 bertahap), recenter (tx→1.61 real-time GSAP), panCamera API, D-pad + zoom +/- + recenter tampil mobile.
+   358→- ✓ P3: Level select 8 node (2 terbuka, 6 terkunci), preview modal + musuh count + MULAI LEVEL; level 1 victory → levelStars=[2] bestLevelDone=1 starCurrency=8; settings slider SFX 50→80 via React event; mobile semua layar DOM-visible.
+   359→- ✓ P4: 100 kartu, beli sukses (300→285, gen-13 owned), filter power/rarity/sort aktif, creator save localStorage.
+   360→- ✓ P5: 13 spawn ok, VLM model unik lucu tak broken, full victory run.
+   361→- ✓ Tutorial fresh save: step 1→4→(kill)→selesai, tutorialSeen+badge tersimpan.
+   362→- ✓ lint bersih, tsc --noEmit bersih (kode game), dev.log bersih (GET 200), 0 console error.
+   363→- Artefak screenshot: download/final_menu.png, world_check.png, enemies.png, shop.png, settings.png, levels_mobile.png.
+   364→
+   365→Stage Summary:
+   366→- P1 SELESAI: dunia 4.5× lebih luas (230×150) penuh rumput/bukit/hutan/taman/sungai/jembatan/kolam teratai/desa/gunung parallax 2 lapis/awan tinggi — void abu-abu HILANG, semua merged hemat draw call.
+   367→- P2 SELESAI: kamera inertia momentum + zoom damping + pinch-to-zoom + BOUNDS luas + recenter; MobileNav D-pad auto-hide + zoom ± + recenter (mobile friendly).
+   368→- P3 SELESAI: Main menu profesional (profil+bintang+MAIN+3 ubin), PETA PETUALANGAN 8 level node + rating bintang + unlock progresif, SETTINGS lengkap (volume slider terpisah/kualitas/sensitivitas/reset 2-step), wave counter dinamis per level.
+   369→- P4 SELESAI: TOKO 100 karakter (6 hero legendaris + 94 generatif deterministik 6 power × 3 varian × 10 tema × 4 rarity), beli pakai ⭐ (grantRunReward 20 pahala=1⭐), filter/sort/search, modal detail, character creator "Buat Sendiri" (warna/aksesoris/ekspresi/power fair) + preview 3D real-time + save localStorage.
+   370→- P5 SELESAI: 20 hantu lokal Indonesia chibi (13 baru: sundel bolong, leak mini, kolong wewe, jailangkung, orang bunian, buto ijo, nyi blorong, palasik, suster ngesot, cindaku, gendruwo bukit, wewe rawa berpayung teratai, setan kober) — tiap jenis model unik + animasi idle khas + mekanik pembeda (flying/immune/flee/tanker/zigzag) + wave 6-10 diperkaya.
+   371→
+   372→Unresolved issues / risks & rekomendasi fase berikutnya:
+   373→- Karakter custom & roster yang DIBELI belum bisa dipasang di gameplay (masih 6 hero CHAR_DEFS) — fase berikutnya: integrasi CharacterBar dynaMis (roster card → placeTower pakai power stats heroId mapping) — perlu sistem placeTower generik di entities.
+   374→- Level 2-8 belum playtest e2e satu-satu (hanya level 1) — jalankan bot per level.
+   375→- Wave 10 agak padat (7 tipe) — pantau di playtest nyata.
+   376→- Karakter custom tersimpan tapi tidak dimuat kembali di creator (list saved chars belum ditampilkan).
+   377→- Leaderboard belum punya kolom level/mode.
+   378→- Ide lanjutan: Sarah si Penjahit, tantangan mingguan, bahasa EN, audio pre-rendered, partikel aura legendaris di gameplay.
+   379→
+   380→---
+   381→Task ID: 8
+   382→Agent: main-agent (Z.ai Code)
+   383→Task: P7 — INTEGRASI KARAKTER MILIK PEMAIN KE GAMEPLAY (roster toko + custom bisa dipasang & bertarung) + creator load/hapus + aura legendaris + playtest level 2-8
+   384→
+   385→Work Log:
+   386→
+   387→QA AWAL (agent-browser + probe):
+   388→- Build sehat: halaman 200, 0 console error, probe lengkap (__pmEngine/__pmStore).
+   389→- KONFIRMASI GAP UTAMA (dari worklog fase lalu): tryPlace(slot, 'gen-13') THROW "Cannot read properties of undefined (reading 'cost')" — karakter yang dibeli di toko TIDAK BISA dipasang di gameplay (CHAR_DEFS hanya 6 hero). Ini prioritas #1.
+   390→
+   391→P7 — INTEGRASI LENGKAP (roster + custom → gameplay):
+   392→1) data.ts: CharDef.id melebar dari CharId → string ( struktur aman, 'ali' tetap assign-able); tambah field rarity?: 'umum'|'langka'|'epik'|'legendaris' (untuk aura & styling).
+   393→2) BARU src/lib/game/chardb.ts (~100 baris):
+   394→   - getCharDef(id): hero → CHAR_DEFS; roster/custom → synthRosterDef(rc) dgn cache; fallback aman CHAR_DEFS.ali.
+   395→   - synthRosterDef: base stats dari HERO se-power (POWERS.heroId) × variant.damageMult/rateMult/rangeMult × RARITY_POWER (umum 0.92 / langka 1.0 / epik 1.08 / legendaris 1.15) → TETAP BALANCED.
+   396→   - Biaya per rarity: RARITY_COST 45/70/95/140 pahala; upgrade ×0.85/1.0/1.15/1.35.
+   397→   - Varian khusus: 'mentul' knockback ×1.5; 'subur' pahalaGen ×1.3; 'kilat' interval ×0.75.
+   398→   - aoeRadius/slowDuration diskalakan rangeMult; slowFactor/knockback/stun dari base.
+   399→   - isHeroChar / isCustomCharId helper.
+   400→3) roster.ts: REGISTRY karakter custom runtime:
+   401→   - loadCustomChars(): localStorage 'penjaga-masjid-custom-char' → Map<id, RosterChar> + rcModels (CharCustom per id) — dipanggil engine.init() & startGame().
+   402→   - getRosterChar(id) cek custom registry dulu → ROSTER.
+   403→   - saveCustomEntry(cc, name) / deleteCustomEntry(id) / listSavedCustoms().
+   404→   - SavedCustomEntry interface (id/presentation/warna/accessory/expression/power/variant/name).
+   405→4) models.ts: getTowerModel(charId, level) — resolusi terpusat: hero → getCharacterModel; custom-* → getCustomModel(cc); roster dgn heroId → model hero asli; roster generatif → getRosterModel; fallback ali.
+   406→5) entities.ts: Tower constructor & setLevel pakai getCharDef + getTowerModel (charId: string); placeTower(charId: string).
+   407→   - AURA PARTIKEL: rarity epik (tiap 0.9s) / legendaris (tiap 0.5s) → ctx.particles.sparkleRise orbit radius 0.6-1.1 sekitar tower, warna emas/ungu.
+   408→6) engine.ts: beginPlacing/updateHoverSlot/refreshSlotHighlights/tryPlace → getCharDef (charId: string); ghostChar: string.
+   409→   - startGame: loadCustomChars() + seed unlockedChars ← ownedChars (hero-umar → 'umar') + semua id custom → belanja toko LANGSUNG terasa di gameplay.
+   410→   - init(): loadCustomChars() awal + probe baru __pmRoster (ROSTER + getCharDef utk QA).
+   411→7) store.ts: selectedCharId/funFact.char/unlockedChars/SelectedTowerInfo.char → string (type widening).
+   412→8) CharacterBar.tsx (rewrite): 6 kartu hero + KARTU ROSTER/CUSTOM MILIK PEMAIN (border sesuai rarity RARITY_INFO.border, badge rarity emoji pojok, preview RosterPreview 3D berputar, harga ⭐, badge 💰 utk power nasihat) + indikator "Koleksi N+" dashed di ujung; panel preview terpilih pakai RosterPreview utk non-hero; onCardDown(charId: string).
+   413→9) TowerPanel/Hud(FunFactModal): CHAR_DEFS[x] → getCharDef(x).
+   414→10) ShopScreen CharCreator: input NAMA karakter (🏷️, max 24 char); KOLEKSI KARYA-MU list (max tampil, scroll 36px) tiap item: emoji power + nama + tombol Muat (Sparkles) + Hapus (X rose); loadSaved() set seluruh state custom + nama; removeSaved() delete + refresh; saveCustom pakai saveCustomEntry(nama).
+   415→
+   416→VERIFIKASI (probe + DOM + VLM + screenshot):
+   417→- ✓ Seed owned: startGame → unlockedChars ['ali','aisyah','gen-13','kakek','custom-1'] (hero-kakek dari toko + gen-13 roster + custom-1 creator).
+   418→- ✓ tryPlace(0,'gen-13') & tryPlace(5,'custom-1') → true; def: "Zahra si Penolong (Cahaya Cepat)" orb dmg7 cost45 rarity umum / "Sarah Karyaku (Dzikir Luas)" bubble dmg9 — ATTACK & VARIAN benar dari power/variant!
+   419→- ✓ Combat: wave 1 selesai 5 defeated dgn tower roster+custom aktif; pahala flow normal.
+   420→- ✓ Upgrade roster tower: level 1→2, dmg 7→11 (multiplier varian+rarity jalan).
+   421→- ✓ Legendaris/epik roster placeable (gen-5 legendaris cost 140 dmg1[nasihat-economy by design], gen-10 epik); aura partikel: glow pool 21-22 alive particles regen tiap 0.5s.
+   422→- ✓ VLM gameplay: "chibi towers on green pads near dirt paths, at least one with hijab, mosque visible, no broken models" ✓.
+   423→- ✓ Level 2-8 e2e bot: L3 victory (47 defeated), L4 3⭐/hp120, L5 3⭐/115, L6 3⭐/115, L7 3⭐/110, L8 2⭐/85 (boss) — semua victory; save: levelStars [0,3,3,3,3,3,3,2], bestLevelDone 8, starCurrency 810.
+   424→- ✓ Creator: input nama; list "Muat Sarah Karyaku" + Hapus; klik Muat → state creator berubah (Anak Gamis aktif + nama "Sarah Karyaku" terisi) — siklus create→save→load→edit lengkap!
+   425→- ✓ Mobile 390×844: 8 kartu bar (6 hero + gen-13 + custom-1) + "Koleksi 2+" badge + D-pad; VLM rekonstruksi cocok.
+   426→- ✓ Tutorial fresh save: step 1→2→3→4→…→0 selesai (advance antar aksi), tutorialSeen tersimpan.
+   427→- ✓ lint bersih, tsc --noEmit bersih, 0 console error, dev.log GET 200.
+   428→- Artefak: download/roster_gameplay.png, download/charbar_mobile.png.
+   429→
+   430→BUGFIX:
+   431→- [FIX] Custom char tidak muncul di CharacterBar (unlockedChars tidak di-seed id custom) → startGame kini gabungkan customs.map(id) ke seed.
+   432→- [FIX] TS error: onToast 'info' → 'good' (tipe toast lokal ShopScreen); comma-expression chardb; unused import addStarCurrency/grantRunReward dihapus.
+   433→- Catatan QA: gameover saat tutorial → tutorialStep tetap (restart tutorial otomatis di game berikut karena tutorialSeen false) — by design. Aksi probe sinkron berturut tanpa advance → step tertinggal (known artifact, pemain nyata selalu ada frame antar aksi).
+   434→
+   435→STYLING DETAIL (mandatory):
+   436→- Kartu roster di CharacterBar: border rarity warna (abu/biru/ungu/emas), badge emoji rarity pojok kiri, preview 3D melayang dalam frame 72px, indikator Koleksi dashed amber.
+   437→- Creator: input nama pill rounded; koleksi list emerald card dgn btn-round mini (Muat golden, Hapus rose).
+   438→
+   439→Stage Summary:
+   440→- SIKLUS GAME TERTUTUP PENUH: TOKO (beli ⭐) + CREATOR (buat & simpan) → START GAME (auto-unlock semua milikan) → PASANG & BERTARUNG (stats seimbang dari sistem: hero-base × varian × rarity) → UPGRADE → AURA legendaris/epik → MENANG → dapat ⭐ lagi utk belanja. Loop ekonomi lengkap!
+   441→- Semua 8 level terverifikasi menang (bot); tutorial & mobile regression pass.
+   442→
+   443→Unresolved issues / risks & rekomendasi fase berikutnya:
+   444→- Slot kartu roster di CharacterBar bisa sangat panjang jika pemain memiliki banyak karakter (scroll horizontal membantu, tapi bisa pertimbangkan tab/kategori atau modal koleksi utk >12 kartu).
+   445→- Nasihat (sedekah) roster: pahalaGen varian 'subur'/'kilat' hanya 2 varian spesial — 'berkah' (range) tidak berpengaruh nyata ke gameplay economy tower (range dipakai cincin saja); bisa buat aura buff nyata nanti.
+   446→- Karakter roster/custom belum punya funFact edukatif unik (pakai teks generik) — bisa perkaya.
+   447→- Leaderboard belum ada kolom mode/level; wave 10 masih 7 tipe musuh (padat).
+   448→- Ide lanjutan: tab Koleksi terpisah dgn detail & statistik kepemilikan, sound cue khas per rarity, save cloud, pilihan bahasa EN.
+   449→
+   450→---
+   451→Task ID: 9
+   452→Agent: main-agent (Z.ai Code)
+   453→Task: P8 — LAYAR KOLEKSI PENUH + BUFF NASIHAT NYATA DI GAMEPLAY + funFact EDUKATIF UNIK + KOLOM MODE LEADERBOARD + SFX RARITY + polish styling
+   454→
+   455→Work Log:
+   456→
+   457→QA AWAL (agent-browser + probe):
+   458→- Dev server 200 OK, console bersih (hanya "WebGL Context Lost" headless yang wajar), probe lengkap.
+   459→- Simulasi cepat: startGame level 1 → wave 3 HP 101 tanpa error — game P1-P7 stabil, lanjut ke fitur baru sesuai rekomendasi fase sebelumnya.
+   460→
+   461→P8-a — LAYAR KOLEKSI (menjawab risiko "CharacterBar bisa sangat panjang"):
+   462→- BARU src/lib/game/collection.ts: openCollection() / closeCollection() / refreshCollData() — memuat data localStorage → store secara SINKRON (bebas react-hooks/set-state-in-effect, bebas impor melingkar store↔achievements).
+   463→- BARU src/components/game/CollectionScreen.tsx (~480 baris): overlay full-screen z-50:
+   464→  * Header (judul + ⭐ currency + close), kartu statistik kepemilikan: total X/100, progress bar animasi stripes emerald→amber, chip jumlah per rarity.
+   465→  * Tab "Milikku" / "Semua (100)" + pencarian nama + filter power (6) & rarity (4) + sort rarity→nama.
+   466→  * Grid kartu 2/3/4/5 kolom responsif: kartu owned (warna + badge "Milikmu") vs locked (grayscale + 🔒 harga ⭐); kartu legendaris owned dapat efek shimmer kilau animasi.
+   467→  * Modal detail: preview 3D berputar, tema, TABEL STATISTIK NYATA level 1 (damage/range/ritme ATAU sedekah+aura nasihat dari getCharDef), power+varian, FUNFACT EDUKATIF UNIK 💡, desc rarity, tombol BELI (jingle rarity!) / "PASANG PENJAGA INI!" (saat bermain) / "Mainkan Koleksimu!" (dari menu → level select).
+   468→- BARU LazyRosterPreview (RosterPreview.tsx): preview 3D hanya MOUNT saat kartu terlihat (IntersectionObserver rootMargin 180px + histeresis unmount 1.6s) + cleanup forceContextLoss() — grid 100 kartu kini hanya ~15 konteks WebGL hidup (sebelumnya 100 → berisiko jenuh konteks browser). Diterapkan juga di grid TOKO.
+   469→- Integrasi: MainMenu tile KOLEKSI ke-4 (grid-cols-2 sm:grid-cols-4, badge jumlah owned ✨); CharacterBar indikator "Koleksi N+" → TOMBOL membuka layar (game AUTO-JEDA saat bermain, resume saat ditutup); GameShell Escape menutup koleksi; guard Space-toggle; EndScreens menu jeda disembunyikan saat koleksi terbuka (tidak tumpang tindih).
+   470→- store.ts: collectionOpen, collOwned, collCurrency, collCustoms, collPausedByUs + setCollectionOpen.
+   471→
+   472→P8-b — BERKAH NASIHAT (menjawasi risiko "varian 'berkah' tidak berpengaruh nyata"):
+   473→- entities.ts Tower: buffMult (1..1.22), nasihatGlow (cincin emerald berputar di kaki tower yang di-buff), buffRing (cincin radius aura berdenyut pada tower sedekah/nasihat), buffRadius basis MANDIRI 4.5/5.5/6.5 per level (bukan range serangan yang memang 2) ×1.4 utk varian 'berkah' → 6.3/7.7/9.1 — varian berkah kini punya efek gameplay nyata!
+   474→- EntityManager.applyNasihatAuras() tiap frame sebelum tower update: tower 'sedekah' (Misbah + semua power nasihat) memperkuat tower tetangga dalam radius: damage × buffMult (dan hasil sedekah tower sedekah lain juga × buffMult). Tidak menumpuk (ambil maksimum). NASIHAT_BUFF = [1.10, 1.16, 1.22].
+   475→- TowerPanel: badge "💡 Berkah Nasihat +N%" (refresh live via simTick saat nilai berubah) + baris "💡 Aura nasihat rad. X · +N%" untuk tower sedekah.
+   476→- VERIFIKASI: misbah+ali jarak 0.5 → ali buffMult 1.1 glow visible ✓; aisyah jarak 5.6 > 4.5 → tidak ter-buff ✓; gen-5 (varian berkah, radius 6.3) → ali jarak 5.1 TER-BUFF ✓ (mustahil dgn radius standar); panel DOM "💡 Berkah Nasihat+10%" ✓; VLM: "green glowing rings on the ground near characters, no broken visuals" ✓.
+   477→
+   478→P8-c — FUNFACT EDUKATIF UNIK (menjawasi risiko "roster funFact generik"):
+   479→- chardb.ts: POWER_FACTS (6 power × 3 fakta islami ramah anak Indonesia: sholat cahaya, dzikir menenangkan, sedekah menolak bala, wudhu separuh iman, nasihat amanah, Bilal muadzin pertama) + hashPick deterministik by id → tiap karakter punya funFact unik + suffix varian.
+   480→- Engine tryPlace: funFact "Tahukah Kamu? 🤔" saat PERTAMA memasang karakter non-hero run itu (hanya saat wave tidak aktif agar tidak mengganggu); FunFactModal judul kontekstual (place vs unlock); placedThisRun direset tiap startGame.
+   481→- VERIFIKASI: pasang gen-13 → modal "Tahukah Kamu?" + "Bangun subuh itu sindiran setan paling ampuh..." ✓; modal detail koleksi menampilkan funFact unik ✓.
+   482→
+   483→P8-d — LEADERBOARD KOLOM MODE (menjawasi risiko "leaderboard belum ada kolom mode/level"):
+   484→- prisma schema: ScoreEntry.mode String @default("Klasik") + db:push sukses.
+   485→- API route: validasi sanitizeMode (whitelist "Klasik"/"Daring Harian" + pola /^Level \d{1,2}$/; sisanya → "Klasik") — uji XSS `<script>` ditolak ✓.
+   486→- CATATAN PENTING: dev server memuat client Prisma LAMA di memori (kolom baru tak dikenal tanpa restart; server tak boleh di-restart manual) → route dialihkan ke RAW SQL ($queryRawUnsafe/$executeRawUnsafe) yang kompatibel klien lama & baru, ranking/prune tetap sama.
+   487→- EndScreens submit: mode = dailyMode ? 'Daring Harian' : levelId>0 ? `Level ${levelId}` : 'Klasik'.
+   488→- MenuModals: chip mode di baris leaderboard (🔥 Daring Harian oranye / 🗺️ Level N biru; Klasik tanpa chip).
+   489→- VERIFIKASI: POST "Level 3"/"Daring Harian" tersimpan ✓; UI victory level 3 → skor masuk dgn mode "Level 3" ✓; chip tampil di modal ✓.
+   490→
+   491→SFX & STYLING DETAIL (mandatory):
+   492→- audio.buyRarity(rarity): 4 jingle berbeda (umum pop+koin, langka triple-chime, epik arpeggio+bel, legendaris fanfare+sorak) — dipakai di Toko & Koleksi.
+   493→- ~150 baris CSS baru: .coll-stat-card (radial + shadow emerald), .coll-progress-fill (gradasi + stripes bergerak @keyframes), .coll-rarity-chip, .coll-tab/-active, .coll-card (owned/locked/legend + shimmer legendaris @keyframes legend-shimmer), .lb-mode-chip (daily orange / level biru).
+   494→- Tile KOLEKSI menu dgn badge jumlah; Tombol KOLEKSI di CharacterBar (dashed amber + gradient + shadow-inner).
+   495→
+   496→BUGFIX TERKAIT:
+   497→- [FIX] GameShell import kehilangan newline saat edit (parse error HMR) — dipulihkan.
+   498→- [FIX] react-hooks/set-state-in-effect pada pemuatan data koleksi → refactor ke helper modul collection.ts (set sinkron di luar React).
+   499→- [FIX] buffRadius awal memakai range tower (Misbah range 2 → radius 2 tak berguna) → basis mandiri 4.5/5.5/6.5.
+   500→- MergeGeometries error 11× di console ternyata ARTEFAK HMR transien saat file setengah diedit — load bersih 0 error (dikonfirmasi dgn init-script capture stack).
+   501→
+   502→VERIFIKASI TOTAL (probe + DOM + VLM + API + mobile 390×844):
+   503→- ✓ Koleksi dari menu: open → data (owned/currency/customs) termuat; tab Milikku 4 kartu, Semua 100 kartu; filter umum → beli "Adib si Ceria" 21⭐: owned 3→4, currency 100→79, toast, statistik "4/100" live-update.
+   504→- ✓ Koleksi saat bermain: klik tombol KOLEKSI → paused=true, menu jeda TERSEMBUNYI, klik kartu Zahra → PASANG → koleksi tutup + unpause + selectedCharId=gen-13 + dragging → tryPlace sukses (ditolak dulu saat pahala kurang — logika ekonomi benar).
+   505→- ✓ Lazy preview: shop 100 kartu hanya ~16 canvas hidup; scroll ke bawah tetap 16 (konteks dilepas/muat ulang).
+   506→- ✓ Buff nasihat: angka + visual ring emerald (VLM konfirmasi) + panel badge + pahalaGen ter-buff.
+   507→- ✓ Leaderboard: mode tersimpan & tampil; run level 3 victory → submit "Level 3" otomatis; XSS ditolak; prune tetap jalan.
+   508→- ✓ Mobile 390×844: menu 4 tile 2 kolom, koleksi readable (VLM), progress+tab+filter OK.
+   509→- ✓ Pause normal (space) tetap berfungsi; Escape menutup koleksi.
+   510→- ✓ lint bersih, tsc --noEmit bersih (kode proyek), dev.log bersih, console 0 error.
+   511→- Artefak: download/collection_screen.png, collection_grid.png, collection_mobile.png, funfact_place.png, nasihat_buff.png, leaderboard_mode.png.
+   512→
+   513→Stage Summary:
+   514→- P8 SELESAI: Layar KOLEKSI profesional (statistik kepemilikan + progress + filter + beli + pasang langsung + lazy WebGL), buff Nasihat kini strategi nyata (tower dukungan memberi +10/16/22% damage & pahala area, varian 'berkah' radius terluas), funFact edukatif unik per karakter (modal "Tahukah Kamu?"), leaderboard berlabel mode asal skor, jingle beli per rarity.
+   515→- Loop ekonomi & koleksi kini punya "rumah" sendiri: TOKO (belanja) → KOLEKSI (album + statistik + deploy) → GAMEPLAY (buff sinergi) → MENANG → ⭐.
+   516→
+   517→Unresolved issues / risks & rekomendasi fase berikutnya:
+   518→- Prisma client di dev server masih versi lama (route leaderboard sudah raw-SQL-proof, tapi model Prisma baru baru terpakai setelah restart server berikutnya) — tidak mempengaruhi fungsi.
+   519→- Koleksi belum menampilkan statistik pemakaian (berapa kali dipasang/menang) — bisa ditambah counter per karakter.
+   520→- Lazy preview punya potensi kedipan sangat singkat saat scroll cepat (histeresis 1.6s menahan); jika terganggu bisa naikkan ke 2.5s.
+   521→- funFact 'place' belum muncul bila penempatan pertama terjadi saat wave aktif (by design, non-intrusif).
+   522→- Ide lanjutan: sorting koleksi by power rarity DESC default; tab "Karya Sendiri" terpisah; pencarian tema; export/share screenshot koleksi; bahasa EN; cloud save.
+   523→
+   524→---
+   525→Task ID: 10
+   526→Agent: sub-agent (P9-a Weekly Challenge)
+   527→Task: P9-a — TANTANGAN MINGGUAN (Weekly Challenge): mode mingguan lebih sulit berhadiah besar (tema violet), streak pekan, badge baru, skor masuk papan rekor berlabel "Tantangan Mingguan"
+   528→
+   529→Work Log:
+   530→- data.ts: refactor `ModeMods` (enemyHpMult/enemySpeedMult/rewardMult/startPahalaBonus/mosqueHpBonus/duaChargeMult/stealMult) → `DailyModifier extends ModeMods`; `applyDailyMods(mod: ModeMods)` (nama fungsi dipertahankan). BARU: `WeeklyModifier` (+ rewardStars 25-40), `WEEKLY_MODIFIERS` (8 entri Indonesia ramah anak: Badai Setan 🌪️, Kabut Pekat 🌫️, Gerimis Berkah 🌧️ [chip duplikat di spec dirapikan jadi 2 chip], Malam Bermega ✨, Pasukan Gergasi 👹, Zakat Mengalir 💰, Uji Iman 🕋 [terberat, 40⭐], Jumat Berkah 🕌), helper ISO-week: `weeklyKey()` (YYYY-Www, Senin awal pekan), `pickWeeklyModifier(key)` (hash sama seperti daily), `daysUntilNextWeek()`.
+   531→- store.ts: state baru `weeklyMode` / `weeklyMod: WeeklyModifier | null` / `weeklyStreakResult` + reset di `resetForNewGame()`; persist.ts: `SaveData` + `weeklyStreak` / `lastWeeklyWin` (default 0/null, merge defensif utk save lama).
+   532→- achievements.ts: `getWeeklyStreakInfo()`, `recordWeeklyWin(weekKey)` (idempotent per pekan; streak+1 bila lastWeeklyWin === weeklyKey(7 hari lalu), selain itu 1); badge baru `{ weekly_win, 'Penjaga Pekanan' 📅 }` (BADGES 15→16; pill menu sudah dinamis BADGES.length — tidak ada hardcode 15); event `weeklyWin` di BadgeCtx + case unlock.
+   533→- engine.ts: field `weeklyKeyRun`; `startGame({ weekly })` — branch setelah daily: applyDailyMods(wmod) + mosqueHpBonus + startPahalaBonus + set store weeklyMode/weeklyMod + toast "TANTANGAN PEKAN INI"; konfigurasi KLASIK (levelId 0, WAVES penuh 10 gelombang — getLevel(0)→undefined→branch klasik terverifikasi); reset weeklyKeyRun bersama dailyKeyRun di startGame; backToMenu reset weeklyMode/weeklyMod; onVictory: hitung runStarGain + bonus mingguan SEBELUM screen 'victory', recordWeeklyWin → weeklyStreakResult, addStarCurrency(rewardStars), checkBadges weeklyWin, ring burst violet 0x8b5cf6 di masjid (mirror oranye daily).
+   534→- BARU src/components/game/WeeklyChallenge.tsx: kartu violet clone DailyChallenge — header CalendarDays + "TANTANGAN MINGGUAN" + chip "Pekan {n}", emoji besar animasi, effect chips `.weekly-effect-chip`, pill emas "🏆 Bonus +N⭐ kalau menang!", streak pill "🔥 N pekan beruntun" / hint, tombol `.btn-weekly` "TERIMA TANTANGAN!" / "Main Lagi Minggu Ini?", footnote countdown "Pekan baru dalam N hari" + "skor masuk papan rekor".
+   535→- MainMenu.tsx: `<WeeklyChallengeCard />` tepat setelah `<DailyChallengeCard />`.
+   536→- EndScreens.tsx: mode label skor `weeklyMode ? 'Tantangan Mingguan' : ...`; banner kemenangan violet `.weekly-won-banner` (📅 "Tantangan Mingguan Selesai!" + nama mod + streak pekan, mirror JSX daily); restart `weeklyMode ? { weekly: true } : ...`; ScoreSubmit TETAP tampil utk mingguan (hanya daily yang suppress — sesuai spec).
+   537→- Hud.tsx: chip `.weekly-chip` "📅 PEKANAN · {nama}" mirror animasi chip daily.
+   538→- MenuModals.tsx: chip mode leaderboard → 'Tantangan Mingguan' kelas `lb-mode-weekly` emoji 📅; api/leaderboard/route.ts: MODE_WHITELIST + 'Tantangan Mingguan'.
+   539→- globals.css: famili WEEKLY violet (~130 baris, header `/* ===== TANTANGAN MINGGUAN ===== */`): `.weekly-card` (bg #f3efff→#ece4ff, border #c4b5fd), `.weekly-effect-chip`, `.weekly-week-chip`, `.weekly-reward-pill` (emas), `.weekly-streak-pill`, `.btn-weekly` (gradient #a78bfa→#8b5cf6, shadow #7c3aed), `.weekly-chip`, `.weekly-won-banner`, `.lb-mode-weekly` (#ede9fe/#6d28d9/#c4b5fd) — semua mirror konvensi famili .daily-*.
+   540→
+   541→BUG DITEMUKAN & DIPERBAIKI:
+   542→- [FIX] PRE-EXISTING (P4): banner "+N Bintang Toko!" di layar kemenangan TIDAK PERNAH tampil — EndScreens ter-mount sejak awal aplikasi sehingga `useState(() => __pmEngine?.runStarGain)` selalu terbaca 0 (engine dibuat di useEffect setelah render pertama). Fix: starGain kini dibaca saat render layar 'victory' (bukan sekali di mount) + onVictory menghitung runStarGain SEBELUM `screen: 'victory'` agar nilai selalu final. Terverifikasi klasik (25⭐) & mingguan (26+30=56⭐ kini tampil).
+   543→- Catatan QA: submit skor pertama via eval tampak "gagal" (scoreSubmitted false) — artefak HMR (edit EndScreens di tengah tes me-remount form & reset state lokal); POST-nya sendiri sukses masuk DB. Re-test setelah reload: UI submit → DB mode "Tantangan Mingguan" ✓.
+   544→
+   545→VERIFIKASI (probe __pmEngine/__pmStore + DOM + API + VLM):
+   546→- ✓ lint bersih; tsc --noEmit: src/ 0 error (hanya error pre-existing di examples/ & skills/ scaffold); dev.log HMR "✓ Compiled" tanpa error.
+   547→- ✓ Menu: .weekly-card + .btn-weekly render di bawah .daily-card; chip "Pekan 36"; pill "🏆 Bonus +30⭐"; tombol "TERIMA TANTANGAN!".
+   548→- ✓ startGame({weekly:true}) → screen 'playing', weeklyMode true, mod 'Jumat Berkah' 🕌 (varian mingguan, ≠ daily 'Jumat Berkah' 🌟), mosqueMaxHp 145 (120+25), RUN_MODS {rewardMult 1.25, duaChargeMult 1.7}, totalWaves 10, levelId 0, dailyMode false; advance(5) tanpa error.
+   549→- ✓ HUD: .weekly-chip "🕌 PEKANAN · Jumat Berkah".
+   550→- ✓ Menang (onVictory): weeklyStreakResult 1, starCurrency 103→133 (+30), badge weekly_win terbuka, lastWeeklyWin '2026-W36'; menang kedua pekan sama → streak tetap 1 (idempotent); backdate lastWeeklyWin ke W35 → menang W36 → streak 2 ✓.
+   551→- ✓ Layar menang: banner violet "Tantangan Mingguan Selesai!" + "+56 Bintang Toko!" (termasuk bonus) + form submit skor TAMPIL (tidak di-suppress); submit UI "PekanJuara" → DB mode "Tantangan Mingguan" ✓; XSS mode tetap ditolak → "Klasik".
+   552→- ✓ Leaderboard modal: chip violet 📅 "Tantangan Mingguan" (kelas lb-mode-weekly).
+   553→- ✓ VLM: kartu violet rapi di bawah kartu oranye tanpa glitch; banner menang + banner bintang + form submit terkonfirmasi visual; chip HUD terkonfirmasi.
+   554→- Artefak: download/weekly_card.png, weekly_card_won.png, weekly_hud.png, weekly_victory.png, weekly_leaderboard.png.
+   555→
+   556→Stage Summary:
+   557→- P9-a SELESAI: mode Tantangan Mingguan penuh — modifier pekan-seeded lebih sulit (8 varian, hingga musuh +35% kuat / imbalan +60%), bonus ⭐ toko 25-40 saat menang, streak pekan beruntun + badge "Penjaga Pekanan", tema violet konsisten (kartu menu, chip HUD, banner menang, chip leaderboard), dan skor TETAP masuk papan rekor berlabel "Tantangan Mingguan" (whitelist API + UI). Bonus: bug lama banner bintang toko P4 ikut diperbaiki sehingga bonus mingguan terlihat di layar menang.
+   558→
+   559→---
+   560→Task ID: 11
+   561→Agent: sub-agent (P9-c Kotak Sedekah power-ups)
+   562→Task: P9-c — KOTAK SEDEKAH: power-up in-run — kotak sedekah ajaib muncul di lapangan saat wave aktif, diketuk pemain untuk buff sementara (damage/rate/pahala berdurasi + Perisai Masjid 3 muatan) dengan klaster pill HUD + hitung mundur.
+   563→
+   564→Work Log:
+   565→- data.ts: section baru `P9-c: KOTAK SEDEKAH` — `PowerupDef` (id/name/emoji/desc/color/duration/kind), `POWERUPS` 4 varian (🏹 Panah Berkah +30% dmg 20dtk, 🪭 Kipas Ajaib rate×0.75 18dtk, 💰 Hujan Pahala +40% 25dtk, 🛡️ Perisai Masjid 3 muatan instan), `POWERUP_CONST` (firstDelay 22, interval [26,40], lifetime 14, bobHeight 0.55, baseY 0.9), `POWERUP_MULT` {damage 1.3, rate 0.75, pahala 1.4}.
+   566→- entities.ts: ManagerCtx +`powerDamageUntil`/`powerRateUntil`/`powerRewardUntil` (init -1 di constructor EntityManager, ikut direset di reset()); Tower.update: pengali `pwDmg`/`pwRate` dari ctx diterapkan ke dmg DAN ke semua 4 jalur cooldown (aura/sedekah/adzan/proyektil orb-bubble-coin); `activatePowerup(kind, duration)` + getter `powerDamageUntil`/`powerRateUntil`/`powerRewardUntil`/`powerRewardActive` utk engine.
+   567→- store.ts: `ActivePowerup` (id/name/emoji/remaining/kind), state `activePowerups` + `shieldCharges`, action `setActivePowerups`/`setShieldCharges`, keduanya di-reset `resetForNewGame()`.
+   568→- engine.ts (section `P9-c: KOTAK SEDEKAH`): field `private` TS (bukan #, agar probe QA bisa baca) powerupGroup/powerupDef/powerupSpawnedAt/powerupExpiresAt/nextPowerupAt/powerupSpin/shieldCharges/lastPowerupHudJson + Plane hit-test. `randomPowerupSpot()`: lane acak t∈[0.3,0.7] + offset tegak lurus 2.2–2.8 sisi acak, validasi ≥1.8 dari SLOTS, luar platform masjid, dalam rumput inti, retry 10×, fallback (-6, 10.8) halaman depan. `buildPowerupBox()`: BoxGeometry emas 0.62×0.5 + tutup warna def.color + RingGeometry emisif 0.7 di bawah. `spawnPowerupAt()` set expiry + jadwal next rand(26..40). Pickup di onPointerUp (SEBELUM logika slot/tower, unified mouse+touch, wasClick + jarak bidang < 1.3): buyRarity('epik') + firework + sparkleRise×2 + rings, `collectPowerup()` refactored shared dengan `debugCollectPowerup()`, toast "{emoji} {name} aktif!". `updatePowerups(waveActive)` di simTick (gameDt>0): spawn hanya saat wave aktif, expire → smokePuff + toast "Kotak sedekah menghilang... 😢", `syncPowerupHud()` recompute list dari getter until (banding JSON anti re-render spam, force saat collect) + sync shield. `updatePowerupVisual(dt)` selalu: bob sin(now*2.2), spin dt*1.4, 3 dtk terakhir pulse scale 1±0.18 + kedip emisif, auto-despawn saat screen bukan 'playing'. onEnemyLeaked: shield > 0 → charge--, rings biru 0x9ecbff + sparkle + toast "🛡️ Perisai masjid menahan 1 musuh!", return dini (musuh tetap leaked/terbersihkan, HP & curian tuyuh TIDAK jalan). onEnemyKilled: reward × POWERUP_MULT.pahala saat powerRewardActive. beginWave wave-1: nextPowerupAt 0 → now+firstDelay. startGame/backToMenu/dispose: despawn + reset semua field. QA: `debugSpawnPowerup(defId?)` + `debugCollectPowerup()`.
+   569→- BARU src/components/game/PowerupBadges.tsx: klaster pill fixed bottom-32 left-3 z-30 (di bawah DuaButton yang di tengah-kiri), AnimatePresence slide-in/out, pill per activePowerup (emoji + nama + ⏳ countdown ceil) + pill perisai "🛡️ Perisai ×N"; kind → kelas aksen. Dipasang di GameShell setelah <DuaButton />.
+   570→- globals.css: section `===== POWERUP (KOTAK SEDEKAH) =====` (~65 baris) — .powerup-pill (rounded-full border-2 font-black 11px px-3 py-1 backdrop-blur hard-shadow pointer-events-none + animasi powerup-pulse 1↔1.04), .powerup-pill-time (tabular-nums), varian -damage (emas #f5c518), -rate (teal #2dd4bf), -pahala (hijau #86d95c), -shield (biru #7cb6f9).
+   571→
+   572→VERIFIKASI (agent-browser probe __pmEngine/__pmStore + DOM + PointerEvent sintetis + VLM):
+   573→- ✓ lint bersih; tsc --noEmit: src/ 0 error (hanya pre-existing examples/ & skills/); dev.log HMR "✓ Compiled" tanpa error; console 0 error.
+   574→- ✓ startGame level 1 → activePowerups [], shieldCharges 0; advance(26) → wave 1 aktif, nextPowerupAt 47 (=25+22), belum ada kotak; advance(23) → kotak natural muncul (hujan-pahala).
+   575→- ✓ debugSpawnPowerup('perisai-masjid') → powerupGroup truthy di (13.55, 1.66, -1.77) — jauh dari slot; debugCollectPowerup → shieldCharges 3 + toast "🛡️ Perisai Masjid aktif!".
+   576→- ✓ PICKUP POINTER NYATA: proyeksi posisi kotak → layar (1204, 332), dispatch PointerEvent pointerdown+pointerup di canvas → kotak terkumpul via jalur player (bukan debug), activePowerups terisi + powerRewardActive true.
+   577→- ✓ Panah Berkah: collect → remaining 20 → berkurang tiap detik → kosong setelah advance melewati durasi; Kipas: rateUntil = now+18; kotak tak diambil → expire 14 dtk + toast "Kotak sedekah menghilang... 😢" + rateUntil tetap -1.
+   578→- ✓ Hujan Pahala: kill pocong 8 → 11 pahala (×1.4) — starsEarned 22 utk 2 kill (deterministik, buff dikumpulkan setelah wave mulai).
+   579→- ✓ Perisai: 6 pocong lolos tanpa tower → shield 3→0 menahan 3 (mosqueHp penuh), 3 sisanya lolos normal (130→121 = 3×3 dmg) — perisai membatalkan leak sepenuhnya.
+   580→- ✓ Gate wave: nextPowerupAt sengaja jatuh di jeda antar-wave → TIDAK spawn; wave 2 mulai → langsung spawn.
+   581→- ✓ startGame reset (active 0, shield 0, box null, nextAt 0, until -1); screen 'victory' → kotak & pill otomatis bersih; run kemenangan penuh level 1 (3 tower, 170 dtk) sukses tanpa error — siklus natural spawn berjalan (nextAt 47→128).
+   582→- ✓ DOM pills: ".powerup-pill-shield | 🛡️Perisai ×3", ".powerup-pill-damage | 🏹Panah Berkah⏳ 20s", ".powerup-pill-rate | 🪭Kipas Ajaib⏳ 18s" — VLM konfirmasi klaster 3 pill (biru/emas/teal) di kiri-bawah, tampil rapi tanpa tumpang tindih DuaButton.
+   583→- Artefak: download/powerup_box.png, download/powerup_hud.png.
+   584→
+   585→Stage Summary:
+   586→- P9-c SELESAI: Kotak Sedekah hadir sebagai engagement aktif mid-wave — kotak emas melayang (bob + spin + cincin warna buff + pulse/kedip 3 dtk terakhir) muncul tiap 26–40 dtk selama wave aktif (pertama 22 dtk setelah wave 1), diketuk (mouse/touch, hit-test bidang radius 1.3) untuk power-up sementara: +30% damage / +25% kecepatan serang (semua jenis serangan & sedekah) / +40% pahala kill — dengan pill HUD countdown per kind — atau Perisai Masjid 3 muatan yang menahan leak tanpa HP/curian. QA helpers debugSpawnPowerup/debugCollectPowerup + probe field private-TS tersedia untuk pengujian otomatis; semua mode (klasik/level/harian/mingguan) didukung.
+   587→
+   588→---
+   589→Task ID: 12
+   590→Agent: sub-agent (P9-b usage stats)
+   591→Task: P9-b — STATISTIK PEMAKAIAN KARAKTER: lacak berapa kali tiap karakter dipasang & ikut menang (persist), tampilkan di layar KOLEKSI (badge kartu + chip modal detail) + sorting "📊 Paling Dipakai".
+   592→
+   593→Work Log:
+   594→- persist.ts: `SaveData` + `charUsage: Record<string, { placed: number; wins: number }>` (key = id gameplay: 'ali', 'gen-13', 'custom-1'); DEFAULT_SAVE + `charUsage: {}`; merge defensif `sanitizeCharUsage()` di loadSave — entri malformed (placed/wins bukan number, entri string, object tanpa field) DILEWATI, nilai di-clamp ≥0; semua jalur return loadSave kini memberi object `charUsage` segar (hindari referensi bersama dgn DEFAULT_SAVE).
+   595→- achievements.ts: section "P9-b: statistik pemakaian karakter" — `getCharUsage()` (salinan defensif dari saveCache), `recordCharPlaced(charId)` (placed++, init entri, flush write-through → localStorage langsung), `recordCharsWon(charIds)` (wins++ per id UNIK via Set, flush).
+   596→- engine.ts: import + 2 hook — `tryPlace()`: `recordCharPlaced(def.id)` tepat setelah checkBadges towerPlaced; `onVictory()`: `recordCharsWon([...new Set(this.manager.towers.map(t => t.def.id))])` setelah clearLossStreak (semua tower yang masih berdiri dianggap ikut menang).
+   597→- store.ts: state `collUsage` (default {}) di antara field koleksi.
+   598→- collection.ts: `openCollection()` + `refreshCollData()` kini memuat `collUsage: getCharUsage()` sinkron ke store.
+   599→- CollectionScreen.tsx: (1) badge kartu `.coll-usage-badge` "📊 N×" kanan-bawah kartu MILIK yang pernah dipasang (lookup via `placeIdOf(c)` → id gameplay; title "Dipasang N× · Menang N×"); (2) modal detail: 2 chip `.coll-usage-chip` "📊 Dipasang N×" + "🏆 Menang N×" (hanya jika milik + placed > 0); (3) toggle urutan di baris filter: "Urutkan: ⭐ Rarity | 📊 Paling Dipakai" — mode usage = milik by placed DESC → sisa milik → belum dimilik by rarity (tie-break rarity+nama), berlaku utk tab Milikku & Semua.
+   600→- globals.css: section "P9-b — STATISTIK PEMAKAIAN KARAKTER" (~65 baris): `.coll-usage-badge` (absolute bottom-right, white/85, border 1.5px emerald-200, 9px font-black, rounded-full, pointer-events-none), `.coll-usage-chip` (emerald-50/200/700, 10px), `.coll-sort-chip`/`-on` (clone .coll-tab versi mungil).
+   601→- [FIX] PRE-EXISTING (P8/Task 9): modal detail koleksi "nyangkut" — menutup layar koleksi saat modal terbuka (X / "Mainkan Koleksimu!" / PASANG) TIDAK menghapus state `selected`, sehingga modal karakter lama muncul lagi begitu koleksi dibuka ulang. Fix: `setSelected(null)` di `close()` + `pickAndPlace()`.
+   602→
+   603→VERIFIKASI (agent-browser probe __pmEngine/__pmStore + localStorage + DOM + VLM):
+   604→- ✓ lint bersih; tsc --noEmit: src/ 0 error (hanya pre-existing examples/ & skills/); dev.log HMR "✓ Compiled" tanpa error; console browser 0 error.
+   605→- ✓ SAVE LAMA → save existing tanpa charUsage tetap aman dimuat; startGame({levelId:1}) → tryPlace(0,'ali') → localStorage LANGSUNG berisi charUsage.ali = {placed:1, wins:0} (write-through terbukti); tryPlace(1,'aisyah')+(2,'umar') sukses, tryPlace(3,'ali') ditolak benar (pahala tinggal 10 < cost — ekonomi jalan).
+   606→- ✓ MENANG: advance(400) dgn 3 tower → screen 'victory' → charUsage ketiga karakter wins:1 (placed tetap).
+   607→- ✓ KOLEKSI NYATA: backToMenu → klik tile KOLEKSI (DOM click) → collUsage termuat ke store; tab Milikku 4 kartu → 2 badge "📊 1×" (ali+aisyah; kartu tanpa pemakaian tanpa badge, umar tak dimiliki → tak berbadge) dgn title "Dipasang 1× · Menang 1×"; computed style badge: absolute/right-bottom 6px/rounded-full/pointer-events none.
+   608→- ✓ MODAL DETAIL: klik kartu Ali → 2 chip "📊 Dipasang 3× | 🏆 Menang 1×" (setelah run tambahan ali 2×).
+   609→- ✓ SORTING: chip "⭐ Rarity | 📊 Paling Dipakai" render; klik Paling Dipakai → Ali (3×) jadi kartu PERTAMA di Milikku & Semua (100 kartu, owned+usage di atas, lalu milik, lalu unowned by rarity); chip aktif bergaya hijau (.coll-sort-chip-on).
+   610→- ✓ DEFENSIF: inject charUsage malformed (placed:"broke", entri tanpa wins, entri string) + reload → buka koleksi → collUsage hanya berisi entri valid (umar), 0 badge, tanpa crash; state valid dipulihkan setelahnya (2 badge kembali).
+   611→- ✓ [FIX] modal nyangkut: buka modal Ali → tutup koleksi (X) → buka lagi → modal TIDAK muncul lagi (sebelum fix: muncul — terkonfirmasi lewat screenshot awal).
+   612→- ✓ VLM: grid sorted (badge "📊 3×/1×" kanan-bawah kartu, chip urutan aktif hijau, Ali pertama, tanpa tumpang tindih); modal (2 chip hijau rapi); mobile 390px badge+chip terbaca, layout utuh.
+   613→- Artefak: download/coll_usage.png, coll_usage_modal.png, coll_usage_sorted.png, coll_usage_mobile.png, coll_usage_final.png.
+   614→
+   615→Stage Summary:
+   616→- P9-b SELESAI: Statistik pemakaian karakter kini terekam permanen (placed/wins per id gameplay, write-through ke localStorage, tahan save lama & entri rusak) dan tampil di KOLEKSI: badge "📊 N×" di kartu milik, chip "Dipasang/Menang" di modal detail, plus sorting "Paling Dipakai" (favorit pemain naik ke atas). Bonus: bug modal detail koleksi yang muncul kembali saat dibuka ulang (P8) ikut diperbaiki.
+   617→

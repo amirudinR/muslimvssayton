@@ -7,7 +7,7 @@
 import { loadSave, saveSave, type SaveData } from './persist'
 import { gameStore } from './store'
 import { audio } from './audio'
-import { dailyKey } from './data'
+import { dailyKey, weeklyKey } from './data'
 
 export interface BadgeDef {
   id: string
@@ -32,6 +32,7 @@ export const BADGES: BadgeDef[] = [
   { id: 'sedekah_300', name: 'Jutawan Sedekah', desc: 'Kotak sedekah Misbah menghasilkan 300 pahala', emoji: '💰' },
   { id: 'tutorial_done', name: 'Murid Rajin', desc: 'Menyelesaikan tutorial Kakek Imam', emoji: '🎓' },
   { id: 'daily_win', name: 'Juara Harian', desc: 'Menang Tantangan Hari Ini', emoji: '🔥' },
+  { id: 'weekly_win', name: 'Penjaga Pekanan', desc: 'Menangkan Tantangan Mingguan', emoji: '📅' },
 ]
 
 let saveCache: SaveData | null = null
@@ -80,6 +81,7 @@ export interface BadgeCtx {
     | 'sedekahTick'
     | 'tutorialDone'
     | 'dailyWin'
+    | 'weeklyWin'
   enemyId?: string
   wave?: number
   stars?: number
@@ -151,6 +153,10 @@ export function checkBadges(ctx: BadgeCtx) {
     }
     case 'dailyWin': {
       unlock('daily_win')
+      break
+    }
+    case 'weeklyWin': {
+      unlock('weekly_win')
       break
     }
   }
@@ -255,6 +261,25 @@ export function recordDailyWin(todayKey: string): number {
   return s.dailyStreak
 }
 
+/* ---------------- tantangan mingguan (P9) ---------------- */
+
+/** info streak tantangan mingguan */
+export function getWeeklyStreakInfo(): { streak: number; lastWin: string | null } {
+  const s = getSave()
+  return { streak: s.weeklyStreak, lastWin: s.lastWeeklyWin }
+}
+
+/** catat kemenangan tantangan mingguan pekan ini — kembalikan streak baru. */
+export function recordWeeklyWin(weekKey: string): number {
+  const s = getSave()
+  if (s.lastWeeklyWin === weekKey) return s.weeklyStreak // sudah dicatat pekan ini
+  const prevWeekKey = weeklyKey(new Date(Date.now() - 7 * 86400000))
+  s.weeklyStreak = s.lastWeeklyWin === prevWeekKey ? s.weeklyStreak + 1 : 1
+  s.lastWeeklyWin = weekKey
+  flush()
+  return s.weeklyStreak
+}
+
 /* ---------------- P3: Level Select ---------------- */
 
 export interface LevelProgressView {
@@ -314,4 +339,39 @@ export function buyChar(id: string, cost: number): boolean {
   s.ownedChars = [...s.ownedChars, id]
   flush()
   return true
+}
+
+/* ---------------- P9-b: statistik pemakaian karakter ---------------- */
+
+/** salinan defensif map pemakaian (id gameplay → { placed, wins }). */
+export function getCharUsage(): Record<string, { placed: number; wins: number }> {
+  const out: Record<string, { placed: number; wins: number }> = {}
+  const src = getSave().charUsage
+  if (!src || typeof src !== 'object') return out
+  for (const [id, u] of Object.entries(src)) {
+    if (!u || typeof u !== 'object') continue
+    out[id] = { placed: u.placed ?? 0, wins: u.wins ?? 0 }
+  }
+  return out
+}
+
+/** catat satu penempatan karakter (engine → setelah placeTower sukses). */
+export function recordCharPlaced(charId: string): void {
+  const s = getSave()
+  if (!s.charUsage || typeof s.charUsage !== 'object') s.charUsage = {}
+  const cur = s.charUsage[charId] ?? { placed: 0, wins: 0 }
+  s.charUsage[charId] = { placed: cur.placed + 1, wins: cur.wins }
+  flush()
+}
+
+/** catat kemenangan utk tiap karakter unik yang ikut bertugas menang. */
+export function recordCharsWon(charIds: string[]): void {
+  if (charIds.length === 0) return
+  const s = getSave()
+  if (!s.charUsage || typeof s.charUsage !== 'object') s.charUsage = {}
+  for (const id of new Set(charIds)) {
+    const cur = s.charUsage[id] ?? { placed: 0, wins: 0 }
+    s.charUsage[id] = { placed: cur.placed, wins: cur.wins + 1 }
+  }
+  flush()
 }

@@ -33,6 +33,10 @@ export interface SaveData {
   dailyStreak: number
   /** tanggal (YYYY-MM-DD) terakhir menang tantangan harian */
   lastDailyWin: string | null
+  /** P9: pekan berturut-turut menang Tantangan Mingguan */
+  weeklyStreak: number
+  /** P9: kunci pekan (YYYY-Www) terakhir menang tantangan mingguan */
+  lastWeeklyWin: string | null
   /** P3: rating bintang terbaik per level (index = levelId-1, nilai 0..3) */
   levelStars: number[]
   /** P3: level tertinggi yang sudah selesai (0 = belum ada) */
@@ -41,6 +45,8 @@ export interface SaveData {
   ownedChars: string[]
   /** P4: bintang currency untuk belanja di toko */
   starCurrency: number
+  /** P9-b: statistik pemakaian per karakter (key = id gameplay) */
+  charUsage: Record<string, { placed: number; wins: number }>
 }
 
 const KEY = 'penjaga-masjid-save-v1'
@@ -60,17 +66,33 @@ const DEFAULT_SAVE: SaveData = {
   lossStreak: 0,
   dailyStreak: 0,
   lastDailyWin: null,
+  weeklyStreak: 0,
+  lastWeeklyWin: null,
   levelStars: [],
   bestLevelDone: 0,
   ownedChars: [],
   starCurrency: 0,
+  charUsage: {},
+}
+
+/** P9-b: sanitasi charUsage dari save lama — entri rusak dilewati. */
+function sanitizeCharUsage(raw: unknown): Record<string, { placed: number; wins: number }> {
+  const out: Record<string, { placed: number; wins: number }> = {}
+  if (!raw || typeof raw !== 'object') return out
+  for (const [id, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (!val || typeof val !== 'object') continue
+    const v = val as { placed?: unknown; wins?: unknown }
+    if (typeof v.placed !== 'number' || typeof v.wins !== 'number') continue
+    out[id] = { placed: Math.max(0, v.placed | 0), wins: Math.max(0, v.wins | 0) }
+  }
+  return out
 }
 
 export function loadSave(): SaveData {
-  if (typeof window === 'undefined') return { ...DEFAULT_SAVE }
+  if (typeof window === 'undefined') return { ...DEFAULT_SAVE, charUsage: {} }
   try {
     const raw = window.localStorage.getItem(KEY)
-    if (!raw) return { ...DEFAULT_SAVE, achievements: [] }
+    if (!raw) return { ...DEFAULT_SAVE, achievements: [], charUsage: {} }
     const parsed = JSON.parse(raw) as Partial<SaveData>
     return {
       ...DEFAULT_SAVE,
@@ -80,13 +102,16 @@ export function loadSave(): SaveData {
       lossStreak: typeof parsed.lossStreak === 'number' ? parsed.lossStreak : 0,
       dailyStreak: typeof parsed.dailyStreak === 'number' ? parsed.dailyStreak : 0,
       lastDailyWin: typeof parsed.lastDailyWin === 'string' ? parsed.lastDailyWin : null,
+      weeklyStreak: typeof parsed.weeklyStreak === 'number' ? parsed.weeklyStreak : 0,
+      lastWeeklyWin: typeof parsed.lastWeeklyWin === 'string' ? parsed.lastWeeklyWin : null,
       levelStars: Array.isArray(parsed.levelStars) ? parsed.levelStars.map((n) => Math.max(0, Math.min(3, n | 0))) : [],
       bestLevelDone: typeof parsed.bestLevelDone === 'number' ? parsed.bestLevelDone : 0,
       ownedChars: Array.isArray(parsed.ownedChars) ? parsed.ownedChars : [],
       starCurrency: typeof parsed.starCurrency === 'number' ? Math.max(0, Math.round(parsed.starCurrency)) : 0,
+      charUsage: sanitizeCharUsage(parsed.charUsage),
     }
   } catch {
-    return { ...DEFAULT_SAVE, achievements: [] }
+    return { ...DEFAULT_SAVE, achievements: [], charUsage: {} }
   }
 }
 
