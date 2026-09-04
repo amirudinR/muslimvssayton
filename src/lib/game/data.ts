@@ -5,7 +5,7 @@
  * ============================================================ */
 
 export type CharId = 'ali' | 'aisyah' | 'umar' | 'fatimah' | 'kakek'
-export type EnemyId = 'pocong' | 'kunti' | 'genderuwo' | 'tuyul' | 'wewe' | 'banaspati'
+export type EnemyId = 'pocong' | 'kunti' | 'genderuwo' | 'tuyul' | 'wewe' | 'kuyang' | 'banaspati'
 export type AttackKind = 'orb' | 'bubble' | 'coin' | 'aura' | 'adzan'
 
 export interface CharLevelStats {
@@ -52,6 +52,8 @@ export interface EnemyDef {
   knockResist?: number // 0..1
   fleesOnHit?: boolean
   isBoss?: boolean
+  flying?: boolean // melayang — tinggi & kebal slow
+  slowImmune?: boolean
 }
 
 export interface WaveSpawn {
@@ -249,6 +251,19 @@ export const ENEMY_DEFS: Record<EnemyId, EnemyDef> = {
     scale: 1.1,
     fleesOnHit: true,
   },
+  kuyang: {
+    id: 'kuyang',
+    name: 'Kuyang Melayang Lucu',
+    emoji: '🎈',
+    desc: 'Kepala terbang penuh rasa penasaran. Melayang tinggi — wangi wudhu tak tersentuh!',
+    hp: 24,
+    speed: 2.15,
+    damage: 4,
+    reward: 12,
+    scale: 0.9,
+    flying: true,
+    slowImmune: true,
+  },
   banaspati: {
     id: 'banaspati',
     name: 'Banaspati Ngambek',
@@ -272,15 +287,16 @@ export const WAVES: WaveDef[] = [
   { spawns: [{ type: 'pocong', count: 6, interval: 1.2 }, { type: 'kunti', count: 4, interval: 2.2, delay: 2 }], reward: 36 },
   { spawns: [{ type: 'genderuwo', count: 2, interval: 3 }, { type: 'pocong', count: 8, interval: 1.1, delay: 2 }, { type: 'tuyul', count: 3, interval: 2, delay: 8 }], reward: 42 },
   { spawns: [{ type: 'kunti', count: 5, interval: 1.8 }, { type: 'genderuwo', count: 3, interval: 2.6, delay: 3 }], reward: 50 },
-  { spawns: [{ type: 'wewe', count: 5, interval: 2 }, { type: 'tuyul', count: 4, interval: 1.5, delay: 3 }, { type: 'pocong', count: 8, interval: 0.9, delay: 5 }], reward: 56 },
-  { spawns: [{ type: 'genderuwo', count: 5, interval: 2 }, { type: 'kunti', count: 5, interval: 1.6, delay: 2 }, { type: 'pocong', count: 6, interval: 0.8, delay: 6 }], reward: 64 },
-  { spawns: [{ type: 'wewe', count: 6, interval: 1.8 }, { type: 'genderuwo', count: 4, interval: 2.2, delay: 3 }, { type: 'tuyul', count: 6, interval: 1, delay: 6 }], reward: 72 },
-  { spawns: [{ type: 'kunti', count: 6, interval: 1.2 }, { type: 'genderuwo', count: 5, interval: 1.8, delay: 2 }, { type: 'wewe', count: 5, interval: 1.6, delay: 4 }, { type: 'tuyul', count: 4, interval: 0.9, delay: 8 }], reward: 80 },
+  { spawns: [{ type: 'wewe', count: 5, interval: 2 }, { type: 'kuyang', count: 2, interval: 2.4, delay: 4 }, { type: 'tuyul', count: 4, interval: 1.5, delay: 3 }, { type: 'pocong', count: 8, interval: 0.9, delay: 5 }], reward: 56 },
+  { spawns: [{ type: 'genderuwo', count: 5, interval: 2 }, { type: 'kunti', count: 5, interval: 1.6, delay: 2 }, { type: 'kuyang', count: 3, interval: 2, delay: 6 }, { type: 'pocong', count: 6, interval: 0.8, delay: 6 }], reward: 64 },
+  { spawns: [{ type: 'wewe', count: 6, interval: 1.8 }, { type: 'genderuwo', count: 4, interval: 2.2, delay: 3 }, { type: 'kuyang', count: 4, interval: 1.8, delay: 5 }, { type: 'tuyul', count: 6, interval: 1, delay: 6 }], reward: 72 },
+  { spawns: [{ type: 'kunti', count: 6, interval: 1.2 }, { type: 'genderuwo', count: 5, interval: 1.8, delay: 2 }, { type: 'wewe', count: 5, interval: 1.6, delay: 4 }, { type: 'kuyang', count: 5, interval: 1.6, delay: 7 }, { type: 'tuyul', count: 4, interval: 0.9, delay: 8 }], reward: 80 },
   {
     spawns: [
       { type: 'banaspati', count: 1, interval: 3, delay: 2 },
       { type: 'pocong', count: 10, interval: 0.8, delay: 5 },
       { type: 'kunti', count: 6, interval: 1.4, delay: 9 },
+      { type: 'kuyang', count: 4, interval: 1.5, delay: 12 },
       { type: 'genderuwo', count: 4, interval: 2, delay: 14 },
     ],
     reward: 150,
@@ -381,6 +397,26 @@ export const GAME_CONST = {
   betweenWaveDelay: 16,
   maxEnemies: 40,
   sellRefund: 0.6, // fraksi dari total biaya
+} as const
+
+/* --------------------------- Kekuatan DOA BERSAMA --------------------------- */
+export const DUA_CONST = {
+  /** energi doa maksimum (terisi dengan menghalau setan) */
+  max: 100,
+  /** energi per setan dihalau */
+  perKill: 7,
+  /** energi bonus saat gelombang selesai */
+  perWave: 12,
+  /** durasi berkah (detik) */
+  duration: 12,
+  /** pengali damage tower saat berkah aktif */
+  damageMult: 1.6,
+  /** pengali kecepatan serang tower (lebih kecil = lebih cepat) */
+  rateMult: 0.65,
+  /** setan jadi lambat karena kaget khusyuk */
+  enemySlow: 0.55,
+  /** masjid dipulihkan sedikit — rezeki doa */
+  heal: 8,
 } as const
 
 export const QUALITY_LEVELS = ['low', 'medium', 'high'] as const

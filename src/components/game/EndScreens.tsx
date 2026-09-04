@@ -1,13 +1,145 @@
 'use client'
 
-/* Layar akhir: kemenangan (kembang api + takbir ceria), kekalahan lembut,
-   dan menu jeda. Semua ramah anak, tanpa nuansa sedih. */
+/* Layar akhir: kemenangan (bintang rating + kirim skor ke papan rekor +
+   kembang api), kekalahan lembut, dan menu jeda. Semua ramah anak. */
 
+import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Play, RotateCcw, Home, Pause, Volume2, VolumeX, Music, Music2 } from 'lucide-react'
+import {
+  Play, RotateCcw, Home, Pause, Volume2, VolumeX, Music, Music2,
+  Trophy, Send, Loader2, CheckCircle2,
+} from 'lucide-react'
 import { useGameStore } from '@/lib/game/store'
 import { getEngine } from '@/lib/game/engine'
 import { audio } from '@/lib/game/audio'
+import { setPlayerName, getRecords } from '@/lib/game/achievements'
+import { GAME_CONST } from '@/lib/game/data'
+import { LeaderboardModal } from './MenuModals'
+
+/* ------------------- Bintang rating lucu ------------------- */
+
+function StarRating({ stars }: { stars: number }) {
+  return (
+    <div className="flex items-center justify-center gap-1.5" aria-label={`Rating ${stars} dari 3 bintang`}>
+      {[1, 2, 3].map((i) => {
+        const on = i <= stars
+        return (
+          <motion.span
+            key={i}
+            initial={{ scale: 0, rotate: -60, y: -30 }}
+            animate={{ scale: on ? 1 : 0.8, rotate: 0, y: 0 }}
+            transition={{ delay: 0.35 + i * 0.28, type: 'spring', stiffness: 380, damping: 12 }}
+            className={`star-big text-5xl ${on ? '' : 'star-empty'}`}
+          >
+            {on ? '⭐' : '☆'}
+          </motion.span>
+        )
+      })}
+    </div>
+  )
+}
+
+/* ------------------- Form kirim skor ------------------- */
+
+function ScoreSubmit({ stars, wave, defeated, pahala }: { stars: number; wave: number; defeated: number; pahala: number }) {
+  const scoreSubmitted = useGameStore((s) => s.scoreSubmitted)
+  const [name, setName] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [showBoard, setShowBoard] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    // default: nama terakhir dipakai
+    const saved = getRecords().playerName
+    if (saved) setName(saved)
+  }, [])
+
+  if (scoreSubmitted) {
+    return (
+      <div className="flex w-full flex-col items-center gap-2">
+        <div className="flex items-center gap-2 rounded-full border-2 border-emerald-300 bg-emerald-50 px-4 py-1.5 text-sm font-black text-emerald-700">
+          <CheckCircle2 className="h-4 w-4" />
+          Skor terkirim ke papan rekor!
+        </div>
+        <button
+          className="btn-cute-secondary flex items-center gap-1.5 !text-xs"
+          onClick={() => {
+            audio.chime()
+            setShowBoard(true)
+          }}
+        >
+          <Trophy className="h-4 w-4" />
+          Lihat Papan Rekor
+        </button>
+        <LeaderboardModal open={showBoard} onClose={() => setShowBoard(false)} />
+      </div>
+    )
+  }
+
+  const submit = async () => {
+    const clean = name.trim()
+    if (clean.length < 2 || sending) {
+      setError('Nama minimal 2 huruf ya! 😊')
+      inputRef.current?.focus()
+      return
+    }
+    setSending(true)
+    setError(null)
+    try {
+      setPlayerName(clean)
+      const res = await fetch('/api/leaderboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: clean, stars, wave, defeated, pahala }),
+      })
+      const json = (await res.json()) as { ok: boolean; error?: string }
+      if (!res.ok || !json.ok) throw new Error(json.error ?? 'gagal')
+      audio.tada()
+      useGameStore.getState().setScoreSubmitted(true)
+    } catch {
+      setError('Aduh, gagal mengirim. Cek jaringan lalu coba lagi! 🙏')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div className="flex w-full flex-col items-center gap-1.5 rounded-2xl border-2 border-amber-200 bg-[#fffbe8] px-4 py-3">
+      <span className="text-xs font-black uppercase tracking-wider text-amber-600">
+        Masuk Papan Rekor? 🏆
+      </span>
+      <div className="flex w-full gap-1.5">
+        <input
+          ref={inputRef}
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value.slice(0, 16))
+            setError(null)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void submit()
+          }}
+          placeholder="Nama kamu…"
+          maxLength={16}
+          className="min-w-0 flex-1 rounded-full border-[3px] border-amber-300 bg-white px-4 py-1.5 text-sm font-black text-[#4a3b20] placeholder:font-bold placeholder:text-stone-300 focus:border-amber-400 focus:outline-none"
+          aria-label="Nama untuk papan rekor"
+        />
+        <button
+          className="btn-cute !px-4 !py-1.5 !text-sm"
+          disabled={sending}
+          onClick={() => void submit()}
+          aria-label="Kirim skor"
+        >
+          {sending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+        </button>
+      </div>
+      {error && <p className="text-xs font-bold text-rose-600">{error}</p>}
+    </div>
+  )
+}
+
+/* ------------------- Layar-layar akhir ------------------- */
 
 export function EndScreens() {
   const screen = useGameStore((s) => s.screen)
@@ -15,6 +147,8 @@ export function EndScreens() {
   const stats = useGameStore((s) => s.stats)
   const soundOn = useGameStore((s) => s.soundOn)
   const musicOn = useGameStore((s) => s.musicOn)
+  const mosqueHp = useGameStore((s) => s.mosqueHp)
+  const resultStars = useGameStore((s) => s.resultStars)
 
   const restart = () => getEngine()?.startGame()
   const toMenu = () => getEngine()?.backToMenu()
@@ -33,19 +167,26 @@ export function EndScreens() {
               initial={{ scale: 0.5, y: 60, rotate: -3 }}
               animate={{ scale: 1, y: 0, rotate: 0 }}
               transition={{ type: 'spring', stiffness: 260, damping: 16 }}
-              className="panel-cute relative flex max-w-md flex-col items-center gap-3 overflow-hidden px-8 py-8 text-center"
+              className="panel-cute relative flex max-h-[92vh] max-w-md flex-col items-center gap-3 overflow-y-auto px-8 py-7 text-center"
             >
               {/* hiasan bintang berputar */}
               <span className="animate-spin-slow absolute -left-4 -top-4 text-5xl opacity-60">✨</span>
               <span className="animate-spin-slow absolute -bottom-3 -right-3 text-5xl opacity-60">🎉</span>
 
-              <span className="animate-bounce-soft text-7xl">🕌</span>
+              <span className="animate-bounce-soft text-6xl sm:text-7xl">🕌</span>
               <h2 className="text-3xl font-black tracking-wide text-emerald-700 sm:text-4xl">
                 ALHAMDULILLAH!
               </h2>
-              <p className="-mt-1 text-lg font-extrabold text-[#6a4d1a]">
-                Masjid aman, setan kabur senang-senang! 🎉
+
+              <StarRating stars={resultStars} />
+              <p className="-mt-1 text-sm font-extrabold text-[#6a4d1a]">
+                {resultStars >= 3
+                  ? 'Sempurna! Masjid selamat tanpa cek-cerek! 💫'
+                  : resultStars === 2
+                    ? 'Hebat! Tinggal sedikit lagi sempurna! 😊'
+                    : 'Menang! Coba jaga masjid lebih rapat lagi ya! 💪'}
               </p>
+
               <div className="w-full space-y-1.5 rounded-2xl bg-amber-50/90 px-5 py-3 text-sm font-bold text-[#6a4d1a]">
                 <p className="flex justify-between">
                   <span>👻 Setan berhasil dihalau</span>
@@ -56,10 +197,18 @@ export function EndScreens() {
                   <span className="font-black text-amber-600">{stats.starsEarned}</span>
                 </p>
                 <p className="flex justify-between">
-                  <span>🛡️ Gelombang diselesaikan</span>
-                  <span className="font-black text-sky-600">{stats.wavesCleared}/10</span>
+                  <span>🕌 Kesehatan masjid</span>
+                  <span className="font-black text-sky-600">{mosqueHp}/{GAME_CONST.mosqueMaxHp}</span>
                 </p>
               </div>
+
+              <ScoreSubmit
+                stars={resultStars}
+                wave={stats.wavesCleared}
+                defeated={stats.defeated}
+                pahala={stats.starsEarned}
+              />
+
               <p className="text-xs font-semibold text-emerald-700">
                 Kembang api masih menyala di atas masjid — lihat dulu boleh! 🎆
               </p>
@@ -102,7 +251,8 @@ export function EndScreens() {
               </p>
               <div className="rounded-2xl bg-sky-50 px-5 py-3 text-sm font-semibold text-sky-800">
                 💡 Coba taruh Ali &amp; Aisyah lebih dekat jalur, upgrade mereka,
-                dan gunakan Fatimah untuk memperlambat setan yang gesit!
+                gunakan Fatimah untuk memperlambat setan gesit, dan tekan{' '}
+                <span className="font-black text-amber-600">DOA BERSAMA</span> saat penuh!
               </div>
               <div className="mt-1 flex flex-wrap justify-center gap-2">
                 <button className="btn-cute" onClick={restart}>

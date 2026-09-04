@@ -7,6 +7,7 @@ import * as THREE from 'three'
 import {
   CHAR_DEFS,
   ENEMY_DEFS,
+  DUA_CONST,
   LANES,
   type CharId,
   type CharDef,
@@ -66,6 +67,8 @@ function laneDir(lane: number, dist: number): THREE.Vector2 {
 export interface ManagerCtx {
   now: number // waktu game terakumulasi (terpengaruh speed & pause)
   particles: ParticleSystem
+  /** Doa Bersama aktif hingga waktu ini (membuff semua tower) */
+  duaActiveUntil: number
   onEnemyKilled: (reward: number, pos: THREE.Vector3, enemyId: EnemyId) => void
   onEnemyLeaked: (enemy: Enemy) => void
   onBossShockwave: (duration: number) => void
@@ -109,7 +112,7 @@ export class Enemy {
     this.maxHp = Math.round(this.def.hp * (1 + 0.12 * (wave - 1)))
     this.hp = this.maxHp
     this.group = getEnemyModel(enemyId)
-    this.headY = { pocong: 1.55, kunti: 1.85, genderuwo: 1.7, tuyul: 1.35, wewe: 1.95, banaspati: 2.6 }[enemyId]
+    this.headY = { pocong: 1.55, kunti: 1.85, genderuwo: 1.7, tuyul: 1.35, wewe: 1.95, kuyang: 1.35, banaspati: 2.6 }[enemyId]
     // bintang kliyengan (orbit di atas kepala)
     const starMat = new THREE.MeshStandardMaterial({ color: 0xffd93d, emissive: 0xffb520, emissiveIntensity: 0.9 })
     for (let i = 0; i < 3; i++) {
@@ -142,7 +145,7 @@ export class Enemy {
       this.dist = Math.max(0, this.dist - opts.knockback * (1 - resist))
     }
     if (opts.stun) this.stunUntil = ctx.now + opts.stun
-    if (opts.slow) {
+    if (opts.slow && !this.def.slowImmune) {
       this.slowUntil = ctx.now + opts.slow.duration
       this.slowFactor = Math.min(this.slowFactor, opts.slow.factor)
     }
@@ -269,6 +272,28 @@ export class Enemy {
       if (this.fleeing) {
         this.group.rotation.x = -0.25 // condong kabur
       }
+    } else if (this.def.id === 'kuyang') {
+      // melayang: naik-turun lembut + goyang sayap & rambut
+      y = 1.15 + Math.sin(this.animT * 3.2) * 0.25
+      const lateral = Math.sin(this.animT * 2.1) * 0.3
+      const dir = laneDir(this.lane, this.dist)
+      tmpVec.x += -dir.y * lateral
+      tmpVec.y += dir.x * lateral
+      if (parts?.wingL) {
+        const flap = Math.sin(this.animT * 13) * 0.55
+        ;(parts.wingL as THREE.Object3D).rotation.z = 0.45 + flap
+        ;(parts.wingR as THREE.Object3D).rotation.z = -0.45 - flap
+        ;(parts.wingL as THREE.Object3D).position.y = 1.0 + flap * 0.12
+        ;(parts.wingR as THREE.Object3D).position.y = 1.0 + flap * 0.12
+      }
+      const strands = parts?.strands as THREE.Object3D[] | undefined
+      if (strands) {
+        strands.forEach((s, i) => {
+          s.rotation.x = Math.sin(this.animT * 5 + i) * 0.35
+          s.rotation.z = Math.cos(this.animT * 4 + i) * 0.2
+        })
+      }
+      if (parts?.ribbon) (parts.ribbon as THREE.Object3D).rotation.z = Math.sin(this.animT * 6) * 0.2
     } else if (this.def.id === 'banaspati') {
       y = 0.3 + Math.sin(this.animT * 2.2) * 0.2
     }
@@ -324,6 +349,8 @@ export class Tower {
   private waveTimer = Math.random() * 4
   private punchTimer = 0
   rangeRing: THREE.Mesh
+  /** cincin keemasan berkah Doa Bersama di bawah kaki */
+  duaGlow: THREE.Mesh
   totalSpent: number
 
   constructor(charId: CharId, slotIndex: number, x: number, z: number, baseCost: number) {
@@ -337,6 +364,18 @@ export class Tower {
     this.rangeRing = createRangeRing(stats.range, 0x9ff2c8)
     this.rangeRing.position.set(x, 0, z)
     this.rangeRing.visible = false
+    this.duaGlow = new THREE.Mesh(
+      new THREE.RingGeometry(0.55, 0.95, 26),
+      new THREE.MeshBasicMaterial({
+        color: 0xffd76a,
+        transparent: true,
+        opacity: 0.6,
+        side: THREE.DoubleSide,
+      }),
+    )
+    this.duaGlow.rotation.x = -Math.PI / 2
+    this.duaGlow.position.set(x, 0.06, z)
+    this.duaGlow.visible = false
   }
 
   get stats() {
@@ -395,14 +434,26 @@ export class Tower {
     }
     this.group.rotation.z *= 0.9
 
+    /* --- berkah Doa Bersama: aura keemasan di kaki --- */
+    if (this.duaGlow) {
+      const blessed = now < ctx.duaActiveUntil
+      this.duaGlow.visible = blessed
+      if (blessed) {
+        this.duaGlow.rotation.z += dt * 2.5
+        this.duaGlow.scale.setScalar(1 + Math.sin(this.animT * 5) * 0.12)
+      }
+    }
+
     /* --- serangan --- */
     this.cooldown -= dt
     if (this.cooldown > 0) return
     const stats = this.stats
+    const blessed = now < ctx.duaActiveUntil
+    const dmg = blessed ? stats.damage * DUA_CONST.damageMult : stats.damage
 
     if (this.def.attack === 'aura') {
       // Fatimah: denyut aroma wangi — AoE slow di sekitar
-      this.cooldown = stats.fireRate
+      this.cooldown = stats.fireRate * (blessed ? DUA_CONST.rateMult : 1)
       const inRange = enemies.filter((e) => !e.dead && !e.leaked && !e.escaped && e.pos.distanceTo(this.pos) < stats.range)
       if (inRange.length > 0) {
         ctx.particles.slowPulse(this.pos.x, 0.8, this.pos.z, stats.range)
@@ -411,7 +462,7 @@ export class Tower {
           factor: this.def.slowFactor![this.level - 1],
           duration: this.def.slowDuration![this.level - 1],
         }
-        inRange.forEach((e) => e.takeDamage(stats.damage, ctx, { slow }))
+        inRange.forEach((e) => e.takeDamage(dmg, ctx, { slow }))
         this.punchTimer = 1
       }
       return
@@ -419,13 +470,13 @@ export class Tower {
 
     if (this.def.attack === 'adzan') {
       // Kakek Imam: cahaya adzan menyapu seluruh layar
-      this.cooldown = stats.fireRate
+      this.cooldown = stats.fireRate * (blessed ? DUA_CONST.rateMult : 1)
       const alive = enemies.filter((e) => !e.dead && !e.leaked && !e.escaped)
       if (alive.length > 0) {
         audio.adzanChime()
         ctx.particles.adzanWave(this.pos.x, 1, this.pos.z)
         alive.forEach((e) =>
-          e.takeDamage(stats.damage, ctx, { knockback: this.def.knockback, stun: this.def.stunDuration }),
+          e.takeDamage(dmg, ctx, { knockback: this.def.knockback, stun: this.def.stunDuration }),
         )
         this.punchTimer = 1.4
         return
@@ -446,7 +497,7 @@ export class Tower {
       }
     }
     if (!target) return
-    this.cooldown = stats.fireRate
+    this.cooldown = stats.fireRate * (blessed ? DUA_CONST.rateMult : 1)
     this.punchTimer = 1
     const muzzleY = 1.3
     const muzzle = tmpVec3.set(this.pos.x, muzzleY, this.pos.z)
@@ -454,14 +505,14 @@ export class Tower {
     if (this.def.attack === 'orb') {
       ctx.particles.muzzle(muzzle.x, muzzle.y, muzzle.z)
       audio.swoosh()
-      ctxManagerSpawnProjectile('orb', this, target, stats.damage)
+      ctxManagerSpawnProjectile('orb', this, target, dmg)
     } else if (this.def.attack === 'bubble') {
       ctx.particles.muzzle(muzzle.x, muzzle.y, muzzle.z, 0xffc7e5)
       audio.bubble()
-      ctxManagerSpawnProjectile('bubble', this, target, stats.damage)
+      ctxManagerSpawnProjectile('bubble', this, target, dmg)
     } else if (this.def.attack === 'coin') {
       audio.coin()
-      ctxManagerSpawnProjectile('coin', this, target, stats.damage)
+      ctxManagerSpawnProjectile('coin', this, target, dmg)
     }
   }
 }
@@ -509,13 +560,22 @@ export class EntityManager {
   private projPool: Record<ProjKind, Projectile[]> = { orb: [], bubble: [], coin: [] }
   private ctx: ManagerCtx
 
-  constructor(particles: ParticleSystem, ctxCallbacks: Omit<ManagerCtx, 'particles' | 'now'>) {
-    this.ctx = { now: 0, particles, ...ctxCallbacks }
+  constructor(particles: ParticleSystem, ctxCallbacks: Omit<ManagerCtx, 'particles' | 'now' | 'duaActiveUntil'>) {
+    this.ctx = { now: 0, duaActiveUntil: -1, particles, ...ctxCallbacks }
     projectileSpawner = (kind, tower, target, damage) => this.spawnProjectile(kind, tower, target, damage)
   }
 
   get now() {
     return this.ctx.now
+  }
+
+  /** Doa Bersama: aktifkan berkah untuk semua tower selama `duration` detik. */
+  activateDuaBlessing(duration: number) {
+    this.ctx.duaActiveUntil = this.ctx.now + duration
+  }
+
+  get duaBlessed() {
+    return this.ctx.now < this.ctx.duaActiveUntil
   }
 
   reset() {
@@ -524,6 +584,7 @@ export class EntityManager {
     this.towers.forEach((t) => {
       this.group.remove(t.group)
       this.group.remove(t.rangeRing)
+      this.group.remove(t.duaGlow)
     })
     this.towers = []
     this.projectiles.forEach((p) => {
@@ -532,6 +593,7 @@ export class EntityManager {
     })
     this.projectiles = []
     this.ctx.now = 0
+    this.ctx.duaActiveUntil = -1
   }
 
   spawnEnemy(enemyId: EnemyId, lane: number, wave: number): Enemy {
@@ -554,6 +616,7 @@ export class EntityManager {
     this.towers.push(tower)
     this.group.add(tower.group)
     this.group.add(tower.rangeRing)
+    this.group.add(tower.duaGlow)
     return tower
   }
 
@@ -561,6 +624,7 @@ export class EntityManager {
     this.towers = this.towers.filter((t) => t !== tower)
     this.group.remove(tower.group)
     this.group.remove(tower.rangeRing)
+    this.group.remove(tower.duaGlow)
   }
 
   private spawnProjectile(kind: ProjKind, tower: Tower, target: Enemy, damage: number) {

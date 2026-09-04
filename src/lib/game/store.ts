@@ -4,7 +4,7 @@
  * ============================================================ */
 
 import { create } from 'zustand'
-import { GAME_CONST, type CharId } from './data'
+import { GAME_CONST, DUA_CONST, type CharId } from './data'
 
 export type Screen = 'menu' | 'playing' | 'victory' | 'gameover'
 export type CameraMode = 'iso' | 'follow' | 'photo' | 'menu' | 'boss'
@@ -51,6 +51,16 @@ export interface GameStore {
   unlockedChars: CharId[]
   stats: { defeated: number; starsEarned: number; wavesCleared: number }
   hudHidden: boolean // mode foto
+  /* --- Doa Bersama (kekuatan spesial) --- */
+  duaCharge: number // 0..DUA_CONST.max
+  duaReady: boolean
+  duaActive: number // sisa detik berkah aktif
+  /* --- hasil akhir untuk UI (bintang, dll) --- */
+  resultStars: 0 | 1 | 2 | 3
+  duaUsedThisGame: number
+  scoreSubmitted: boolean
+  /* --- lencana yang terbuka sesi ini (untuk toast) --- */
+  badgeToast: { id: number; name: string; emoji: string; desc: string } | null
 }
 
 interface GameActions {
@@ -80,6 +90,14 @@ interface GameActions {
   setHudHidden: (h: boolean) => void
   bumpStats: (patch: Partial<GameStore['stats']>) => void
   resetForNewGame: () => void
+  addDuaCharge: (amount: number) => void
+  consumeDuaCharge: () => void
+  setDuaActive: (seconds: number) => void
+  tickDuaActive: (dt: number) => void
+  setResultStars: (stars: 0 | 1 | 2 | 3) => void
+  setScoreSubmitted: (v: boolean) => void
+  showBadgeToast: (name: string, emoji: string, desc: string) => void
+  clearBadgeToast: () => void
 }
 
 let toastId = 0
@@ -108,6 +126,13 @@ export const useGameStore = create<GameStore & GameActions>()((set) => ({
   unlockedChars: ['ali', 'aisyah'],
   stats: { defeated: 0, starsEarned: 0, wavesCleared: 0 },
   hudHidden: false,
+  duaCharge: 0,
+  duaReady: false,
+  duaActive: 0,
+  resultStars: 0,
+  duaUsedThisGame: 0,
+  scoreSubmitted: false,
+  badgeToast: null,
 
   setScreen: (s) => set({ screen: s }),
   setPaused: (p) => set({ paused: p }),
@@ -146,6 +171,32 @@ export const useGameStore = create<GameStore & GameActions>()((set) => ({
   setHudHidden: (h) => set({ hudHidden: h }),
   bumpStats: (patch) => set((st) => ({ stats: { ...st.stats, ...patch } })),
 
+  addDuaCharge: (amount) =>
+    set((st) => {
+      if (st.duaReady || st.screen !== 'playing') return st
+      const charge = Math.min(DUA_CONST.max, st.duaCharge + amount)
+      const ready = charge >= DUA_CONST.max
+      const justReady = ready && !st.duaReady
+      if (justReady) {
+        return { duaCharge: charge, duaReady: true, toast: { id: ++toastId, text: 'Doa Bersama siap! Tekan tombolnya 🤲', emoji: '✨', tone: 'good' as const } }
+      }
+      return { duaCharge: charge, duaReady: ready }
+    }),
+
+  consumeDuaCharge: () => set({ duaCharge: 0, duaReady: false, duaActive: DUA_CONST.duration }),
+
+  setDuaActive: (seconds) => set({ duaActive: Math.max(0, seconds) }),
+
+  tickDuaActive: (dt) =>
+    set((st) => (st.duaActive <= 0 ? st : { duaActive: Math.max(0, st.duaActive - dt) })),
+
+  setResultStars: (stars) => set({ resultStars: stars }),
+  setScoreSubmitted: (v) => set({ scoreSubmitted: v }),
+
+  showBadgeToast: (name, emoji, desc) =>
+    set({ badgeToast: { id: ++toastId, name, emoji, desc } }),
+  clearBadgeToast: () => set({ badgeToast: null }),
+
   resetForNewGame: () =>
     set({
       screen: 'playing',
@@ -166,6 +217,13 @@ export const useGameStore = create<GameStore & GameActions>()((set) => ({
       stats: { defeated: 0, starsEarned: 0, wavesCleared: 0 },
       hudHidden: false,
       cameraMode: 'iso',
+      duaCharge: 0,
+      duaReady: false,
+      duaActive: 0,
+      resultStars: 0,
+      duaUsedThisGame: 0,
+      scoreSubmitted: false,
+      badgeToast: null,
     }),
 }))
 

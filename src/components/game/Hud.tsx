@@ -11,14 +11,14 @@ import {
 } from 'lucide-react'
 import { useGameStore } from '@/lib/game/store'
 import { getEngine } from '@/lib/game/engine'
-import { CHAR_DEFS, WAVES } from '@/lib/game/data'
+import { CHAR_DEFS, WAVES, GAME_CONST } from '@/lib/game/data'
 import { audio } from '@/lib/game/audio'
 
 export function Hud() {
   const screen = useGameStore((s) => s.screen)
   const paused = useGameStore((s) => s.paused)
   const mosqueHp = useGameStore((s) => s.mosqueHp)
-  const mosqueMaxHp = useGameStore((s) => s.mosqueMaxHp) || 100
+  const mosqueMaxHp = GAME_CONST.mosqueMaxHp
   const pahala = useGameStore((s) => s.pahala)
   const wave = useGameStore((s) => s.wave)
   const waveActive = useGameStore((s) => s.waveActive)
@@ -53,6 +53,7 @@ export function Hud() {
   if (screen !== 'playing') return null
 
   const hpPct = Math.max(0, (mosqueHp / mosqueMaxHp) * 100)
+  const hpLow = hpPct <= 30
 
   return (
     <div className="pointer-events-none fixed inset-x-0 top-0 z-30 flex flex-col items-center gap-1.5 px-2 pt-2 sm:gap-2 sm:pt-3">
@@ -63,26 +64,53 @@ export function Hud() {
           <span className="text-xl sm:text-2xl">🕌</span>
           <div className="flex flex-col">
             <div className="flex items-center gap-1 text-[10px] font-extrabold text-emerald-700 sm:text-xs">
-              <Heart className="h-3 w-3 fill-rose-400 text-rose-400" />
+              <motion.span
+                animate={hpLow ? { scale: [1, 1.3, 1] } : { scale: 1 }}
+                transition={hpLow ? { repeat: Infinity, duration: 0.8 } : undefined}
+                className="inline-flex"
+              >
+                <Heart className={`h-3 w-3 ${hpLow ? 'fill-rose-500 text-rose-500' : 'fill-rose-400 text-rose-400'}`} />
+              </motion.span>
               KESEHATAN MASJID
             </div>
-            <div className="mt-0.5 h-3.5 w-28 overflow-hidden rounded-full bg-stone-200 sm:w-36">
+            <div className={`relative mt-0.5 h-3.5 w-28 overflow-hidden rounded-full bg-stone-200 sm:w-36 ${hpLow ? 'hp-low-pulse' : ''}`}>
               <motion.div
-                className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-lime-400"
+                className={`h-full rounded-full ${
+                  hpLow
+                    ? 'bg-gradient-to-r from-rose-500 to-orange-400'
+                    : 'bg-gradient-to-r from-emerald-400 to-lime-400'
+                }`}
                 animate={{ width: `${hpPct}%` }}
                 transition={{ type: 'spring', stiffness: 120, damping: 20 }}
               />
+              <span className="hp-segments" aria-hidden>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <i key={i} />
+                ))}
+              </span>
             </div>
           </div>
           <span className="text-xs font-extrabold text-[#4a3b20] sm:text-sm">{mosqueHp}</span>
         </div>
 
-        {/* Wave badge */}
-        <div className="panel-cute flex items-center gap-1.5 px-3 py-2">
-          <span className="text-lg sm:text-xl">🛡️</span>
-          <span className="text-sm font-extrabold text-[#4a3b20] sm:text-base">
-            Gelombang {wave}/{WAVES.length}
-          </span>
+        {/* Wave badge + titik progres */}
+        <div className="panel-cute flex flex-col items-center gap-0.5 px-3 py-1.5">
+          <div className="flex items-center gap-1.5">
+            <span className="text-lg sm:text-xl">🛡️</span>
+            <span className="text-sm font-extrabold text-[#4a3b20] sm:text-base">
+              Gelombang {wave}/{WAVES.length}
+            </span>
+          </div>
+          <div className="flex items-center gap-1" aria-label="Progres gelombang">
+            {WAVES.map((_, i) => (
+              <span
+                key={i}
+                className={`h-1.5 w-1.5 rounded-full transition-all ${
+                  i < wave ? 'w-2.5 bg-amber-400' : i === wave && waveActive ? 'bg-emerald-500 animate-pulse' : 'bg-stone-300'
+                }`}
+              />
+            ))}
+          </div>
         </div>
 
         {/* Pahala + kontrol */}
@@ -209,9 +237,9 @@ export function Hud() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 1.1, y: 12 }}
             transition={{ type: 'spring', stiffness: 320, damping: 18 }}
-            className="mt-2 rounded-3xl border-4 border-amber-300 bg-gradient-to-b from-[#fff3c9] to-[#ffe6a3] px-6 py-3 text-center shadow-xl"
+            className="wave-banner mt-2 rounded-3xl px-6 py-3 text-center"
           >
-            <p className="text-xl font-black tracking-wide text-[#7a4a10] drop-shadow-sm sm:text-2xl">{banner}</p>
+            <p className="text-xl font-black tracking-wide text-[#7a4a10] sm:text-2xl">{banner}</p>
           </motion.div>
         )}
       </AnimatePresence>

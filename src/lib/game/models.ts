@@ -985,6 +985,56 @@ function buildEnemy(enemyId: EnemyId): THREE.Group {
     shawl.rotation.x = Math.PI / 2
     g.add(shawl)
     addFace(head, 0.46, { y: 0.0, spread: 0.2, eyeScale: 1.05, smileScale: 0.85 })
+  } else if (enemyId === 'kuyang') {
+    /* Kuyang Melayang Lucu — kepala terbang penuh rasa penasaran.
+       Versi ceria: wajah bulat imut, pipi merona, sayap kecil kepak-kapuk,
+       pita kuning, dan rambut kecil bergoyang. */
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 12), std(0xffe9d6, { roughness: 0.55 }))
+    head.name = 'head'
+    head.position.y = 1.05
+    head.castShadow = true
+    g.add(head)
+    // rambut gelap belakang + poni tiga
+    const hair = new THREE.Mesh(
+      new THREE.SphereGeometry(0.52, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55),
+      std(0x4a3b52, { roughness: 1 }),
+    )
+    hair.position.y = 1.08
+    hair.rotation.x = Math.PI * 0.78
+    g.add(hair)
+    for (const dx of [-0.22, 0, 0.22]) {
+      const bang = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.16, 4, 8), std(0x4a3b52, { roughness: 1 }))
+      bang.name = 'bang'
+      bang.position.set(dx, 1.42, 0.18)
+      bang.rotation.z = dx * 1.2
+      g.add(bang)
+    }
+    // pita kuning ceria di atas kepala
+    const ribbon = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.05, 6, 12), std(0xffd76a))
+    ribbon.name = 'ribbon'
+    ribbon.position.set(0.34, 1.5, 0.05)
+    ribbon.rotation.y = Math.PI / 2
+    g.add(ribbon)
+    // sayap kecil lucu (kepak-kapuk saat terbang)
+    const wingGeo = new THREE.SphereGeometry(0.3, 10, 8)
+    const wingMat = std(0xfff6e8, { roughness: 0.9 })
+    const wingL = new THREE.Mesh(wingGeo, wingMat)
+    wingL.name = 'wingL'
+    wingL.position.set(-0.62, 1.0, -0.05)
+    wingL.scale.set(1, 0.55, 0.8)
+    const wingR = new THREE.Mesh(wingGeo, wingMat)
+    wingR.name = 'wingR'
+    wingR.position.set(0.62, 1.0, -0.05)
+    wingR.scale.set(1, 0.55, 0.8)
+    g.add(wingL, wingR)
+    // helai rambut kecil bergoyang di bawah kepala (khas kuyang, versi imut)
+    for (const dx of [-0.14, 0, 0.14]) {
+      const strand = new THREE.Mesh(new THREE.CapsuleGeometry(0.045, 0.3, 4, 8), std(0x4a3b52, { roughness: 1 }))
+      strand.name = 'strand'
+      strand.position.set(dx, 0.6, -0.05)
+      g.add(strand)
+    }
+    addFace(head, 0.5, { y: 0.02, spread: 0.21, eyeScale: 1.35, smileScale: 1.25, cheeks: true })
   } else {
     // banaspati (boss) — bola api gembul lucu
     const fireMat = new THREE.MeshStandardMaterial({
@@ -1046,6 +1096,10 @@ export function getEnemyModel(enemyId: EnemyId): THREE.Group {
     armR: named.armR ?? null,
     coin: named.coin ?? null,
     flames: collectListed(clone, 'flame'),
+    wingL: named.wingL ?? null,
+    wingR: named.wingR ?? null,
+    ribbon: named.ribbon ?? null,
+    strands: collectListed(clone, 'strand'),
   }
   return clone
 }

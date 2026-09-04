@@ -30,3 +30,14 @@ model Post {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+// Global high score leaderboard for the game (best runs of PENJAGA MASJID)
+model ScoreEntry {
+  id        Int      @id @default(autoincrement())
+  name      String
+  stars     Int
+  wave      Int
+  defeated  Int
+  pahala    Int
+  createdAt DateTime @default(now())
+}

@@ -116,7 +116,7 @@ class ParticlePool {
     for (let i = 0; i < MAX_PER_POOL; i++) {
       this.data.push({
         alive: false, vx: 0, vy: 0, vz: 0, gravity: 0, drag: 1,
-        life: 0, maxLife: 1, sizeStart: 1, sizeEnd: 1, fadeIn: false,
+        life: 0, maxLife: 1, sizeStart: 1, sizeEnd: 1, fadeIn: false, opacity: 1,
       })
       this.sizes[i] = 0
       this.opacities[i] = 0

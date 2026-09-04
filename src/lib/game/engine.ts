@@ -22,6 +22,7 @@ import {
   LANES,
   SLOTS,
   GAME_CONST,
+  DUA_CONST,
   type CharId,
   type EnemyId,
   type Quality,
@@ -32,6 +33,8 @@ import { EntityManager, type Enemy, type Tower } from './entities'
 import { CameraController } from './camera'
 import { audio } from './audio'
 import { gameStore, type CameraMode } from './store'
+import { computeStars } from './persist'
+import { checkBadges, recordSessionEnd } from './achievements'
 
 interface SlotObj {
   group: THREE.Group
@@ -103,6 +106,8 @@ export class GameEngine {
   private auraTimer = 0
   private mosqueToastCd = 0
   private frameCount = 0
+  /** overlay DOM cahaya keemasan saat Doa Bersama aktif */
+  private duaOverlay: HTMLElement | null = null
 
   private lastFrameTime = performance.now()
 
@@ -123,7 +128,7 @@ export class GameEngine {
     ;(window as unknown as Record<string, unknown>).__pmStore = gameStore
 
     this.scene = new THREE.Scene()
-    this.scene.background = new THREE.Color(0xa9e2ff)
+    this.scene.background = new THREE.Color(0x8fd4ff)
     this.scene.fog = new THREE.Fog(0xbfe8ff, 90, 170)
 
     // environment reflections untuk kubah emas berkilau
@@ -501,6 +506,7 @@ export class GameEngine {
 
   tryPlace(slotIndex: number, charId: CharId): boolean {
     const st = gameStore.get()
+    if (st.screen !== 'playing') return false
     const def = CHAR_DEFS[charId]
     const slot = this.slots[slotIndex]
     if (!slot || slot.occupied) return false
@@ -521,6 +527,7 @@ export class GameEngine {
     gameStore.set((s) => ({ ...s, selectedCharId: null, dragging: false }))
     this.cancelPlacing()
     this.refreshSlotHighlights()
+    checkBadges({ event: 'towerPlaced', towersCount: this.manager.towers.length })
     return true
   }
 
@@ -658,6 +665,7 @@ export class GameEngine {
     audio.setSound(gameStore.get().soundOn)
     audio.setMusic(gameStore.get().musicOn)
     audio.startBgm()
+    this.clearDuaOverlay()
     gameStore.get().resetForNewGame()
     gameStore.set((s) => ({ ...s, pahala: GAME_CONST.startPahala, mosqueHp: GAME_CONST.mosqueMaxHp }))
     this.manager.reset()
@@ -761,6 +769,10 @@ export class GameEngine {
     this.particles.showPahala(0, 6, 10, waveDef.reward)
     audio.tada()
     st.showToast(`Gelombang ${waveNum} aman! +${waveDef.reward} pahala 🌟`, '🎉', 'good')
+    // energi doa bonus tiap gelombang selesai
+    st.addDuaCharge(DUA_CONST.perWave)
+    checkBadges({ event: 'waveComplete', wave: waveNum })
+    checkBadges({ event: 'pahalaChanged', pahala: st.pahala + waveDef.reward })
 
     // tips edukatif santai
     if (waveNum % 2 === 0) {
@@ -777,19 +789,28 @@ export class GameEngine {
   }
 
   private onVictory() {
-    gameStore.set((s) => ({ ...s, screen: 'victory' }))
+    const st = gameStore.get()
+    const stars = computeStars(st.mosqueHp, GAME_CONST.mosqueMaxHp)
+    gameStore.set((s) => ({ ...s, screen: 'victory', resultStars: stars }))
     audio.stopBgm()
     audio.cheer()
     audio.tada()
     this.setCameraMode('menu')
     this.victoryTimer = 0
     this.victoryFxTimer = 0
+    this.clearDuaOverlay()
+    checkBadges({ event: 'victory', stars, pahala: st.stats.starsEarned })
+    recordSessionEnd(st.stats.starsEarned)
   }
 
   private onGameOver() {
+    const st = gameStore.get()
     gameStore.set((s) => ({ ...s, screen: 'gameover' }))
     audio.stopBgm()
     audio.mosqueHit()
+    this.clearDuaOverlay()
+    checkBadges({ event: 'gameOver' })
+    recordSessionEnd(st.stats.starsEarned)
     // setan lari senang (bukan dramatic)
     this.manager.enemies.forEach((e) => {
       e.fleeing = true
@@ -797,9 +818,73 @@ export class GameEngine {
     gameStore.get().showToast('Setan-setan lari senang-senang~ 😄', '👻', 'info')
   }
 
+  /* =============================== DOA BERSAMA =============================== */
+
+  /** Aktifkan kekuatan spesial Doa Bersama (dipanggil tombol UI). */
+  activateDua() {
+    const st = gameStore.get()
+    if (!st.duaReady || st.screen !== 'playing' || st.paused) return
+
+    // berkah untuk semua tower
+    this.manager.activateDuaBlessing(DUA_CONST.duration)
+    // setan jadi lambat & khusyuk (kecuali kuyang yang melayang bebas)
+    this.manager.enemies.forEach((e) => {
+      if (!e.dead && !e.leaked && !e.escaped && !e.def.slowImmune) {
+        e.slowUntil = this.manager.now + DUA_CONST.duration
+        e.slowFactor = Math.min(e.slowFactor, DUA_CONST.enemySlow)
+      }
+    })
+    // masjid dipulihkan sedikit
+    const healed = Math.min(GAME_CONST.mosqueMaxHp, st.mosqueHp + DUA_CONST.heal)
+    if (healed > st.mosqueHp) {
+      gameStore.set((s) => ({ ...s, mosqueHp: healed }))
+      this.particles.showDamage(0, 7.5, 6, DUA_CONST.heal, '#4ade80')
+    }
+
+    /* --- VFX: cahaya keemasan dari kubah masjid --- */
+    this.particles.rings.spawn(0, 0.12, 0, 0xffd76a, 16, 1.2)
+    this.particles.rings.spawn(0, 0.12, 0, 0xfff3c9, 10, 0.8)
+    this.particles.adzanWave(0, 9, 0)
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2
+      this.particles.sparkleRise(Math.cos(a) * 3.5, 6 + Math.random() * 4, Math.sin(a) * 3.5)
+    }
+    // cincin berkah di setiap tower
+    this.manager.towers.forEach((t) => {
+      this.particles.rings.spawn(t.pos.x, 0.1, t.pos.z, 0xffd76a, 2.4, 0.7)
+    })
+
+    // suara arpeggio harpa + sorak
+    audio.duaBlessing()
+
+    // overlay cahaya keemasan di layar
+    this.showDuaOverlay()
+
+    // state UI
+    st.consumeDuaCharge()
+    gameStore.set((s) => ({ ...s, duaUsedThisGame: s.duaUsedThisGame + 1 }))
+    st.showToast('DOA BERSAMA! Semua anak sholeh ber semangat barakah! ✨', '🤲', 'good')
+    checkBadges({ event: 'duaUsed' })
+  }
+
+  private showDuaOverlay() {
+    this.clearDuaOverlay()
+    const el = document.createElement('div')
+    el.className = 'dua-glow-overlay'
+    document.body.appendChild(el)
+    this.duaOverlay = el
+  }
+
+  private clearDuaOverlay() {
+    if (this.duaOverlay) {
+      this.duaOverlay.remove()
+      this.duaOverlay = null
+    }
+  }
+
   /* =============================== CALLBACKS =============================== */
 
-  private onEnemyKilled(reward: number, pos: THREE.Vector3, _enemyId: EnemyId) {
+  private onEnemyKilled(reward: number, pos: THREE.Vector3, enemyId: EnemyId) {
     const st = gameStore.get()
     gameStore.set((s) => ({
       ...s,
@@ -807,7 +892,10 @@ export class GameEngine {
       stats: { ...s.stats, defeated: s.stats.defeated + 1, starsEarned: s.stats.starsEarned + reward },
     }))
     this.particles.showPahala(pos.x, 2.4, pos.z, reward)
-    void st
+    // energi Doa Bersama naik saat setan dihalau
+    st.addDuaCharge(DUA_CONST.perKill)
+    checkBadges({ event: 'enemyKilled', enemyId })
+    checkBadges({ event: 'pahalaChanged', pahala: st.pahala + reward })
   }
 
   private onEnemyLeaked(enemy: Enemy) {
@@ -902,6 +990,16 @@ export class GameEngine {
         gameStore.set((s) => (s.bossHp === boss.hp ? s : { ...s, bossHp: boss.hp, bossMaxHp: boss.maxHp }))
       } else if (st.bossHp !== null) {
         gameStore.set((s) => ({ ...s, bossHp: null }))
+      }
+
+      // hitung mundur berkah Doa Bersama
+      if (st.duaActive > 0) {
+        st.tickDuaActive(gameDt)
+        const stillBlessed = this.manager.duaBlessed
+        if (!stillBlessed && this.duaOverlay) {
+          this.clearDuaOverlay()
+          gameStore.get().showToast('Berkah doa selesai — kumpulkan lagi ya! 🤲', '✨', 'info')
+        }
       }
     } else {
       // saat pause/menu tetap animasikan manager minimal (idle tower)
@@ -1036,6 +1134,7 @@ export class GameEngine {
   dispose() {
     this.disposed = true
     cancelAnimationFrame(this.rafId)
+    this.clearDuaOverlay()
     const c = this.canvas
     c.removeEventListener('pointerdown', this.onPointerDown)
     c.removeEventListener('pointermove', this.onPointerMove)

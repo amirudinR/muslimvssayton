@@ -221,6 +221,21 @@ class GameAudio {
     this.sfx(() => this.osc('sine', 1046, this.t, 0.4, 0.14))
   }
 
+  /** Doa Bersama: arpeggio harpa lembut naik + bel + sorak — "berkah turun". */
+  duaBlessing() {
+    this.sfx(() => {
+      const t = this.t
+      // arpeggio harpa naik (C-E-G-B-D) lembut
+      const notes = [523, 659, 784, 988, 1175]
+      notes.forEach((n, i) => this.osc('triangle', n, t + i * 0.14, 0.9, 0.12))
+      // bel kilat di puncak
+      this.osc('sine', 1568, t + 0.75, 1.1, 0.12)
+      this.osc('sine', 2093, t + 0.95, 0.9, 0.07)
+      // sorak anak-anak
+      this.noise(t + 0.7, 0.6, 0.1, 1800)
+    })
+  }
+
   /* ------------------------------ BGM ------------------------------ */
 
   startBgm() {

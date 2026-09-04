@@ -11,6 +11,7 @@ import { Hud, ToastLayer, FunFactModal } from './Hud'
 import { CharacterBar } from './CharacterBar'
 import { TowerPanel } from './TowerPanel'
 import { EndScreens, PhotoControls } from './EndScreens'
+import { DuaButton, BadgeToastLayer } from './DuaButton'
 
 export default function GameShell() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -26,7 +27,7 @@ export default function GameShell() {
 
     const parent = canvas.parentElement
     const ro = parent ? new ResizeObserver(() => engine.resize()) : null
-    ro?.observe(parent)
+    if (parent && ro) ro.observe(parent)
 
     // latar belakang mulai dari menu (kamera orbit masjid)
     engine.setCameraMode('menu')
@@ -56,7 +57,7 @@ export default function GameShell() {
   }, [])
 
   return (
-    <div className="fixed inset-0 select-none overflow-hidden bg-[#a9e2ff]">
+    <div className="fixed inset-0 select-none overflow-hidden bg-[#8fd4ff]">
       <canvas
         ref={canvasRef}
         className="h-full w-full touch-none"
@@ -73,8 +74,10 @@ export default function GameShell() {
       <CharacterBar />
       <EndScreens />
       <PhotoControls />
+      <DuaButton />
       <ToastLayer />
       <FunFactModal />
+      <BadgeToastLayer />
     </div>
   )
 }
